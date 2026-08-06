@@ -97,6 +97,32 @@ export const markRecallHealthy = mutation({
   },
 });
 
+export const pushBriefingCards = mutation({
+  args: {
+    secret: v.string(),
+    tool: v.string(),
+    cards: v.array(
+      v.object({
+        kind: v.union(
+          v.literal("calendar"),
+          v.literal("email"),
+          v.literal("research"),
+          v.literal("note"),
+        ),
+        title: v.string(),
+        body: v.string(),
+      }),
+    ),
+  },
+  handler: async (ctx, { secret, tool, cards }) => {
+    checkToolSecret(secret);
+    for (const card of cards) {
+      await ctx.db.insert("briefingCards", card);
+    }
+    await markToolHealthy(ctx, tool);
+  },
+});
+
 // Standing context injected into the agent prompt at session start: the
 // browser fetches this (as Tarik) and passes it as a dynamic variable.
 export const standingContext = query({

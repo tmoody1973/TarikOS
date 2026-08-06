@@ -1,9 +1,16 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
+
+async function requireUser(ctx: QueryCtx | MutationCtx) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) throw new Error("Not authenticated");
+}
 
 export const briefingCards = query({
   args: {},
   handler: async (ctx) => {
+    await requireUser(ctx);
     return await ctx.db.query("briefingCards").order("desc").take(20);
   },
 });
@@ -11,6 +18,7 @@ export const briefingCards = query({
 export const recentThoughts = query({
   args: {},
   handler: async (ctx) => {
+    await requireUser(ctx);
     return await ctx.db.query("thoughts").order("desc").take(20);
   },
 });
@@ -18,6 +26,7 @@ export const recentThoughts = query({
 export const recentMemories = query({
   args: {},
   handler: async (ctx) => {
+    await requireUser(ctx);
     return await ctx.db.query("memories").order("desc").take(20);
   },
 });
@@ -25,6 +34,7 @@ export const recentMemories = query({
 export const recentTranscripts = query({
   args: {},
   handler: async (ctx) => {
+    await requireUser(ctx);
     return await ctx.db.query("transcripts").order("desc").take(10);
   },
 });
@@ -32,29 +42,15 @@ export const recentTranscripts = query({
 export const toolRegistry = query({
   args: {},
   handler: async (ctx) => {
+    await requireUser(ctx);
     return await ctx.db.query("tools").collect();
   },
 });
 
-export const addBriefingCard = mutation({
-  args: {
-    kind: v.union(
-      v.literal("calendar"),
-      v.literal("email"),
-      v.literal("research"),
-      v.literal("note"),
-    ),
-    title: v.string(),
-    body: v.string(),
-  },
-  handler: async (ctx, args) => {
-    return await ctx.db.insert("briefingCards", args);
-  },
-});
-
 export const seedDemo = mutation({
-  args: {},
-  handler: async (ctx) => {
+  args: { secret: v.string() },
+  handler: async (ctx, { secret }) => {
+    if (secret !== process.env.MORPHEUS_TOOL_SECRET) throw new Error("Invalid secret");
     const existing = await ctx.db.query("tools").collect();
     if (existing.length > 0) return "already seeded";
 

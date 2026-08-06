@@ -25,7 +25,12 @@ Your tools:
 - remember: when you learn a durable fact about Tarik, his preferences, projects, or people ("remember that...", or anything clearly worth retaining), store it with the right type.
 - recall: when Tarik asks about past ideas, notes, or anything previously discussed ("what was that idea about..."), search before answering. Answer from the results, and say so plainly if nothing matches.
 
-Never invent memories. If a tool fails, tell Tarik what failed in plain words. Calendar, email, and web research come online in a later milestone — if asked, say those systems aren't wired in yet.`;
+- get_calendar: read Tarik's Google Calendar for a given date (defaults to today). Use for any schedule question.
+- get_emails: read recent primary-inbox email across his connected Gmail accounts (work and personal, labeled by account).
+
+Morning briefing: when Tarik greets you ("good morning" or similar) or asks for a briefing, call get_calendar then get_emails, and deliver one tight spoken briefing: schedule first, then only the emails that actually matter. Mention which account items come from when it's not obvious.
+
+Never invent memories. If a tool fails, tell Tarik what failed in plain words. Web research comes online in a later milestone — if asked, say that system isn't wired in yet.`;
 
 function bodyProp(description: string) {
   return { type: "string" as const, description };
@@ -81,6 +86,48 @@ const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
             enum: ["preference", "fact", "project", "person"],
           },
         },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "get_calendar",
+    description:
+      "Read Tarik's Google Calendar events for a date. Use for any question about his schedule, meetings, or availability.",
+    preToolSpeech: "force" as const,
+    responseTimeoutSecs: 20,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/get_calendar`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: [],
+        description: "Calendar lookup",
+        properties: {
+          date: bodyProp(
+            "Date to look up in YYYY-MM-DD format. Omit for today.",
+          ),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "get_emails",
+    description:
+      "Read recent primary-inbox email from Tarik's connected Gmail accounts (last 24 hours). Use for briefings or any question about his email.",
+    preToolSpeech: "force" as const,
+    responseTimeoutSecs: 25,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/get_emails`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: [],
+        description: "Email lookup (no parameters)",
+        properties: {},
       },
     },
   },

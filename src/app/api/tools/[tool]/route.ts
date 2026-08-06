@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
+import {
+  getCalendarEvents,
+  getRecentEmails,
+  GoogleAuthError,
+} from "@/lib/google";
 
 // Webhook endpoint for Morpheus's ElevenLabs server tools. Authenticated by
 // a shared secret header (configured on the agent), not a browser session —
@@ -8,6 +13,17 @@ import { api } from "../../../../../convex/_generated/api";
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 type ToolResult = { ok: boolean; message: string; data?: unknown };
+
+function formatTime(iso: string): string {
+  const d = new Date(iso);
+  return isNaN(d.getTime())
+    ? iso
+    : d.toLocaleTimeString("en-US", {
+        timeZone: "America/Chicago",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+}
 
 export async function POST(
   req: NextRequest,
@@ -33,6 +49,12 @@ export async function POST(
     const result = await runTool(tool, body, secret);
     return NextResponse.json(result, { status: result.ok ? 200 : 400 });
   } catch (error) {
+    if (error instanceof GoogleAuthError) {
+      return NextResponse.json(
+        { ok: false, message: error.message },
+        { status: 200 },
+      );
+    }
     console.error(`Tool ${tool} failed:`, error);
     return NextResponse.json(
       {
@@ -102,6 +124,52 @@ async function runTool(
             ? "Nothing in the second brain matches that."
             : `Found ${count} matching item(s).`,
         data: results,
+      };
+    }
+    case "get_calendar": {
+      const date =
+        typeof body.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.date)
+          ? body.date
+          : undefined;
+      const { date: day, events } = await getCalendarEvents(date);
+      await convex.mutation(api.secondBrain.pushBriefingCards, {
+        secret,
+        tool: "get_calendar",
+        cards: events.slice(0, 6).map((e) => ({
+          kind: "calendar" as const,
+          title: e.title,
+          body: `${e.allDay ? "All day" : formatTime(e.start)}${
+            e.location ? ` · ${e.location}` : ""
+          } · ${e.account}`,
+        })),
+      });
+      return {
+        ok: true,
+        message:
+          events.length === 0
+            ? `Nothing on the calendar for ${day}.`
+            : `${events.length} event(s) on ${day}.`,
+        data: { date: day, events },
+      };
+    }
+    case "get_emails": {
+      const emails = await getRecentEmails();
+      await convex.mutation(api.secondBrain.pushBriefingCards, {
+        secret,
+        tool: "get_emails",
+        cards: emails.slice(0, 6).map((e) => ({
+          kind: "email" as const,
+          title: e.subject || "(no subject)",
+          body: `${e.from} · ${e.account} — ${e.snippet.slice(0, 100)}`,
+        })),
+      });
+      return {
+        ok: true,
+        message:
+          emails.length === 0
+            ? "No new primary inbox email in the last day."
+            : `${emails.length} recent email(s).`,
+        data: { emails },
       };
     }
     default:
