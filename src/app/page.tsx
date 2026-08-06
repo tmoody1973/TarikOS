@@ -1,13 +1,30 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "convex/react";
+import { Authenticated, AuthLoading, useQuery } from "convex/react";
 import { UserButton } from "@clerk/nextjs";
 import { ConversationProvider } from "@elevenlabs/react";
 import { api } from "../../convex/_generated/api";
 import { Zone, ZoneEmpty } from "@/components/hud/Zone";
 import { StatusRail } from "@/components/hud/StatusRail";
 import { VoiceLink } from "@/components/hud/VoiceLink";
+
+export default function Dashboard() {
+  return (
+    <>
+      <Authenticated>
+        <DashboardInner />
+      </Authenticated>
+      <AuthLoading>
+        <div className="flex flex-1 items-center justify-center">
+          <p className="pulse-soft font-[family-name:var(--font-mono-hud)] text-xs tracking-[0.3em] text-steel">
+            MORPHEUS · AUTHENTICATING…
+          </p>
+        </div>
+      </AuthLoading>
+    </>
+  );
+}
 
 const KIND_COLOR: Record<string, string> = {
   calendar: "text-hudblue",
@@ -16,7 +33,7 @@ const KIND_COLOR: Record<string, string> = {
   note: "text-amber",
 };
 
-export default function Dashboard() {
+function DashboardInner() {
   const cards = useQuery(api.dashboard.briefingCards);
   const thoughts = useQuery(api.dashboard.recentThoughts);
   const memories = useQuery(api.dashboard.recentMemories);
