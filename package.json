@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@clerk/nextjs": "^7.7.0",
+    "@elevenlabs/elevenlabs-js": "^2.61.0",
+    "@elevenlabs/react": "^1.12.0",
     "convex": "^1.43.0",
     "next": "16.3.0",
     "react": "19.2.8",

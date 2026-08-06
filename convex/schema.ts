@@ -11,14 +11,14 @@ export default defineSchema({
       v.literal("person"),
     ),
     transcriptId: v.optional(v.id("transcripts")),
-  }),
+  }).searchIndex("search_content", { searchField: "content" }),
 
   thoughts: defineTable({
     raw: v.string(),
     cleaned: v.string(),
     tags: v.array(v.string()),
     transcriptId: v.optional(v.id("transcripts")),
-  }),
+  }).searchIndex("search_cleaned", { searchField: "cleaned" }),
 
   transcripts: defineTable({
     title: v.string(),

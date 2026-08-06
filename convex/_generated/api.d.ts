@@ -9,6 +9,8 @@
  */
 
 import type * as dashboard from "../dashboard.js";
+import type * as secondBrain from "../secondBrain.js";
+import type * as transcripts from "../transcripts.js";
 
 import type {
   ApiFromModules,
@@ -18,6 +20,8 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   dashboard: typeof dashboard;
+  secondBrain: typeof secondBrain;
+  transcripts: typeof transcripts;
 }>;
 
 /**

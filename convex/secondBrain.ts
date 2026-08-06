@@ -1,0 +1,111 @@
+import { mutation, query } from "./_generated/server";
+import { v } from "convex/values";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
+
+// Tool-facing functions, called by the Next.js tool webhook routes on behalf
+// of the ElevenLabs agent. They authenticate with a shared secret rather than
+// a user identity — the caller is Morpheus, not a browser session.
+function checkToolSecret(secret: string) {
+  const expected = process.env.MORPHEUS_TOOL_SECRET;
+  if (!expected || secret !== expected) {
+    throw new Error("Invalid tool secret");
+  }
+}
+
+async function markToolHealthy(ctx: MutationCtx, name: string) {
+  const tool = await ctx.db
+    .query("tools")
+    .withIndex("by_name", (q) => q.eq("name", name))
+    .unique();
+  if (tool && (tool.health !== "ok" || !tool.enabled)) {
+    await ctx.db.patch(tool._id, { health: "ok", enabled: true });
+  }
+}
+
+export const captureThought = mutation({
+  args: {
+    secret: v.string(),
+    raw: v.string(),
+    cleaned: v.string(),
+    tags: v.array(v.string()),
+  },
+  handler: async (ctx, { secret, raw, cleaned, tags }) => {
+    checkToolSecret(secret);
+    const id = await ctx.db.insert("thoughts", { raw, cleaned, tags });
+    await ctx.db.insert("briefingCards", {
+      kind: "note",
+      title: "Thought captured",
+      body: cleaned,
+    });
+    await markToolHealthy(ctx, "capture_thought");
+    return id;
+  },
+});
+
+export const remember = mutation({
+  args: {
+    secret: v.string(),
+    content: v.string(),
+    type: v.union(
+      v.literal("preference"),
+      v.literal("fact"),
+      v.literal("project"),
+      v.literal("person"),
+    ),
+  },
+  handler: async (ctx, { secret, content, type }) => {
+    checkToolSecret(secret);
+    const id = await ctx.db.insert("memories", { content, type });
+    await markToolHealthy(ctx, "remember");
+    return id;
+  },
+});
+
+export const recall = query({
+  args: {
+    secret: v.string(),
+    searchQuery: v.string(),
+  },
+  handler: async (ctx, { secret, searchQuery }) => {
+    checkToolSecret(secret);
+    const [thoughts, memories] = await Promise.all([
+      ctx.db
+        .query("thoughts")
+        .withSearchIndex("search_cleaned", (q) =>
+          q.search("cleaned", searchQuery),
+        )
+        .take(5),
+      ctx.db
+        .query("memories")
+        .withSearchIndex("search_content", (q) =>
+          q.search("content", searchQuery),
+        )
+        .take(5),
+    ]);
+    return {
+      thoughts: thoughts.map((t) => ({ content: t.cleaned, tags: t.tags })),
+      memories: memories.map((m) => ({ content: m.content, type: m.type })),
+    };
+  },
+});
+
+export const markRecallHealthy = mutation({
+  args: { secret: v.string() },
+  handler: async (ctx, { secret }) => {
+    checkToolSecret(secret);
+    await markToolHealthy(ctx, "recall");
+  },
+});
+
+// Standing context injected into the agent prompt at session start: the
+// browser fetches this (as Tarik) and passes it as a dynamic variable.
+export const standingContext = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    const memories = await ctx.db.query("memories").order("desc").take(30);
+    if (memories.length === 0) return "No stored memories yet.";
+    return memories.map((m) => `- [${m.type}] ${m.content}`).join("\n");
+  },
+});

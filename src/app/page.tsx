@@ -1,10 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery } from "convex/react";
 import { UserButton } from "@clerk/nextjs";
+import { ConversationProvider } from "@elevenlabs/react";
 import { api } from "../../convex/_generated/api";
 import { Zone, ZoneEmpty } from "@/components/hud/Zone";
 import { StatusRail } from "@/components/hud/StatusRail";
+import { VoiceLink } from "@/components/hud/VoiceLink";
 
 const KIND_COLOR: Record<string, string> = {
   calendar: "text-hudblue",
@@ -20,6 +23,15 @@ export default function Dashboard() {
   const transcripts = useQuery(api.dashboard.recentTranscripts);
   const tools = useQuery(api.dashboard.toolRegistry);
 
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchResults = useQuery(
+    api.transcripts.searchSecondBrain,
+    searchQuery.trim() ? { searchQuery } : "skip",
+  );
+  const searching = searchQuery.trim() !== "";
+  const shownThoughts = searching ? searchResults?.thoughts : thoughts;
+  const shownMemories = searching ? searchResults?.memories : memories;
+
   return (
     <div className="flex flex-1 gap-3 p-3">
       <StatusRail />
@@ -27,30 +39,9 @@ export default function Dashboard() {
       <main className="grid flex-1 grid-cols-1 gap-3 lg:grid-cols-2 lg:grid-rows-2">
         {/* Conversation surface */}
         <Zone title="Conversation" accent="bg-amber">
-          <div className="flex items-center gap-3 border-b border-panel-edge pb-3">
-            <span className="h-2.5 w-2.5 rounded-full bg-steel pulse-soft" />
-            <span className="text-xs tracking-[0.25em] text-steel">
-              VOICE LINK OFFLINE · MILESTONE 2
-            </span>
-          </div>
-          <div className="mt-3 flex-1 overflow-y-auto">
-            {transcripts === undefined ? (
-              <ZoneEmpty>syncing…</ZoneEmpty>
-            ) : transcripts.length === 0 ? (
-              <ZoneEmpty>
-                No conversations yet. Morpheus is waiting to hear your voice.
-              </ZoneEmpty>
-            ) : (
-              <ul className="space-y-2">
-                {transcripts.map((t) => (
-                  <li key={t._id} className="text-sm text-foreground/80">
-                    <span className="text-amber">{t.title}</span> ·{" "}
-                    {t.turns.length} turns
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          <ConversationProvider>
+            <VoiceLink />
+          </ConversationProvider>
         </Zone>
 
         {/* Command center */}
@@ -83,20 +74,34 @@ export default function Dashboard() {
 
         {/* Second brain */}
         <Zone title="Second Brain" accent="bg-lavender">
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search thoughts and memories…"
+            className="mb-3 w-full rounded-md border border-panel-edge bg-black/40 px-3 py-1.5 text-sm text-foreground placeholder:text-steel focus:border-lavender focus:outline-none"
+          />
           <div className="grid flex-1 grid-cols-2 gap-4 overflow-y-auto">
             <div>
               <h3 className="text-[10px] uppercase tracking-[0.3em] text-lavender">
                 Thoughts
               </h3>
-              {thoughts === undefined ? (
+              {shownThoughts === undefined ? (
                 <ZoneEmpty>syncing…</ZoneEmpty>
-              ) : thoughts.length === 0 ? (
-                <ZoneEmpty>Nothing captured yet.</ZoneEmpty>
+              ) : shownThoughts.length === 0 ? (
+                <ZoneEmpty>
+                  {searching ? "No matches." : "Nothing captured yet."}
+                </ZoneEmpty>
               ) : (
                 <ul className="mt-2 space-y-2">
-                  {thoughts.map((t) => (
+                  {shownThoughts.map((t) => (
                     <li key={t._id} className="text-sm text-foreground/80">
                       {t.cleaned}
+                      {t.tags.length > 0 && (
+                        <span className="ml-2 text-[10px] uppercase tracking-wider text-lavender/60">
+                          {t.tags.join(" · ")}
+                        </span>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -106,13 +111,15 @@ export default function Dashboard() {
               <h3 className="text-[10px] uppercase tracking-[0.3em] text-lavender">
                 Memories
               </h3>
-              {memories === undefined ? (
+              {shownMemories === undefined ? (
                 <ZoneEmpty>syncing…</ZoneEmpty>
-              ) : memories.length === 0 ? (
-                <ZoneEmpty>Morpheus hasn&apos;t learned anything yet.</ZoneEmpty>
+              ) : shownMemories.length === 0 ? (
+                <ZoneEmpty>
+                  {searching ? "No matches." : "Morpheus hasn't learned anything yet."}
+                </ZoneEmpty>
               ) : (
                 <ul className="mt-2 space-y-2">
-                  {memories.map((m) => (
+                  {shownMemories.map((m) => (
                     <li key={m._id} className="text-sm text-foreground/80">
                       <span className="text-lavender/70">[{m.type}]</span>{" "}
                       {m.content}
@@ -121,6 +128,25 @@ export default function Dashboard() {
                 </ul>
               )}
             </div>
+          </div>
+          <div className="mt-3 border-t border-panel-edge pt-2">
+            <h3 className="text-[10px] uppercase tracking-[0.3em] text-lavender">
+              Conversations
+            </h3>
+            {transcripts === undefined || transcripts.length === 0 ? (
+              <ZoneEmpty>No conversations logged yet.</ZoneEmpty>
+            ) : (
+              <ul className="mt-1 space-y-1">
+                {transcripts.slice(0, 4).map((t) => (
+                  <li key={t._id} className="text-xs text-foreground/70">
+                    <span className="text-amber/80">{t.title}</span> ·{" "}
+                    {t.turns.length} turns
+                    {t.toolCalls.length > 0 &&
+                      ` · ${t.toolCalls.length} tool call(s)`}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </Zone>
 
