@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+:root {
+  --background: #050608;
+  --foreground: #d8e4f0;
+  --lcars-amber: #ff9900;
+  --lcars-salmon: #ff7788;
+  --lcars-lavender: #cc99cc;
+  --lcars-blue: #99ccff;
+  --lcars-steel: #6688aa;
+  --hud-cyan: #35e0ff;
+  --panel: #0b0e14;
+  --panel-edge: #1a2233;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-amber: var(--lcars-amber);
+  --color-salmon: var(--lcars-salmon);
+  --color-lavender: var(--lcars-lavender);
+  --color-hudblue: var(--lcars-blue);
+  --color-steel: var(--lcars-steel);
+  --color-cyan-hud: var(--hud-cyan);
+  --color-panel: var(--panel);
+  --color-panel-edge: var(--panel-edge);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-mono-hud);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-mono-hud), monospace;
+}
+
+/* LCARS end-cap: pill on one side only */
+.lcars-cap-left {
+  border-radius: 9999px 0 0 9999px;
+}
+.lcars-cap-right {
+  border-radius: 0 9999px 9999px 0;
+}
+
+/* Subtle HUD glow for live elements */
+.hud-glow {
+  text-shadow: 0 0 8px color-mix(in srgb, currentColor 60%, transparent);
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.pulse-soft {
+  animation: pulse-soft 2.4s ease-in-out infinite;
+}
