@@ -38,6 +38,9 @@ async function execute(
     userId: USER_ID,
     connectedAccountId,
     arguments: args,
+    // ponytail: track latest toolkit versions; pin versions if a Composio
+    // release ever changes a response shape under us.
+    dangerouslySkipVersionCheck: true,
   });
   if (!result.successful) {
     const error = String(result.error ?? "unknown error");
