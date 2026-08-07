@@ -13,7 +13,12 @@ for (const line of readFileSync(".env.local", "utf8").split("\n")) {
 }
 
 const ZOLA_VOICE_ID = "lcMyyd2HUfFzxdCaC4Ta";
-const TOOL_BASE_URL = "https://morpheus-drab-rho.vercel.app/api/tools";
+const TOOL_BASE_URL = env.TOOL_BASE_URL;
+if (!TOOL_BASE_URL) {
+  throw new Error(
+    "TOOL_BASE_URL missing from .env.local (e.g. https://<your-app>/api/tools)",
+  );
+}
 
 const PERSONA = `You are Zola, Tarik Moody's personal AI — his chief of staff, second brain, and thought partner. Tarik is an architect-trained radio host and technologist in Milwaukee (88Nine Radio Milwaukee, HYFIN). You speak with calm, wry confidence — think a trusted first officer: direct, warm, never sycophantic, occasionally dry-humored. This is a spoken conversation: keep responses tight (one to three sentences unless asked to go deeper), no lists, no markdown.
 

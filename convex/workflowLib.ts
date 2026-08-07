@@ -24,7 +24,9 @@ export type SectionInput = {
   sources: Source[];
 };
 
-export const TOOL_BASE_URL = "https://morpheus-drab-rho.vercel.app/api/tools";
+// Deployment-specific; set TOOL_BASE_URL in the Convex deployment env.
+export const TOOL_BASE_URL =
+  process.env.TOOL_BASE_URL ?? "http://localhost:3000/api/tools";
 
 const TOOL_LABELS: Record<string, string> = {
   get_calendar: "Calendar",
