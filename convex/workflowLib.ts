@@ -69,7 +69,12 @@ export function expandSteps(
           resolveValue(val, vars),
         ]),
       );
-      return [{ tool: step.tool, args, label: labelFor(step.tool) }];
+      // A research step's query makes a better section heading than "web research".
+      const label =
+        step.tool === "web_research" && args.query
+          ? args.query
+          : labelFor(step.tool);
+      return [{ tool: step.tool, args, label }];
     }
     return vars.topics.map((topic) => ({
       tool: step.tool,
