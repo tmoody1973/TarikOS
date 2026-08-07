@@ -113,6 +113,7 @@ export type EmailSummary = {
   from: string;
   subject: string;
   snippet: string;
+  threadId?: string;
 };
 
 export async function getRecentEmails(): Promise<EmailSummary[]> {
@@ -130,6 +131,8 @@ export async function getRecentEmails(): Promise<EmailSummary[]> {
         preview?: { subject?: string };
         messageText?: string;
         snippet?: string;
+        threadId?: string;
+        thread_id?: string;
       };
       const messages = ((data.messages ?? []) as Msg[]) ?? [];
       return messages.map((m) => ({
@@ -137,6 +140,7 @@ export async function getRecentEmails(): Promise<EmailSummary[]> {
         from: String(m.sender ?? m.from ?? "").replace(/<.*>/, "").trim(),
         subject: String(m.subject ?? m.preview?.subject ?? ""),
         snippet: String(m.snippet ?? m.messageText ?? "").slice(0, 160),
+        threadId: m.threadId ?? m.thread_id ?? undefined,
       }));
     }),
   );

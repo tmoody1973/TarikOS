@@ -1,10 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { Authenticated, AuthLoading, useQuery } from "convex/react";
 import { UserButton } from "@clerk/nextjs";
 import { api } from "../../convex/_generated/api";
 import { Zone, ZoneEmpty } from "@/components/hud/Zone";
+import { TodayPanel, InboxPanel } from "@/components/DayPanels";
 
 // Home (MOO-483): command center + summary cards. Zones summarize; pages
 // hold the detail; the voice dock (AppShell) is the conversation surface.
@@ -41,33 +43,62 @@ const STATUS_COLOR: Record<string, string> = {
 function HomeInner() {
   const cards = useQuery(api.dashboard.briefingCards);
   const summary = useQuery(api.dashboard.homeSummary);
+  const [panel, setPanel] = useState<"today" | "inbox" | null>(null);
 
   return (
     <div className="relative grid flex-1 grid-cols-1 gap-3 lg:grid-cols-2 lg:grid-rows-2">
       {/* Command center */}
       <Zone title="Command Center" accent="bg-hudblue">
+        <div className="mb-3 flex gap-2">
+          <button
+            onClick={() => setPanel("today")}
+            className="lcars-cap-left bg-hudblue px-4 py-1 font-[family-name:var(--font-display)] text-xs text-black transition hover:opacity-80"
+          >
+            TODAY
+          </button>
+          <button
+            onClick={() => setPanel("inbox")}
+            className="lcars-cap-right bg-salmon px-4 py-1 font-[family-name:var(--font-display)] text-xs text-black transition hover:opacity-80"
+          >
+            INBOX
+          </button>
+        </div>
         {cards === undefined ? (
           <ZoneEmpty>syncing…</ZoneEmpty>
         ) : cards.length === 0 ? (
           <ZoneEmpty>No briefing cards yet.</ZoneEmpty>
         ) : (
           <ul className="space-y-3 overflow-y-auto">
-            {cards.map((c) => (
-              <li
-                key={c._id}
-                className="rounded-md border border-panel-edge bg-black/30 p-3"
-              >
-                <div
-                  className={`text-[10px] uppercase tracking-[0.3em] ${KIND_COLOR[c.kind]} hud-glow`}
-                >
-                  {c.kind}
-                </div>
-                <div className="mt-1 font-[family-name:var(--font-display)] text-lg text-foreground">
-                  {c.title}
-                </div>
-                <p className="mt-1 text-sm text-foreground/70">{c.body}</p>
-              </li>
-            ))}
+            {cards.map((c) => {
+              const opens =
+                c.kind === "calendar"
+                  ? ("today" as const)
+                  : c.kind === "email"
+                    ? ("inbox" as const)
+                    : null;
+              return (
+                <li key={c._id}>
+                  <div
+                    onClick={opens ? () => setPanel(opens) : undefined}
+                    className={`rounded-md border border-panel-edge bg-black/30 p-3 ${
+                      opens
+                        ? "cursor-pointer transition hover:border-hudblue/40"
+                        : ""
+                    }`}
+                  >
+                    <div
+                      className={`text-[10px] uppercase tracking-[0.3em] ${KIND_COLOR[c.kind]} hud-glow`}
+                    >
+                      {c.kind}
+                    </div>
+                    <div className="mt-1 font-[family-name:var(--font-display)] text-lg text-foreground">
+                      {c.title}
+                    </div>
+                    <p className="mt-1 text-sm text-foreground/70">{c.body}</p>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </Zone>
@@ -165,6 +196,9 @@ function HomeInner() {
       <div className="absolute right-2 top-2">
         <UserButton />
       </div>
+
+      <TodayPanel open={panel === "today"} onClose={() => setPanel(null)} />
+      <InboxPanel open={panel === "inbox"} onClose={() => setPanel(null)} />
     </div>
   );
 }
