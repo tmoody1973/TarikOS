@@ -27,7 +27,29 @@ export const recentMemories = query({
   args: {},
   handler: async (ctx) => {
     await requireUser(ctx);
-    return await ctx.db.query("memories").order("desc").take(20);
+    return await ctx.db.query("memories").order("desc").take(200);
+  },
+});
+
+// Provenance view (brain page): a memory plus the conversation that taught it.
+export const memoryDetail = query({
+  args: { memoryId: v.id("memories") },
+  handler: async (ctx, { memoryId }) => {
+    await requireUser(ctx);
+    const memory = await ctx.db.get(memoryId);
+    if (!memory) return null;
+    const transcript = memory.transcriptId
+      ? await ctx.db.get(memory.transcriptId)
+      : null;
+    return { memory, transcript };
+  },
+});
+
+export const deleteMemory = mutation({
+  args: { memoryId: v.id("memories") },
+  handler: async (ctx, { memoryId }) => {
+    await requireUser(ctx);
+    await ctx.db.delete(memoryId);
   },
 });
 
