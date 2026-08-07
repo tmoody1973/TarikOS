@@ -1,12 +1,29 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useConversation } from "@elevenlabs/react";
 import { useConvex, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 
+// Lazy WebGL orb — three.js only downloads when the HUD mounts client-side.
+const Orb = dynamic(() => import("./Orb").then((m) => m.Orb), { ssr: false });
+
 type Turn = { role: "tarik" | "morpheus"; text: string };
+
+// LCARS palette: amber core, HUD-cyan halo.
+const ORB_COLORS: [string, string] = ["#ff9900", "#35e0ff"];
+
+// Raw SDK volume sits low; the official blocks apply this curve so the orb
+// visibly moves. The getters throw when no session is active.
+function scaleVolume(get: (() => number) | undefined): number {
+  try {
+    return Math.min(1, Math.pow(get?.() ?? 0, 0.5) * 2.5);
+  } catch {
+    return 0;
+  }
+}
 
 export function VoiceLink() {
   const convexClient = useConvex();
@@ -44,8 +61,17 @@ export function VoiceLink() {
     },
   });
 
-  const { status, isSpeaking } = conversation;
+  const { status, isSpeaking, getInputVolume, getOutputVolume } = conversation;
   const connected = status === "connected";
+
+  const scaledInput = useCallback(
+    () => scaleVolume(getInputVolume),
+    [getInputVolume],
+  );
+  const scaledOutput = useCallback(
+    () => scaleVolume(getOutputVolume),
+    [getOutputVolume],
+  );
 
   async function engage() {
     setError(null);
@@ -115,6 +141,21 @@ export function VoiceLink() {
       {error && (
         <p className="mt-2 text-xs text-salmon">VOICE LINK ERROR: {error}</p>
       )}
+
+      {/* Zola's orb: idle-breathes via auto mode when disconnected; reacts to
+          real session audio (manual mode) when the link is live. */}
+      <div className="mx-auto mt-3 h-32 w-32 shrink-0 sm:h-40 sm:w-40">
+        {connected ? (
+          <Orb
+            colors={ORB_COLORS}
+            volumeMode="manual"
+            getInputVolume={scaledInput}
+            getOutputVolume={scaledOutput}
+          />
+        ) : (
+          <Orb colors={ORB_COLORS} volumeMode="auto" agentState={null} />
+        )}
+      </div>
 
       <div className="mt-3 flex-1 space-y-2 overflow-y-auto">
         {turns.length === 0 ? (
