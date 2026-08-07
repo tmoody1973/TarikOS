@@ -8,7 +8,13 @@ export type ResolvedStep = {
   args: Record<string, string>;
   label: string;
 };
-export type TemplateVars = { today: string; topics: string[]; topic?: string };
+export type FeedGroup = { label: string; feeds: string[] };
+export type TemplateVars = {
+  today: string;
+  topics: string[];
+  topic?: string;
+  feedGroups?: FeedGroup[];
+};
 export type ToolResult = { ok: boolean; message: string; data?: unknown };
 export type Source = { title: string; url: string };
 export type SectionInput = {
@@ -45,9 +51,17 @@ export function expandSteps(
   vars: TemplateVars,
 ): ResolvedStep[] {
   return steps.flatMap((step) => {
-    const usesTopics = Object.values(step.args).some((val) =>
-      val.includes("{{topics}}"),
-    );
+    const argValues = Object.values(step.args);
+    if (argValues.some((val) => val.includes("{{feedGroups}}"))) {
+      // Fan out into one call per feed group; the route gets the group's
+      // feed URLs space-joined, the section takes the group's label.
+      return (vars.feedGroups ?? []).map((group) => ({
+        tool: step.tool,
+        args: { label: group.label, feeds: group.feeds.join(" ") },
+        label: group.label,
+      }));
+    }
+    const usesTopics = argValues.some((val) => val.includes("{{topics}}"));
     if (!usesTopics) {
       const args = Object.fromEntries(
         Object.entries(step.args).map(([k, val]) => [

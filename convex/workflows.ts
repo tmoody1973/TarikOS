@@ -5,6 +5,7 @@ import {
   query,
 } from "./_generated/server";
 import { v } from "convex/values";
+import type { MutationCtx } from "./_generated/server";
 import { requireUser } from "./dashboard";
 import { checkToolSecret, markToolHealthy } from "./secondBrain";
 
@@ -169,21 +170,65 @@ export const markBriefToolHealthy = mutation({
 
 // ---- One-time seed (run as admin: npx convex run workflows:seedPhase2) ----
 
+// Search topics = open-ended discovery; feed groups = named sources with
+// canonical URLs via RSS (no aggregator redirect garbage). Feed URLs
+// verified live 2026-08-07; Bandcamp/FOX6/JSOnline expose no usable feeds.
 const STANDING_TOPICS = [
   "AI in radio and broadcast",
   "AI and developer tooling news",
-  "Public radio and media funding",
-  "Tech news from TechCrunch, VentureBeat, and Product Hunt",
   "Bandcamp news",
   "Cooking recipes worth trying",
-  "Milwaukee news",
-  "Milwaukee business news",
 ];
 
+const FEED_GROUPS = [
+  {
+    label: "Tech headlines",
+    feeds: [
+      "https://techcrunch.com/feed/",
+      "https://venturebeat.com/feed/",
+      "https://www.producthunt.com/feed",
+    ],
+  },
+  {
+    label: "Milwaukee news",
+    feeds: [
+      "https://urbanmilwaukee.com/feed/",
+      "https://milwaukeerecord.com/feed/",
+      "https://www.tmj4.com/news/local-news.rss",
+    ],
+  },
+  { label: "Milwaukee business", feeds: ["https://biztimes.com/feed/"] },
+  { label: "Public media & funding", feeds: ["https://current.org/feed/"] },
+];
+
+const MORNING_BRIEF_STEPS: { tool: string; args: Record<string, string> }[] = [
+  { tool: "get_calendar", args: { date: "{{today}}" } },
+  { tool: "get_emails", args: {} },
+  { tool: "get_rss", args: { feeds: "{{feedGroups}}" } },
+  { tool: "web_research", args: { query: "{{topics}}" } },
+];
+
+async function upsertSetting(
+  ctx: MutationCtx,
+  key: string,
+  value: unknown,
+): Promise<void> {
+  const row = await ctx.db
+    .query("settings")
+    .withIndex("by_key", (q) => q.eq("key", key))
+    .unique();
+  if (row) {
+    await ctx.db.patch(row._id, { value });
+  } else {
+    await ctx.db.insert("settings", { key, value });
+  }
+}
+
+// Idempotent upsert: safe to re-run after changing steps/topics/feeds.
+// Preserves the workflow's enabled toggle; overwrites steps and settings.
 export const seedPhase2 = internalMutation({
   args: {},
   handler: async (ctx) => {
-    const results: string[] = [];
     const existing = await ctx.db
       .query("workflows")
       .withIndex("by_name", (q) => q.eq("name", "morning-brief"))
@@ -194,31 +239,14 @@ export const seedPhase2 = internalMutation({
         // 12:00 UTC = 7:00 CDT (6:00 CST in winter — Convex crons are
         // UTC-only; revisit at the DST flip if it matters).
         trigger: { type: "cron", schedule: "0 12 * * 1-5" },
-        steps: [
-          { tool: "get_calendar", args: { date: "{{today}}" } },
-          { tool: "get_emails", args: {} },
-          { tool: "web_research", args: { query: "{{topics}}" } },
-        ],
+        steps: MORNING_BRIEF_STEPS,
         enabled: true,
       });
-      results.push("workflow morning-brief seeded");
     } else {
-      results.push("workflow morning-brief already present");
+      await ctx.db.patch(existing._id, { steps: MORNING_BRIEF_STEPS });
     }
-
-    const topics = await ctx.db
-      .query("settings")
-      .withIndex("by_key", (q) => q.eq("key", "briefTopics"))
-      .unique();
-    if (!topics) {
-      await ctx.db.insert("settings", {
-        key: "briefTopics",
-        value: STANDING_TOPICS,
-      });
-      results.push(`briefTopics seeded (${STANDING_TOPICS.length} topics)`);
-    } else {
-      results.push("briefTopics already present");
-    }
-    return results.join("; ");
+    await upsertSetting(ctx, "briefTopics", STANDING_TOPICS);
+    await upsertSetting(ctx, "briefFeeds", FEED_GROUPS);
+    return `morning-brief ${existing ? "updated" : "seeded"}; ${STANDING_TOPICS.length} search topics; ${FEED_GROUPS.length} feed groups`;
   },
 });

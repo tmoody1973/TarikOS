@@ -70,6 +70,10 @@ export const run = internalAction({
       ((await ctx.runQuery(internal.workflows.getSetting, {
         key: "briefTopics",
       })) as string[] | null) ?? [];
+    const feedGroups =
+      ((await ctx.runQuery(internal.workflows.getSetting, {
+        key: "briefFeeds",
+      })) as { label: string; feeds: string[] }[] | null) ?? [];
     const today = chicagoToday();
     const runStartedAt = Date.now();
 
@@ -88,6 +92,7 @@ export const run = internalAction({
       today,
       topics,
       topic: params?.topic,
+      feedGroups,
     });
 
     let okCount = 0;

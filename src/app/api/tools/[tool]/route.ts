@@ -11,6 +11,7 @@ import {
   agentkeyResearch,
   type ResearchResult,
 } from "@/lib/research";
+import { fetchFeedGroup } from "@/lib/rss";
 
 // Webhook endpoint for Zola's ElevenLabs server tools. Authenticated by
 // a shared secret header (configured on the agent), not a browser session —
@@ -220,6 +221,33 @@ async function runTool(
           results.length === 0
             ? "No results found for that."
             : `${results.length} sources found; they're on the dashboard.`,
+        data: { results },
+      };
+    }
+    case "get_rss": {
+      const feeds =
+        typeof body.feeds === "string"
+          ? body.feeds.split(/\s+/).filter(Boolean)
+          : [];
+      if (feeds.length === 0) {
+        return { ok: false, message: "get_rss needs a feeds list." };
+      }
+      const results = await fetchFeedGroup(feeds);
+      await convex.mutation(api.secondBrain.pushBriefingCards, {
+        secret,
+        tool: "get_rss",
+        cards: results.slice(0, 4).map((r) => ({
+          kind: "research" as const,
+          title: r.title,
+          body: `${r.snippet}${r.url ? ` — ${r.url}` : ""}`,
+        })),
+      });
+      return {
+        ok: true,
+        message:
+          results.length === 0
+            ? "No fresh items in those feeds."
+            : `${results.length} fresh item(s) from the feeds.`,
         data: { results },
       };
     }

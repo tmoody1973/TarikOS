@@ -48,6 +48,26 @@ test("a {{topics}} step fans out into one call per topic, in order", () => {
   );
 });
 
+test("a {{feedGroups}} step fans out per feed group with joined urls", () => {
+  const out = expandSteps(
+    [{ tool: "get_rss", args: { feeds: "{{feedGroups}}" } }],
+    {
+      ...vars,
+      feedGroups: [
+        { label: "Tech headlines", feeds: ["https://a/feed", "https://b/feed"] },
+        { label: "Milwaukee news", feeds: ["https://c/feed"] },
+      ],
+    },
+  );
+  assert.equal(out.length, 2);
+  assert.deepEqual(out[0], {
+    tool: "get_rss",
+    args: { label: "Tech headlines", feeds: "https://a/feed https://b/feed" },
+    label: "Tech headlines",
+  });
+  assert.equal(out[1].label, "Milwaukee news");
+});
+
 test("{{topic}} resolves from run params (on-demand brief shape)", () => {
   const out = expandSteps(
     [{ tool: "web_research", args: { query: "latest on {{topic}}" } }],
