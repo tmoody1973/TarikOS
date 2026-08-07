@@ -47,6 +47,20 @@ body {
   text-shadow: 0 0 8px color-mix(in srgb, currentColor 60%, transparent);
 }
 
+/* Hallmark · macrostructure: Broadsheet reader · theme: preserved LCARS ·
+ * design-system: app tokens · designed-as-app · scope: /briefs reader */
+.news-columns {
+  columns: 21rem;
+  column-gap: 2.5rem;
+  column-rule: 1px solid var(--panel-edge);
+}
+.news-item {
+  break-inside: avoid;
+}
+.news-rule-double {
+  border-block: 3px double var(--lcars-steel);
+}
+
 @keyframes pulse-soft {
   0%,
   100% {

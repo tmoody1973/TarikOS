@@ -5,7 +5,6 @@ import Link from "next/link";
 import { Authenticated, AuthLoading, useAction, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
-import { Zone, ZoneEmpty } from "@/components/hud/Zone";
 
 export default function BriefsPage() {
   return (
@@ -105,7 +104,7 @@ function BriefsInner() {
       <aside className="hidden w-40 flex-col gap-2 lg:flex">
         <Link
           href="/"
-          className="lcars-cap-left flex h-24 items-end justify-end bg-amber p-3 transition hover:opacity-80"
+          className="lcars-cap-left flex h-24 items-end justify-end bg-amber p-3 transition hover:opacity-80 focus-visible:outline-2 focus-visible:outline-cyan-hud"
         >
           <span className="font-[family-name:var(--font-display)] text-xl leading-none text-black">
             TARIK
@@ -126,97 +125,120 @@ function BriefsInner() {
         </div>
       </aside>
 
-      <main className="grid flex-1 grid-cols-1 gap-3 lg:grid-cols-[minmax(220px,1fr)_2.5fr]">
-        <Zone title="Briefs" accent="bg-lavender">
-          {briefs === undefined ? (
-            <ZoneEmpty>syncing…</ZoneEmpty>
-          ) : briefs.length === 0 ? (
-            <ZoneEmpty>No briefs yet — the morning brief builds weekdays at 7am.</ZoneEmpty>
-          ) : (
-            <ul className="space-y-1.5 overflow-y-auto">
-              {briefs.map((b) => (
-                <li key={b._id}>
-                  <button
-                    onClick={() => setSelectedId(b._id)}
-                    className={`flex w-full items-center gap-2 rounded-md border px-3 py-2 text-left transition ${
-                      b._id === activeId
-                        ? "border-lavender/60 bg-lavender/10"
-                        : "border-panel-edge bg-black/30 hover:border-lavender/30"
-                    }`}
-                  >
+      <main className="flex min-w-0 flex-1 flex-col overflow-y-auto rounded-lg border border-panel-edge bg-panel px-4 py-5 sm:px-8">
+        {briefs === undefined ? (
+          <p className="pulse-soft mt-8 text-center text-xs tracking-[0.3em] text-steel">
+            SYNCING…
+          </p>
+        ) : briefs.length === 0 ? (
+          <p className="mt-8 text-center text-sm text-steel">
+            No briefs yet — the morning brief builds weekdays at 7am.
+          </p>
+        ) : (
+          <>
+            {/* Masthead */}
+            <header className="news-rule-double px-1 py-4 text-center">
+              <h1 className="font-[family-name:var(--font-display)] text-3xl uppercase leading-none tracking-[0.08em] text-foreground [overflow-wrap:anywhere] sm:text-5xl">
+                {brief?.title ?? "The Daily Brief"}
+              </h1>
+              {/* Folio line */}
+              {brief && (
+                <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 border-t border-panel-edge pt-2 text-[10px] uppercase tracking-[0.25em] text-steel">
+                  <span>{briefDate(brief._creationTime)}</span>
+                  <span aria-hidden>·</span>
+                  <span className="inline-flex items-center gap-1.5">
                     <span
-                      className={`h-2 w-2 shrink-0 rounded-full ${STATUS_COLOR[b.status] ?? "bg-steel"}`}
+                      className={`h-1.5 w-1.5 rounded-full ${STATUS_COLOR[brief.status] ?? "bg-steel"}`}
                     />
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm text-foreground/90">
-                        {b.title}
-                      </span>
-                      <span className="block text-[10px] uppercase tracking-wider text-steel">
-                        {briefDate(b._creationTime)} · {b.status}
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Zone>
-
-        <Zone title={brief?.title ?? "Reader"} accent="bg-hudblue">
-          {brief === undefined && activeId ? (
-            <ZoneEmpty>syncing…</ZoneEmpty>
-          ) : !brief ? (
-            <ZoneEmpty>Select a brief.</ZoneEmpty>
-          ) : (
-            <div className="flex flex-1 flex-col overflow-hidden">
-              <div className="flex items-center gap-3 border-b border-panel-edge pb-2">
-                <span
-                  className={`h-2 w-2 rounded-full ${STATUS_COLOR[brief.status] ?? "bg-steel"}`}
-                />
-                <span className="text-[10px] uppercase tracking-[0.25em] text-steel">
-                  {brief.status === "building"
-                    ? "building — sections appear as steps complete"
-                    : `${brief.status} · ${brief.sections.length} section(s)`}
-                </span>
-                <button
-                  onClick={refresh}
-                  disabled={refreshing || brief.status === "building"}
-                  className="lcars-cap-right ml-auto bg-hudblue px-4 py-1 font-[family-name:var(--font-display)] text-sm text-black transition hover:opacity-80 disabled:opacity-40"
-                >
-                  {refreshing ? "QUEUED…" : "REFRESH"}
-                </button>
-              </div>
-              <div className="mt-3 flex-1 space-y-5 overflow-y-auto pr-2">
-                {brief.sections.length === 0 ? (
-                  <ZoneEmpty>
                     {brief.status === "building"
-                      ? "Building — first section incoming…"
-                      : "No sections."}
-                  </ZoneEmpty>
-                ) : (
-                  brief.sections.map((s, i) => (
-                    <section key={i}>
+                      ? "building — sections arriving live"
+                      : `${brief.status} · ${brief.sections.length} sections`}
+                  </span>
+                  <span aria-hidden>·</span>
+                  <button
+                    onClick={refresh}
+                    disabled={refreshing || brief.status === "building"}
+                    className="tracking-[0.25em] text-hudblue transition hover:text-cyan-hud focus-visible:outline-2 focus-visible:outline-cyan-hud disabled:opacity-40"
+                  >
+                    {refreshing ? "QUEUED…" : "↻ REFRESH"}
+                  </button>
+                </div>
+              )}
+            </header>
+
+            {/* Editions strip */}
+            <nav
+              aria-label="Editions"
+              className="mt-3 flex gap-2 overflow-x-auto border-b border-panel-edge pb-3"
+            >
+              {briefs.map((b) => (
+                <button
+                  key={b._id}
+                  onClick={() => setSelectedId(b._id)}
+                  className={`flex shrink-0 items-center gap-2 rounded-full border px-3 py-1 text-[11px] uppercase tracking-wider transition focus-visible:outline-2 focus-visible:outline-cyan-hud ${
+                    b._id === activeId
+                      ? "border-lavender/70 bg-lavender/15 text-foreground"
+                      : "border-panel-edge text-steel hover:border-lavender/40 hover:text-foreground/80"
+                  }`}
+                >
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${STATUS_COLOR[b.status] ?? "bg-steel"}`}
+                  />
+                  {briefDate(b._creationTime)}
+                </button>
+              ))}
+            </nav>
+
+            {/* Column flow */}
+            {!brief ? (
+              <p className="pulse-soft mt-8 text-center text-xs tracking-[0.3em] text-steel">
+                SYNCING…
+              </p>
+            ) : brief.sections.length === 0 ? (
+              <p className="mt-8 text-center text-sm text-steel">
+                {brief.status === "building"
+                  ? "Building — first section incoming…"
+                  : "No sections."}
+              </p>
+            ) : (
+              <div className="news-columns mt-5">
+                {brief.sections.map((s, i) => {
+                  const isError = s.body.startsWith("⚠️");
+                  return (
+                    <section
+                      key={i}
+                      className={`news-item mb-6 ${
+                        isError
+                          ? "rounded-md border border-salmon/40 bg-salmon/5 p-3"
+                          : ""
+                      }`}
+                    >
                       <h3
-                        className={`text-[11px] uppercase tracking-[0.3em] hud-glow ${
-                          s.body.startsWith("⚠️")
-                            ? "text-salmon"
-                            : "text-hudblue"
+                        className={`border-b pb-1 font-[family-name:var(--font-display)] text-base uppercase tracking-[0.15em] [overflow-wrap:anywhere] ${
+                          isError
+                            ? "border-salmon/40 text-salmon"
+                            : "border-panel-edge text-hudblue"
                         }`}
                       >
+                        {isError && (
+                          <span className="mr-2 text-[10px] tracking-[0.25em]">
+                            CORRECTION
+                          </span>
+                        )}
                         {s.heading}
                       </h3>
-                      <div className="mt-1.5">
+                      <div className="mt-2 text-[13px] leading-relaxed">
                         <Body text={s.body} />
                       </div>
                       {s.sources.length > 0 && (
-                        <p className="mt-1.5 space-x-3 pl-3 text-[11px]">
+                        <p className="mt-2 border-t border-dotted border-panel-edge pt-1.5 text-[11px] leading-relaxed">
                           {s.sources.map((src, j) => (
                             <a
                               key={j}
                               href={src.url}
                               target="_blank"
                               rel="noreferrer"
-                              className="text-lavender/80 underline-offset-2 hover:underline"
+                              className="mr-3 text-lavender/80 underline-offset-2 [overflow-wrap:anywhere] hover:underline focus-visible:outline-2 focus-visible:outline-cyan-hud"
                             >
                               {src.title}
                             </a>
@@ -224,12 +246,12 @@ function BriefsInner() {
                         </p>
                       )}
                     </section>
-                  ))
-                )}
+                  );
+                })}
               </div>
-            </div>
-          )}
-        </Zone>
+            )}
+          </>
+        )}
       </main>
     </div>
   );
