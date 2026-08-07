@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Authenticated, AuthLoading, useAction, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
+import { ReaderPane } from "@/components/ReaderPane";
 
 export default function BriefsPage() {
   return (
@@ -88,6 +89,7 @@ function BriefsInner() {
   );
   const runNow = useAction(api.workflowRunner.runNow);
   const [refreshing, setRefreshing] = useState(false);
+  const [readerUrl, setReaderUrl] = useState<string | null>(null);
 
   async function refresh() {
     if (!brief) return;
@@ -236,8 +238,10 @@ function BriefsInner() {
                             <a
                               key={j}
                               href={src.url}
-                              target="_blank"
-                              rel="noreferrer"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setReaderUrl(src.url);
+                              }}
                               className="mr-3 text-lavender/80 underline-offset-2 [overflow-wrap:anywhere] hover:underline focus-visible:outline-2 focus-visible:outline-cyan-hud"
                             >
                               {src.title}
@@ -253,6 +257,8 @@ function BriefsInner() {
           </>
         )}
       </main>
+
+      <ReaderPane url={readerUrl} onClose={() => setReaderUrl(null)} />
     </div>
   );
 }
