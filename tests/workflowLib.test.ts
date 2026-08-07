@@ -89,6 +89,27 @@ test("research headlines are inline links; unlinked fall back to bold", () => {
   ]);
 });
 
+test("relative/garbage result urls never become links or sources", () => {
+  const { section } = formatSection(
+    { tool: "web_research", args: { query: "x" }, label: "Funding" },
+    {
+      ok: true,
+      message: "2 sources found",
+      data: {
+        results: [
+          { title: "Aggregator Story", snippet: "s", url: "/goto?url=CAESVgHuR6" },
+          { title: "Real Story", snippet: "s", url: "https://real.example/a" },
+        ],
+      },
+    },
+  );
+  assert.ok(section.body.includes("- **Aggregator Story** — s"));
+  assert.ok(!section.body.includes("/goto"));
+  assert.deepEqual(section.sources, [
+    { title: "Real Story", url: "https://real.example/a" },
+  ]);
+});
+
 test("cleanText strips markdown artifacts and hard newlines from snippets", () => {
   assert.equal(
     cleanText("News\n\n# Bandcamp Announces Ban\n**bold** and [a link](https://x.example) here"),

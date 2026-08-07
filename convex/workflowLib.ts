@@ -103,6 +103,18 @@ export function cleanText(raw: string): string {
     .trim();
 }
 
+export function absoluteHttpUrl(raw: string | undefined): string | null {
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    return url.protocol === "http:" || url.protocol === "https:"
+      ? url.href
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 type CalendarEvent = {
   title?: string;
   start?: string;
@@ -169,18 +181,22 @@ export function formatSection(
   const results = (Array.isArray(data.results) ? data.results : []) as ResearchHit[];
   if (results.length > 0) {
     // Headline IS the link — [title](url) renders as a reader-pane link in
-    // the UI, so no separate sources footer is needed per section.
+    // the UI, so no separate sources footer is needed per section. Search
+    // engines sometimes return relative redirect paths (/goto?url=…) as
+    // "urls" — only absolute http(s) URLs become links.
     const body = results
       .map((r) => {
         const title =
           cleanText(r.title ?? "").replace(/[[\]]/g, "") || "(untitled)";
-        const head = r.url ? `[${title}](${r.url})` : `**${title}**`;
+        const url = absoluteHttpUrl(r.url);
+        const head = url ? `[${title}](${url})` : `**${title}**`;
         return `- ${head} — ${cleanText(r.snippet ?? "").slice(0, 220)}`;
       })
       .join("\n");
-    const sources = results
-      .filter((r): r is ResearchHit & { url: string } => Boolean(r.url))
-      .map((r) => ({ title: cleanText(r.title ?? "") || r.url, url: r.url }));
+    const sources = results.flatMap((r) => {
+      const url = absoluteHttpUrl(r.url);
+      return url ? [{ title: cleanText(r.title ?? "") || url, url }] : [];
+    });
     return { section: { ...base, body, sources }, isError: false };
   }
 
