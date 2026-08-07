@@ -31,6 +31,10 @@ Your tools:
 - web_research: live web search. Use whenever Tarik asks about current events, news, or anything you don't know. Summarize the results aloud in two or three sentences; source cards land on his dashboard automatically. If he says "remember this" afterward, store the key finding with remember.
 - agentkey_research: a second research engine with different providers. Use it only when Tarik explicitly asks for AgentKey or a second opinion, or when web_research is disabled or fails — it costs limited credits.
 
+- get_telos: Tarik's telos — his mission, goals, problems, challenges, and strategies. His active telos also arrives in your standing context each session; call get_telos when he asks about it directly or you need the full picture. Let the telos steer priorities: connect suggestions to his goals when it's natural, never preachy.
+- add_telos_item: create a telos item (kind: mission, goal, problem, challenge, or strategy). Goals should carry a "measurable" — a concrete finish line. TELOS SETUP INTERVIEW: if the telos is empty (or Tarik says "set up my telos" / "telos interview"), run a short spoken interview — one question at a time: first his mission (one sentence, why he does what he does), then two or three goals with measurable finish lines, then the problems he's working on, then current challenges. Create each answer with add_telos_item as you go, confirming briefly. Keep it conversational, not a form.
+- update_telos_item: change an existing telos item — pass "match" with a few words from the item, plus new text, status (active, deferred, done, dropped), or measurable. Use when Tarik completes a goal, drops one, or rewords anything. If the tool reports several matches, ask which he means.
+
 - get_brief: the latest pre-built brief document (morning brief and other workflows). This is your FIRST choice for any briefing.
 - run_workflow: kick off a workflow by name. When Tarik says "build me a brief on X" or "research X for me", call run_workflow with name "research-brief" and the topic — then tell him it's building on his Briefs page and move on; don't wait for it. Never pretend a disabled or failed workflow ran.
 - navigate_ui: control Tarik's dashboard. When he asks to see something ("show me my briefs", "open my memories", "go home"), navigate to the right page: home, briefs, brain (memories and thoughts), conversations (transcripts), or control (tool and workflow switches). Pass "target" with a few words of a brief's title to open that specific brief. Confirm in a word or two — the screen change speaks for itself.
@@ -176,6 +180,85 @@ const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
         description: "The research request",
         properties: {
           query: bodyProp("The search query, phrased for a web search engine"),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "get_telos",
+    description:
+      "Fetch Tarik's active telos items (mission, goals, problems, challenges, strategies). Use when he asks about his goals, mission, or priorities, or before advising on tradeoffs.",
+    responseTimeoutSecs: 15,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/get_telos`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: [],
+        description: "Telos lookup",
+        properties: {
+          kind: {
+            type: "string" as const,
+            description: "Optional: limit to one kind",
+            enum: ["mission", "goal", "problem", "challenge", "strategy"],
+          },
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "add_telos_item",
+    description:
+      "Create a telos item during setup or whenever Tarik states a new mission, goal, problem, challenge, or strategy. Goals should include a measurable finish line.",
+    responseTimeoutSecs: 15,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/add_telos_item`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["kind", "text"],
+        description: "The telos item to create",
+        properties: {
+          kind: {
+            type: "string" as const,
+            description: "What kind of item this is",
+            enum: ["mission", "goal", "problem", "challenge", "strategy"],
+          },
+          text: bodyProp("The item itself, one clear sentence"),
+          measurable: bodyProp(
+            "For goals: the concrete finish line (e.g. '3 shows live by Oct 1')",
+          ),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "update_telos_item",
+    description:
+      "Edit an existing telos item: mark done or dropped, reword it, or change its measurable. Pass a few words from the item as match.",
+    responseTimeoutSecs: 15,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/update_telos_item`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["match"],
+        description: "Which item to change and how",
+        properties: {
+          match: bodyProp("A few words from the item's current text"),
+          text: bodyProp("Optional: replacement text"),
+          status: {
+            type: "string" as const,
+            description: "Optional: new status",
+            enum: ["active", "deferred", "done", "dropped"],
+          },
+          measurable: bodyProp("Optional: new measurable finish line"),
         },
       },
     },

@@ -137,6 +137,7 @@ export const unembedded = internalQuery({
   ): Promise<{
     memories: { id: Id<"memories">; text: string }[];
     thoughts: { id: Id<"thoughts">; text: string }[];
+    telos: { id: Id<"telosItems">; text: string }[];
   }> => {
     const memories = await ctx.db
       .query("memories")
@@ -146,9 +147,14 @@ export const unembedded = internalQuery({
       .query("thoughts")
       .filter((q) => q.eq(q.field("embedding"), undefined))
       .take(64);
+    const telos = await ctx.db
+      .query("telosItems")
+      .filter((q) => q.eq(q.field("embedding"), undefined))
+      .take(64);
     return {
       memories: memories.map((m) => ({ id: m._id, text: m.content })),
       thoughts: thoughts.map((t) => ({ id: t._id, text: t.cleaned })),
+      telos: telos.map((t) => ({ id: t._id, text: t.text })),
     };
   },
 });
@@ -161,14 +167,22 @@ export const storeEmbeddings = internalMutation({
     thoughts: v.array(
       v.object({ id: v.id("thoughts"), embedding: v.array(v.float64()) }),
     ),
+    telos: v.array(
+      v.object({ id: v.id("telosItems"), embedding: v.array(v.float64()) }),
+    ),
   },
-  handler: async (ctx, { memories, thoughts }): Promise<void> => {
-    for (const m of memories) {
-      if (await ctx.db.get(m.id)) await ctx.db.patch(m.id, { embedding: m.embedding });
-    }
-    for (const t of thoughts) {
-      if (await ctx.db.get(t.id)) await ctx.db.patch(t.id, { embedding: t.embedding });
-    }
+  handler: async (ctx, { memories, thoughts, telos }): Promise<void> => {
+    await Promise.all([
+      ...memories.map(async (m) => {
+        if (await ctx.db.get(m.id)) await ctx.db.patch(m.id, { embedding: m.embedding });
+      }),
+      ...thoughts.map(async (t) => {
+        if (await ctx.db.get(t.id)) await ctx.db.patch(t.id, { embedding: t.embedding });
+      }),
+      ...telos.map(async (t) => {
+        if (await ctx.db.get(t.id)) await ctx.db.patch(t.id, { embedding: t.embedding });
+      }),
+    ]);
   },
 });
 
@@ -187,9 +201,12 @@ export const backfillEmbeddings = internalAction({
       const texts = [
         ...batch.memories.map((m) => m.text),
         ...batch.thoughts.map((t) => t.text),
+        ...batch.telos.map((t) => t.text),
       ];
       if (texts.length === 0) break;
       const vectors = await voyageEmbed(apiKey, texts, "document");
+      const thoughtBase = batch.memories.length;
+      const telosBase = thoughtBase + batch.thoughts.length;
       await ctx.runMutation(internal.memoryOps.storeEmbeddings, {
         memories: batch.memories.map((m, i) => ({
           id: m.id,
@@ -197,7 +214,11 @@ export const backfillEmbeddings = internalAction({
         })),
         thoughts: batch.thoughts.map((t, i) => ({
           id: t.id,
-          embedding: vectors[batch.memories.length + i],
+          embedding: vectors[thoughtBase + i],
+        })),
+        telos: batch.telos.map((t, i) => ({
+          id: t.id,
+          embedding: vectors[telosBase + i],
         })),
       });
       total += texts.length;
@@ -226,25 +247,43 @@ export const getThoughtsByIds = internalQuery({
   },
 });
 
+export const getTelosByIds = internalQuery({
+  args: { ids: v.array(v.id("telosItems")) },
+  handler: async (ctx, { ids }): Promise<Doc<"telosItems">[]> => {
+    const docs = await Promise.all(ids.map((id) => ctx.db.get(id)));
+    return docs.filter((d): d is Doc<"telosItems"> => d !== null);
+  },
+});
+
 // Shared: embed the query and fetch the vector-matched docs (null = no key).
 async function vectorHits(
   ctx: ActionCtx,
   searchQuery: string,
-): Promise<{ memDocs: Doc<"memories">[]; thoughtDocs: Doc<"thoughts">[] } | null> {
+): Promise<{
+  memDocs: Doc<"memories">[];
+  thoughtDocs: Doc<"thoughts">[];
+  telosDocs: Doc<"telosItems">[];
+} | null> {
   const apiKey = process.env.VOYAGE_API_KEY;
   if (!apiKey) return null;
   const [vector] = await voyageEmbed(apiKey, [searchQuery], "query");
-  const [memHits, thoughtHits] = await Promise.all([
+  const [memHits, thoughtHits, telosHits] = await Promise.all([
     ctx.vectorSearch("memories", "by_embedding", { vector, limit: 5 }),
     ctx.vectorSearch("thoughts", "by_embedding", { vector, limit: 5 }),
+    ctx.vectorSearch("telosItems", "by_embedding", { vector, limit: 5 }),
   ]);
-  const memDocs = await ctx.runQuery(internal.memoryOps.getMemoriesByIds, {
-    ids: memHits.filter((h) => h._score >= MIN_SCORE).map((h) => h._id),
-  });
-  const thoughtDocs = await ctx.runQuery(internal.memoryOps.getThoughtsByIds, {
-    ids: thoughtHits.filter((h) => h._score >= MIN_SCORE).map((h) => h._id),
-  });
-  return { memDocs, thoughtDocs };
+  const [memDocs, thoughtDocs, telosDocs] = await Promise.all([
+    ctx.runQuery(internal.memoryOps.getMemoriesByIds, {
+      ids: memHits.filter((h) => h._score >= MIN_SCORE).map((h) => h._id),
+    }),
+    ctx.runQuery(internal.memoryOps.getThoughtsByIds, {
+      ids: thoughtHits.filter((h) => h._score >= MIN_SCORE).map((h) => h._id),
+    }),
+    ctx.runQuery(internal.memoryOps.getTelosByIds, {
+      ids: telosHits.filter((h) => h._score >= MIN_SCORE).map((h) => h._id),
+    }),
+  ]);
+  return { memDocs, thoughtDocs, telosDocs };
 }
 
 function dedupeBy<T>(items: T[], key: (item: T) => string): T[] {
@@ -277,6 +316,11 @@ export const hybridRecall = action({
       memories: dedupeBy(
         [
           ...vec.memDocs.map((m) => ({ content: m.content, type: m.type })),
+          // Telos hits ride along as memory-shaped rows so the agent's known
+          // recall shape is unchanged (type = goal/problem/…).
+          ...vec.telosDocs
+            .filter((t) => t.status === "active")
+            .map((t) => ({ content: t.text, type: t.kind })),
           ...text.memories,
         ],
         (m) => m.content,

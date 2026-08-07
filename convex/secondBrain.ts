@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
+import { compileTelosSummary } from "./telosLib";
 
 // Tool-facing functions, called by the Next.js tool webhook routes on behalf
 // of the ElevenLabs agent. They authenticate with a shared secret rather than
@@ -136,6 +137,16 @@ export const recall = query({
   },
 });
 
+// Generic health-mark for query-shaped tools (queries can't write; their
+// routes call this after a successful read). Secret is the trust boundary.
+export const markToolHealthyFromTool = mutation({
+  args: { secret: v.string(), name: v.string() },
+  handler: async (ctx, { secret, name }) => {
+    checkToolSecret(secret);
+    await markToolHealthy(ctx, name);
+  },
+});
+
 export const markRecallHealthy = mutation({
   args: { secret: v.string() },
   handler: async (ctx, { secret }) => {
@@ -172,13 +183,23 @@ export const pushBriefingCards = mutation({
 
 // Standing context injected into the agent prompt at session start: the
 // browser fetches this (as Tarik) and passes it as a dynamic variable.
+// Telos summary (mission/goals/problems) leads; recent memories follow.
 export const standingContext = query({
   args: {},
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
-    const memories = await ctx.db.query("memories").order("desc").take(30);
-    if (memories.length === 0) return "No stored memories yet.";
-    return memories.map((m) => `- [${m.type}] ${m.content}`).join("\n");
+    const [telosItems, memories] = await Promise.all([
+      ctx.db.query("telosItems").take(200),
+      ctx.db.query("memories").order("desc").take(30),
+    ]);
+    const telos = compileTelosSummary(telosItems, Date.now());
+    const memoryBlock =
+      memories.length === 0
+        ? "No stored memories yet."
+        : memories.map((m) => `- [${m.type}] ${m.content}`).join("\n");
+    return telos
+      ? `Tarik's telos — his mission, goals, and problems. Let it steer priorities and suggestions:\n${telos}\n\nRecent memories:\n${memoryBlock}`
+      : memoryBlock;
   },
 });

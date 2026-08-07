@@ -14,6 +14,12 @@ import {
 import { fetchFeedGroup } from "@/lib/rss";
 import { runConsolidation } from "@/lib/consolidate";
 import { safeSlice } from "../../../../../convex/workflowLib";
+import {
+  TELOS_KINDS,
+  TELOS_STATUSES,
+  type TelosKind,
+  type TelosStatus,
+} from "../../../../../convex/telosLib";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
 // Webhook endpoint for Zola's ElevenLabs server tools. Authenticated by
@@ -22,6 +28,20 @@ import type { Id } from "../../../../../convex/_generated/dataModel";
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 type ToolResult = { ok: boolean; message: string; data?: unknown };
+
+// Voice tools handle every telos kind except "dimension" (review-session
+// territory, MOO-490).
+type TelosToolKind = Exclude<TelosKind, "dimension">;
+const VOICE_TELOS_KINDS = TELOS_KINDS.filter(
+  (k): k is TelosToolKind => k !== "dimension",
+);
+
+// Coerce an unknown body field to a trimmed, surrogate-safe string (or undefined).
+function strArg(value: unknown, max: number): string | undefined {
+  return typeof value === "string" && value.trim()
+    ? safeSlice(value.trim(), max)
+    : undefined;
+}
 
 function formatTime(iso: string): string {
   const d = new Date(iso);
@@ -324,6 +344,86 @@ async function runTool(
             body: s.body.slice(0, 1200),
           })),
         },
+      };
+    }
+    case "get_telos": {
+      const kind = VOICE_TELOS_KINDS.includes(body.kind as TelosToolKind)
+        ? (body.kind as TelosToolKind)
+        : undefined;
+      const [items] = await Promise.all([
+        convex.query(api.telos.listItems, { secret, kind }),
+        convex.mutation(api.secondBrain.markToolHealthyFromTool, {
+          secret,
+          name: "get_telos",
+        }),
+      ]);
+      if (items.length === 0) {
+        return {
+          ok: true,
+          message:
+            "The telos is empty — offer to run the setup interview: ask about mission, then goals with measurables, then problems and challenges, creating each with add_telos_item.",
+        };
+      }
+      return {
+        ok: true,
+        message: `${items.length} active telos item(s). Speak from them naturally.`,
+        data: { items },
+      };
+    }
+    case "add_telos_item": {
+      const kind = body.kind as TelosToolKind;
+      const text = strArg(body.text, 500) ?? "";
+      const measurable = strArg(body.measurable, 200);
+      if (!VOICE_TELOS_KINDS.includes(kind)) {
+        return {
+          ok: false,
+          message: `add_telos_item needs a kind: ${VOICE_TELOS_KINDS.join(", ")}.`,
+        };
+      }
+      if (!text) return { ok: false, message: "add_telos_item needs text." };
+      const res = await convex.mutation(api.telos.addItem, {
+        secret,
+        kind,
+        text,
+        measurable,
+      });
+      return {
+        ok: true,
+        message: res.created
+          ? `Added to the telos as a ${kind}.`
+          : "That's already in the telos.",
+      };
+    }
+    case "update_telos_item": {
+      const match = typeof body.match === "string" ? body.match.trim() : "";
+      if (!match) {
+        return { ok: false, message: "update_telos_item needs match text." };
+      }
+      const status = TELOS_STATUSES.includes(body.status as TelosStatus)
+        ? (body.status as TelosStatus)
+        : undefined;
+      const res = await convex.mutation(api.telos.updateItemByMatch, {
+        secret,
+        match,
+        text: strArg(body.text, 500),
+        status,
+        measurable: strArg(body.measurable, 200),
+      });
+      if (res.outcome === "not_found") {
+        return {
+          ok: true,
+          message: `No active telos item matches "${match}". Ask Tarik which item he means.`,
+        };
+      }
+      if (res.outcome === "ambiguous") {
+        return {
+          ok: true,
+          message: `Several items match — ask Tarik which one: ${res.candidates.join("; ")}.`,
+        };
+      }
+      return {
+        ok: true,
+        message: `Updated: ${res.item.text} (${res.item.status}).`,
       };
     }
     default:

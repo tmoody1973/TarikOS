@@ -13,6 +13,8 @@ import type * as dashboard from "../dashboard.js";
 import type * as embeddingsLib from "../embeddingsLib.js";
 import type * as memoryOps from "../memoryOps.js";
 import type * as secondBrain from "../secondBrain.js";
+import type * as telos from "../telos.js";
+import type * as telosLib from "../telosLib.js";
 import type * as transcripts from "../transcripts.js";
 import type * as workflowLib from "../workflowLib.js";
 import type * as workflowRunner from "../workflowRunner.js";
@@ -30,6 +32,8 @@ declare const fullApi: ApiFromModules<{
   embeddingsLib: typeof embeddingsLib;
   memoryOps: typeof memoryOps;
   secondBrain: typeof secondBrain;
+  telos: typeof telos;
+  telosLib: typeof telosLib;
   transcripts: typeof transcripts;
   workflowLib: typeof workflowLib;
   workflowRunner: typeof workflowRunner;

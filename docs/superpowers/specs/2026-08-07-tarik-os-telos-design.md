@@ -60,12 +60,20 @@ All store-bound strings pass through `safeSlice()` (lone-surrogate gotcha).
 
 ## Seed
 
-`scripts/import-telos.ts` — parses `~/.claude/PAI/USER/TELOS/{MISSION,GOALS,
-PROBLEMS,CHALLENGES,STRATEGIES}.md` (bullet-per-item markdown) into
-`telosItems` rows with `source: "import"`. Idempotent: matched items update
-in place, re-runs never duplicate. Dimension rows start empty and get filled
-by the first review. After import, Tarik says "review my telos" and Zola
-walks each item — that first session doubles as review #1.
+> **Correction (2026-08-07, during MOO-488 build):** the PAI TELOS markdown
+> turned out to be an empty scaffold (its own updates.md: "no personal
+> content yet") — the earlier "populated" finding was wrong. Tarik chose
+> **voice-interview population**: an `add_telos_item` tool joins the tool
+> surface, and Zola's first telos session is the interview — she asks
+> LifeOS-style questions (mission → goals with measurables → problems →
+> challenges) and creates items live.
+
+`scripts/import-telos.ts` still ships for whenever markdown content exists —
+parses `~/.claude/PAI/USER/TELOS/{MISSION,GOALS,PROBLEMS,CHALLENGES,
+STRATEGIES}.md` into `telosItems` rows with `source: "import"`. Idempotent:
+exact (kind, text) matches never duplicate; aborts with a report when zero
+items parse (the current state). Dimension rows start empty and get filled
+by review sessions.
 
 ## Zola's head (standing context)
 

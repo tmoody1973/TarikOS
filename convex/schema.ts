@@ -107,6 +107,43 @@ export default defineSchema({
     ),
   }),
 
+  telosItems: defineTable({
+    kind: v.union(
+      v.literal("mission"),
+      v.literal("goal"),
+      v.literal("problem"),
+      v.literal("challenge"),
+      v.literal("strategy"),
+      v.literal("dimension"),
+    ),
+    text: v.string(),
+    measurable: v.optional(v.string()),
+    dimension: v.optional(v.string()),
+    currentState: v.optional(v.string()),
+    idealState: v.optional(v.string()),
+    status: v.union(
+      v.literal("active"),
+      v.literal("deferred"),
+      v.literal("done"),
+      v.literal("dropped"),
+    ),
+    reviewedAt: v.number(),
+    reviewCadenceDays: v.number(),
+    source: v.union(
+      v.literal("import"),
+      v.literal("interview"),
+      v.literal("review"),
+      v.literal("consolidation"),
+    ),
+    transcriptId: v.optional(v.id("transcripts")),
+    embedding: v.optional(v.array(v.float64())),
+  })
+    .index("by_kind", ["kind", "status"])
+    .vectorIndex("by_embedding", {
+      vectorField: "embedding",
+      dimensions: 1024,
+    }),
+
   settings: defineTable({
     key: v.string(),
     value: v.any(),
