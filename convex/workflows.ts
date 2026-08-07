@@ -1,9 +1,11 @@
 import {
+  action,
   internalMutation,
   internalQuery,
   mutation,
   query,
 } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import type { MutationCtx } from "./_generated/server";
 import { requireUser } from "./dashboard";
@@ -168,6 +170,47 @@ export const markBriefToolHealthy = mutation({
   },
 });
 
+export const markNamedToolHealthy = internalMutation({
+  args: { name: v.string() },
+  handler: async (ctx, { name }) => {
+    await markToolHealthy(ctx, name);
+  },
+});
+
+// Voice-triggered workflow launch (run_workflow tool). Fire-and-return so
+// Zola can speak immediately while the brief builds.
+export const runFromTool = action({
+  args: {
+    secret: v.string(),
+    name: v.string(),
+    topic: v.optional(v.string()),
+  },
+  handler: async (
+    ctx,
+    { secret, name, topic },
+  ): Promise<{ ok: boolean; message: string }> => {
+    checkToolSecret(secret);
+    const workflow = await ctx.runQuery(internal.workflows.getByName, { name });
+    if (!workflow) {
+      return { ok: false, message: `No workflow named ${name} exists.` };
+    }
+    if (!workflow.enabled) {
+      return {
+        ok: false,
+        message: `The ${name} workflow is disabled in the control panel.`,
+      };
+    }
+    await ctx.scheduler.runAfter(0, internal.workflowRunner.run, {
+      name,
+      params: topic ? { topic } : undefined,
+    });
+    await ctx.runMutation(internal.workflows.markNamedToolHealthy, {
+      name: "run_workflow",
+    });
+    return { ok: true, message: "started" };
+  },
+});
+
 // ---- One-time seed (run as admin: npx convex run workflows:seedPhase2) ----
 
 // Search topics = open-ended discovery; feed groups = named sources with
@@ -234,17 +277,16 @@ export const seedPhase2 = internalMutation({
       schedule: string,
       steps: { tool: string; args: Record<string, string> }[],
     ): Promise<string> {
+      const trigger =
+        schedule === "voice"
+          ? ({ type: "voice" } as const)
+          : ({ type: "cron", schedule } as const);
       const existing = await ctx.db
         .query("workflows")
         .withIndex("by_name", (q) => q.eq("name", name))
         .unique();
       if (!existing) {
-        await ctx.db.insert("workflows", {
-          name,
-          trigger: { type: "cron", schedule },
-          steps,
-          enabled: true,
-        });
+        await ctx.db.insert("workflows", { name, trigger, steps, enabled: true });
         return `${name} seeded`;
       }
       await ctx.db.patch(existing._id, { steps });
@@ -258,6 +300,12 @@ export const seedPhase2 = internalMutation({
       // 08:00 UTC = 3:00 AM CDT nightly.
       await upsertWorkflow("memory-consolidation", "0 8 * * *", [
         { tool: "consolidate_memories", args: {} },
+      ]),
+      // Voice-triggered ("build me a brief on X"); schedule ignored.
+      await upsertWorkflow("research-brief", "voice", [
+        { tool: "web_research", args: { query: "{{topic}} — overview and latest developments" } },
+        { tool: "web_research", args: { query: "{{topic}} news {{today}}" } },
+        { tool: "web_research", args: { query: "{{topic}} analysis and expert commentary" } },
       ]),
     ];
     await upsertSetting(ctx, "briefTopics", STANDING_TOPICS);

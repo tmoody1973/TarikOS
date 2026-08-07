@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, Fragment } from "react";
-import Link from "next/link";
+import { useState, useEffect, Fragment, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Authenticated, AuthLoading, useAction, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -11,7 +11,9 @@ export default function BriefsPage() {
   return (
     <>
       <Authenticated>
-        <BriefsInner />
+        <Suspense>
+          <BriefsInner />
+        </Suspense>
       </Authenticated>
       <AuthLoading>
         <div className="flex flex-1 items-center justify-center">
@@ -126,6 +128,15 @@ function Bold({ text }: { text: string }) {
 function BriefsInner() {
   const briefs = useQuery(api.workflows.listBriefs);
   const [selectedId, setSelectedId] = useState<Id<"briefs"> | null>(null);
+  // navigate_ui "open a specific brief": /briefs?open=<title fragment>
+  const openParam = useSearchParams().get("open");
+  useEffect(() => {
+    if (!openParam || !briefs) return;
+    const match = briefs.find((b) =>
+      b.title.toLowerCase().includes(openParam.toLowerCase()),
+    );
+    if (match) setSelectedId(match._id);
+  }, [openParam, briefs]);
   const activeId = selectedId ?? briefs?.[0]?._id ?? null;
   const brief = useQuery(
     api.workflows.getBrief,
@@ -146,31 +157,7 @@ function BriefsInner() {
   }
 
   return (
-    <div className="flex flex-1 gap-3 p-3">
-      <aside className="hidden w-40 flex-col gap-2 lg:flex">
-        <Link
-          href="/"
-          className="lcars-cap-left flex h-24 items-end justify-end bg-amber p-3 transition hover:opacity-80 focus-visible:outline-2 focus-visible:outline-cyan-hud"
-        >
-          <span className="font-[family-name:var(--font-display)] text-xl leading-none text-black">
-            TARIK
-            <br />
-            OS
-          </span>
-        </Link>
-        <div className="lcars-cap-left flex h-12 items-center justify-end bg-lavender p-3">
-          <span className="font-[family-name:var(--font-display)] text-sm text-black">
-            BRIEFS
-          </span>
-        </div>
-        <div className="flex flex-1 flex-col justify-end gap-1 rounded-lg border border-panel-edge bg-panel p-3">
-          <span className="text-[10px] tracking-[0.3em] text-steel">ZOLA</span>
-          <span className="text-[10px] tracking-[0.2em] text-cyan-hud hud-glow">
-            LIVING BRIEFS
-          </span>
-        </div>
-      </aside>
-
+    <div className="flex flex-1 gap-3">
       <main className="flex min-w-0 flex-1 flex-col overflow-y-auto rounded-lg border border-panel-edge bg-panel px-4 py-5 sm:px-8">
         {briefs === undefined ? (
           <p className="pulse-soft mt-8 text-center text-xs tracking-[0.3em] text-steel">

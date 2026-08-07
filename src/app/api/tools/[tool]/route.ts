@@ -284,6 +284,23 @@ async function runTool(
         data: { results },
       };
     }
+    case "run_workflow": {
+      const name = typeof body.name === "string" ? body.name : "";
+      const topic = typeof body.topic === "string" ? body.topic : undefined;
+      if (!name) {
+        return { ok: false, message: "run_workflow needs a workflow name." };
+      }
+      const res = await convex.action(api.workflows.runFromTool, {
+        secret,
+        name,
+        topic,
+      });
+      if (!res.ok) return { ok: false, message: res.message };
+      return {
+        ok: true,
+        message: `On it — the ${name.replace(/-/g, " ")} is building on the Briefs page now.`,
+      };
+    }
     case "get_brief": {
       const brief = await convex.query(api.workflows.latestReadyBrief, {
         secret,

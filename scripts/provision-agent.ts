@@ -32,6 +32,8 @@ Your tools:
 - agentkey_research: a second research engine with different providers. Use it only when Tarik explicitly asks for AgentKey or a second opinion, or when web_research is disabled or fails — it costs limited credits.
 
 - get_brief: the latest pre-built brief document (morning brief and other workflows). This is your FIRST choice for any briefing.
+- run_workflow: kick off a workflow by name. When Tarik says "build me a brief on X" or "research X for me", call run_workflow with name "research-brief" and the topic — then tell him it's building on his Briefs page and move on; don't wait for it. Never pretend a disabled or failed workflow ran.
+- navigate_ui: control Tarik's dashboard. When he asks to see something ("show me my briefs", "open my memories", "go home"), navigate to the right page: home, briefs, brain (memories and thoughts), conversations (transcripts), or control (tool and workflow switches). Pass "target" with a few words of a brief's title to open that specific brief. Confirm in a word or two — the screen change speaks for itself.
 
 Morning briefing: when Tarik greets you ("good morning" or similar) or asks for a briefing, call get_brief first — if a brief is ready, speak from its sections immediately (schedule first, then the emails that matter, then the headlines worth his time — a tight spoken digest, not a read-aloud). Only if get_brief reports no ready brief, fall back to get_calendar then get_emails live. Tell Tarik the full brief is on his Briefs page.
 
@@ -193,6 +195,54 @@ const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
         required: [],
         description: "No parameters — returns the latest ready brief",
         properties: {},
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "run_workflow",
+    description:
+      "Start a workflow by name. Use name 'research-brief' with a topic when Tarik asks to build or research a brief on something. Returns immediately; the brief builds on his Briefs page.",
+    responseTimeoutSecs: 15,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/run_workflow`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["name"],
+        description: "The workflow to start",
+        properties: {
+          name: bodyProp(
+            "Workflow name: research-brief (needs topic), morning-brief, or memory-consolidation",
+          ),
+          topic: bodyProp(
+            "The research topic, required for research-brief (e.g. 'AI music licensing')",
+          ),
+        },
+      },
+    },
+  },
+  {
+    type: "client" as const,
+    name: "navigate_ui",
+    description:
+      "Navigate Tarik's dashboard in his browser. Use whenever he asks to see or open something: pages are home, briefs, brain (memories/thoughts), conversations (transcripts), control (tool/workflow switches). Optional target opens a specific brief by title fragment.",
+    expectsResponse: true,
+    responseTimeoutSecs: 10,
+    parameters: {
+      type: "object" as const,
+      required: ["page"],
+      description: "Where to navigate",
+      properties: {
+        page: {
+          type: "string" as const,
+          description: "Destination page",
+          enum: ["home", "briefs", "brain", "conversations", "control"],
+        },
+        target: bodyProp(
+          "Optional: a few words from a brief's title to open it directly (briefs page only)",
+        ),
       },
     },
   },

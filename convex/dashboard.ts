@@ -55,6 +55,62 @@ export const setToolEnabled = mutation({
   },
 });
 
+// Home-page summary cards (MOO-483): counts + tiny previews per zone.
+export const homeSummary = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireUser(ctx);
+    const [memories, thoughts, tools, workflows, latestBrief] =
+      await Promise.all([
+        ctx.db.query("memories").order("desc").collect(),
+        ctx.db.query("thoughts").order("desc").collect(),
+        ctx.db.query("tools").collect(),
+        ctx.db.query("workflows").collect(),
+        ctx.db.query("briefs").order("desc").first(),
+      ]);
+    return {
+      brain: {
+        memoryCount: memories.length,
+        thoughtCount: thoughts.length,
+        latestMemories: memories.slice(0, 3).map((m) => ({
+          content: m.content,
+          type: m.type,
+        })),
+      },
+      control: {
+        toolCount: tools.length,
+        errorCount: tools.filter((t) => t.health === "error").length,
+        disabledCount: tools.filter((t) => !t.enabled).length,
+        workflowCount: workflows.length,
+      },
+      brief: latestBrief
+        ? {
+            _id: latestBrief._id,
+            title: latestBrief.title,
+            status: latestBrief.status,
+            sectionCount: latestBrief.sections.length,
+          }
+        : null,
+    };
+  },
+});
+
+export const workflowRegistry = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireUser(ctx);
+    return await ctx.db.query("workflows").collect();
+  },
+});
+
+export const setWorkflowEnabled = mutation({
+  args: { workflowId: v.id("workflows"), enabled: v.boolean() },
+  handler: async (ctx, { workflowId, enabled }) => {
+    await requireUser(ctx);
+    await ctx.db.patch(workflowId, { enabled });
+  },
+});
+
 export const seedDemo = mutation({
   args: { secret: v.string() },
   handler: async (ctx, { secret }) => {

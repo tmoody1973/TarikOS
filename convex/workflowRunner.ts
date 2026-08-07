@@ -77,9 +77,12 @@ export const run = internalAction({
     const today = chicagoToday();
     const runStartedAt = Date.now();
 
+    const title = params?.topic
+      ? `Research: ${params.topic} — ${today}`
+      : workflowTitle(name, today);
     const id = await ctx.runMutation(internal.workflows.createOrResetBrief, {
       briefId,
-      title: workflowTitle(name, today),
+      title,
       workflowName: name,
       runStartedAt,
     });
