@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useConversation } from "@elevenlabs/react";
 import { useConvex, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
+import { LiveWaveform } from "./LiveWaveform";
+import { Matrix } from "./Matrix";
 
 // Lazy WebGL orb — three.js only downloads when the HUD mounts client-side.
 const Orb = dynamic(() => import("./Orb").then((m) => m.Orb), { ssr: false });
@@ -23,6 +25,32 @@ function scaleVolume(get: (() => number) | undefined): number {
   } catch {
     return 0;
   }
+}
+
+const MATRIX_COLS = 24;
+const IDLE_LEVELS = Array<number>(MATRIX_COLS).fill(0);
+
+// Word-by-word reveal for Zola's newest transcript line; invisible remainder
+// reserves layout so the paragraph doesn't jump while revealing.
+function RevealText({ text }: { text: string }) {
+  const words = text.split(" ");
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    setCount(0);
+    const timer = setInterval(
+      () => setCount((c) => Math.min(c + 1, words.length)),
+      40,
+    );
+    return () => clearInterval(timer);
+  }, [text, words.length]);
+  return (
+    <span className="text-foreground/85">
+      {words.slice(0, count).join(" ")}
+      <span aria-hidden className="opacity-0">
+        {" " + words.slice(count).join(" ")}
+      </span>
+    </span>
+  );
 }
 
 export function VoiceLink() {
@@ -46,6 +74,7 @@ export function VoiceLink() {
       }
     },
     onAgentToolResponse: (props: { tool_name?: string; is_error?: boolean }) => {
+      toolActivityRef.current = 1; // light up the SYS matrix
       const transcriptId = transcriptIdRef.current;
       if (transcriptId && props?.tool_name) {
         logToolCall({
@@ -72,6 +101,31 @@ export function VoiceLink() {
     () => scaleVolume(getOutputVolume),
     [getOutputVolume],
   );
+
+  // Tool-activity matrix: tool responses spike a level that decays over ~1s,
+  // driving a flickering VU pattern. Dark when nothing is happening.
+  const toolActivityRef = useRef(0);
+  const [matrixLevels, setMatrixLevels] = useState<number[]>(IDLE_LEVELS);
+  useEffect(() => {
+    if (!connected) {
+      toolActivityRef.current = 0;
+      setMatrixLevels(IDLE_LEVELS);
+      return;
+    }
+    const timer = setInterval(() => {
+      toolActivityRef.current *= 0.88;
+      const a = toolActivityRef.current;
+      setMatrixLevels(
+        a < 0.02
+          ? IDLE_LEVELS
+          : Array.from(
+              { length: MATRIX_COLS },
+              () => a * (0.3 + Math.random() * 0.7),
+            ),
+      );
+    }, 100);
+    return () => clearInterval(timer);
+  }, [connected]);
 
   async function engage() {
     setError(null);
@@ -120,13 +174,28 @@ export function VoiceLink() {
               : "bg-steel"
           }`}
         />
-        <span className="text-xs tracking-[0.25em] text-steel">
+        <span className="shrink-0 text-xs tracking-[0.25em] text-steel">
           {connected
             ? isSpeaking
               ? "ZOLA SPEAKING"
               : "LISTENING"
             : "VOICE LINK STANDBY"}
         </span>
+        {/* Mic confidence: thin scrolling waveform of the live input */}
+        <div className="mx-2 h-6 min-w-0 flex-1">
+          {connected && (
+            <LiveWaveform
+              active
+              mode="scrolling"
+              barColor="#ff9900"
+              barWidth={2}
+              barGap={2}
+              height={24}
+              fadeEdges
+              className="h-6 w-full"
+            />
+          )}
+        </div>
         <button
           onClick={connected ? () => conversation.endSession() : engage}
           disabled={connecting}
@@ -157,6 +226,23 @@ export function VoiceLink() {
         )}
       </div>
 
+      {/* SYS readout: dot-matrix flickers while Zola's tools are working */}
+      <div className="mx-auto mt-2 flex shrink-0 flex-col items-center gap-1">
+        <Matrix
+          rows={5}
+          cols={MATRIX_COLS}
+          mode="vu"
+          levels={matrixLevels}
+          size={4}
+          gap={2}
+          palette={{ on: "#35e0ff", off: "#131a26" }}
+          ariaLabel="Tool activity"
+        />
+        <span className="text-[9px] tracking-[0.35em] text-steel">
+          TOOL ACTIVITY
+        </span>
+      </div>
+
       <div className="mt-3 flex-1 space-y-2 overflow-y-auto">
         {turns.length === 0 ? (
           <p className="mt-2 text-sm italic text-steel">
@@ -174,7 +260,11 @@ export function VoiceLink() {
               >
                 {turn.role === "tarik" ? "TARIK" : "ZOLA"}
               </span>{" "}
-              <span className="text-foreground/85">{turn.text}</span>
+              {turn.role === "morpheus" && i === turns.length - 1 ? (
+                <RevealText text={turn.text} />
+              ) : (
+                <span className="text-foreground/85">{turn.text}</span>
+              )}
             </p>
           ))
         )}
