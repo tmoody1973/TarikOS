@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  cleanText,
   expandSteps,
   formatSection,
   workflowTitle,
@@ -65,7 +66,7 @@ test("failed tool result becomes an error section, run continues", () => {
   assert.ok(section.body.includes("Email fetch failed"));
 });
 
-test("research result formats markdown body and source links", () => {
+test("research headlines are inline links; unlinked fall back to bold", () => {
   const { section, isError } = formatSection(
     { tool: "web_research", args: { query: "x" }, label: "Milwaukee news" },
     {
@@ -81,10 +82,18 @@ test("research result formats markdown body and source links", () => {
   );
   assert.equal(isError, false);
   assert.equal(section.heading, "Milwaukee news");
-  assert.ok(section.body.includes("**Story A**"));
+  assert.ok(section.body.includes("- [Story A](https://a.example) — Something happened"));
+  assert.ok(section.body.includes("- **Story B** — More happened"));
   assert.deepEqual(section.sources, [
     { title: "Story A", url: "https://a.example" },
   ]);
+});
+
+test("cleanText strips markdown artifacts and hard newlines from snippets", () => {
+  assert.equal(
+    cleanText("News\n\n# Bandcamp Announces Ban\n**bold** and [a link](https://x.example) here"),
+    "News Bandcamp Announces Ban bold and a link here",
+  );
 });
 
 test("calendar result lists events with Chicago times", () => {

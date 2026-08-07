@@ -91,6 +91,18 @@ function chicagoTime(iso: string): string {
       });
 }
 
+// Tool snippets (Tavily etc.) arrive with raw markdown artifacts — headings,
+// emphasis marks, links, hard newlines. Scrub to plain prose for brief bodies.
+export function cleanText(raw: string): string {
+  return raw
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/[*_`]{1,3}/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 type CalendarEvent = {
   title?: string;
   start?: string;
@@ -148,7 +160,7 @@ export function formatSection(
         : emails
             .map(
               (e) =>
-                `- **${e.subject || "(no subject)"}** — ${e.from ?? "unknown"}${e.account ? ` (${e.account})` : ""}: ${(e.snippet ?? "").slice(0, 140)}`,
+                `- **${cleanText(e.subject ?? "") || "(no subject)"}** — ${e.from ?? "unknown"}${e.account ? ` (${e.account})` : ""}: ${cleanText(e.snippet ?? "").slice(0, 140)}`,
             )
             .join("\n");
     return { section: { ...base, body, sources: [] }, isError: false };
@@ -156,12 +168,19 @@ export function formatSection(
 
   const results = (Array.isArray(data.results) ? data.results : []) as ResearchHit[];
   if (results.length > 0) {
+    // Headline IS the link — [title](url) renders as a reader-pane link in
+    // the UI, so no separate sources footer is needed per section.
     const body = results
-      .map((r) => `- **${r.title ?? "(untitled)"}** — ${(r.snippet ?? "").slice(0, 220)}`)
+      .map((r) => {
+        const title =
+          cleanText(r.title ?? "").replace(/[[\]]/g, "") || "(untitled)";
+        const head = r.url ? `[${title}](${r.url})` : `**${title}**`;
+        return `- ${head} — ${cleanText(r.snippet ?? "").slice(0, 220)}`;
+      })
       .join("\n");
     const sources = results
       .filter((r): r is ResearchHit & { url: string } => Boolean(r.url))
-      .map((r) => ({ title: r.title ?? r.url, url: r.url }));
+      .map((r) => ({ title: cleanText(r.title ?? "") || r.url, url: r.url }));
     return { section: { ...base, body, sources }, isError: false };
   }
 

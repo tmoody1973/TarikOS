@@ -41,25 +41,69 @@ function briefDate(creationTime: number): string {
 }
 
 // Brief bodies are markdown our own runner emits: "- " list lines with
-// optional **bold** spans. Render just that; no markdown lib needed.
-function Body({ text }: { text: string }) {
+// **bold** spans and [headline](url) links. Render just that; no markdown
+// lib needed. Links open the reader pane via onLink.
+function Body({
+  text,
+  onLink,
+}: {
+  text: string;
+  onLink: (url: string) => void;
+}) {
   const lines = text.split("\n");
   return (
-    <div className="space-y-1">
+    <div className="space-y-1.5">
       {lines.map((line, i) =>
         line.startsWith("- ") ? (
           <p key={i} className="pl-3 text-sm text-foreground/80">
             <span className="text-steel">▸ </span>
-            <Bold text={line.slice(2)} />
+            <Inline text={line.slice(2)} onLink={onLink} />
           </p>
         ) : (
           <p key={i} className="text-sm text-foreground/80">
-            <Bold text={line} />
+            <Inline text={line} onLink={onLink} />
           </p>
         ),
       )}
     </div>
   );
+}
+
+const LINK_RE = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+
+function Inline({
+  text,
+  onLink,
+}: {
+  text: string;
+  onLink: (url: string) => void;
+}) {
+  const nodes: React.ReactNode[] = [];
+  let last = 0;
+  for (const m of text.matchAll(LINK_RE)) {
+    if (m.index > last) {
+      nodes.push(<Bold key={last} text={text.slice(last, m.index)} />);
+    }
+    const [, label, url] = m;
+    nodes.push(
+      <a
+        key={m.index}
+        href={url}
+        onClick={(e) => {
+          e.preventDefault();
+          onLink(url);
+        }}
+        className="font-semibold text-lavender underline decoration-lavender/40 underline-offset-2 [overflow-wrap:anywhere] transition hover:text-foreground hover:decoration-lavender focus-visible:outline-2 focus-visible:outline-cyan-hud"
+      >
+        {label}
+      </a>,
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) {
+    nodes.push(<Bold key={last} text={text.slice(last)} />);
+  }
+  return <>{nodes}</>;
 }
 
 function Bold({ text }: { text: string }) {
@@ -230,25 +274,8 @@ function BriefsInner() {
                         {s.heading}
                       </h3>
                       <div className="mt-2 text-[13px] leading-relaxed">
-                        <Body text={s.body} />
+                        <Body text={s.body} onLink={setReaderUrl} />
                       </div>
-                      {s.sources.length > 0 && (
-                        <p className="mt-2 border-t border-dotted border-panel-edge pt-1.5 text-[11px] leading-relaxed">
-                          {s.sources.map((src, j) => (
-                            <a
-                              key={j}
-                              href={src.url}
-                              onClick={(e) => {
-                                e.preventDefault();
-                                setReaderUrl(src.url);
-                              }}
-                              className="mr-3 text-lavender/80 underline-offset-2 [overflow-wrap:anywhere] hover:underline focus-visible:outline-2 focus-visible:outline-cyan-hud"
-                            >
-                              {src.title}
-                            </a>
-                          ))}
-                        </p>
-                      )}
                     </section>
                   );
                 })}

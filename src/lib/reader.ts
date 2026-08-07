@@ -1,10 +1,11 @@
-import { JSDOM, VirtualConsole } from "jsdom";
+import { parseHTML } from "linkedom";
 import { Readability } from "@mozilla/readability";
 import sanitizeHtml from "sanitize-html";
 
 // Server-side article extraction for the reader pane: fetch a source URL,
-// run Firefox's Readability parser, sanitize the result down to a tight
-// tag allowlist so it's safe to render with dangerouslySetInnerHTML.
+// run Firefox's Readability parser (on linkedom — jsdom can't load in the
+// Vercel runtime, its deps require() ESM-only modules), sanitize the result
+// down to a tight tag allowlist so it's safe for dangerouslySetInnerHTML.
 
 export type ReaderArticle = {
   title: string;
@@ -44,6 +45,15 @@ function assertSafeUrl(raw: string): URL {
   return url;
 }
 
+function absolutize(ref: string | undefined, base: URL): string | undefined {
+  if (!ref) return undefined;
+  try {
+    return new URL(ref, base).href;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function extractArticle(rawUrl: string): Promise<ReaderArticle> {
   const url = assertSafeUrl(rawUrl);
 
@@ -53,9 +63,6 @@ export async function extractArticle(rawUrl: string): Promise<ReaderArticle> {
       "user-agent":
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
       accept: "text/html,application/xhtml+xml",
-      // jsdom's globals break undici's automatic response decompression in
-      // this process, so ask the server for an uncompressed body outright.
-      "accept-encoding": "identity",
     },
     redirect: "follow",
     signal: AbortSignal.timeout(15_000),
@@ -64,16 +71,14 @@ export async function extractArticle(rawUrl: string): Promise<ReaderArticle> {
     throw new ReaderError(`The site answered ${res.status}.`);
   }
   const rawHtml = (await res.text()).slice(0, 3_000_000);
-  // Body sniff instead of a content-type check: jsdom's globals make
-  // res.headers.get() unreliable in the same process, and Readability
-  // needs HTML regardless of what the header claims.
   if (!/<(!doctype|html|body|article|div)[\s>]/i.test(rawHtml.slice(0, 2000))) {
     throw new ReaderError("That link isn't an article page.");
   }
 
-  const virtualConsole = new VirtualConsole(); // swallow CSS-parse noise
-  const dom = new JSDOM(rawHtml, { url: url.href, virtualConsole });
-  const article = new Readability(dom.window.document).parse();
+  const { document } = parseHTML(rawHtml);
+  const article = new Readability(
+    document as unknown as Document,
+  ).parse();
   if (!article?.content || (article.textContent ?? "").trim().length < 200) {
     throw new ReaderError("Couldn't extract readable text from that page.");
   }
@@ -85,14 +90,24 @@ export async function extractArticle(rawUrl: string): Promise<ReaderArticle> {
       "img", "br", "hr", "table", "thead", "tbody", "tr", "th", "td",
     ],
     allowedAttributes: {
-      a: ["href"],
+      a: ["href", "target", "rel"],
       img: ["src", "alt"],
     },
     allowedSchemes: ["https", "http"],
     transformTags: {
-      a: sanitizeHtml.simpleTransform("a", {
-        target: "_blank",
-        rel: "noreferrer",
+      // Resolve relative URLs here (deterministic regardless of DOM lib).
+      a: (tagName, attribs) => ({
+        tagName,
+        attribs: {
+          ...attribs,
+          href: absolutize(attribs.href, url) ?? "",
+          target: "_blank",
+          rel: "noreferrer",
+        },
+      }),
+      img: (tagName, attribs) => ({
+        tagName,
+        attribs: { ...attribs, src: absolutize(attribs.src, url) ?? "" },
       }),
     },
   });
