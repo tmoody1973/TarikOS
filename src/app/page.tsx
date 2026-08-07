@@ -18,7 +18,7 @@ export default function Dashboard() {
       <AuthLoading>
         <div className="flex flex-1 items-center justify-center">
           <p className="pulse-soft font-[family-name:var(--font-mono-hud)] text-xs tracking-[0.3em] text-steel">
-            MORPHEUS · AUTHENTICATING…
+            ZOLA · AUTHENTICATING…
           </p>
         </div>
       </AuthLoading>
@@ -133,7 +133,7 @@ function DashboardInner() {
                 <ZoneEmpty>syncing…</ZoneEmpty>
               ) : shownMemories.length === 0 ? (
                 <ZoneEmpty>
-                  {searching ? "No matches." : "Morpheus hasn't learned anything yet."}
+                  {searching ? "No matches." : "Zola hasn't learned anything yet."}
                 </ZoneEmpty>
               ) : (
                 <ul className="mt-2 space-y-2">

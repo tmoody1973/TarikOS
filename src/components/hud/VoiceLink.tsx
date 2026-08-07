@@ -97,7 +97,7 @@ export function VoiceLink() {
         <span className="text-xs tracking-[0.25em] text-steel">
           {connected
             ? isSpeaking
-              ? "MORPHEUS SPEAKING"
+              ? "ZOLA SPEAKING"
               : "LISTENING"
             : "VOICE LINK STANDBY"}
         </span>
@@ -121,7 +121,7 @@ export function VoiceLink() {
           <p className="mt-2 text-sm italic text-steel">
             {connected
               ? "Live. Say something."
-              : "Engage the voice link and talk to Morpheus."}
+              : "Engage the voice link and talk to Zola."}
           </p>
         ) : (
           turns.map((turn, i) => (
@@ -131,7 +131,7 @@ export function VoiceLink() {
                   turn.role === "tarik" ? "text-hudblue" : "text-amber"
                 }
               >
-                {turn.role === "tarik" ? "TARIK" : "MORPHEUS"}
+                {turn.role === "tarik" ? "TARIK" : "ZOLA"}
               </span>{" "}
               <span className="text-foreground/85">{turn.text}</span>
             </p>

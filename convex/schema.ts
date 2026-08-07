@@ -56,4 +56,45 @@ export default defineSchema({
     title: v.string(),
     body: v.string(),
   }),
+
+  workflows: defineTable({
+    name: v.string(),
+    trigger: v.union(
+      v.object({ type: v.literal("cron"), schedule: v.string() }),
+      v.object({ type: v.literal("voice") }),
+    ),
+    // Ordered steps; string args support {{today}}, {{topic}}, {{topics}}
+    // templates ({{topics}} fans the step out into one call per standing topic).
+    steps: v.array(
+      v.object({ tool: v.string(), args: v.record(v.string(), v.string()) }),
+    ),
+    enabled: v.boolean(),
+    lastRunAt: v.optional(v.number()),
+    lastError: v.optional(v.string()),
+  }).index("by_name", ["name"]),
+
+  briefs: defineTable({
+    title: v.string(),
+    workflowName: v.string(),
+    status: v.union(
+      v.literal("building"),
+      v.literal("ready"),
+      v.literal("error"),
+    ),
+    runStartedAt: v.number(),
+    sections: v.array(
+      v.object({
+        heading: v.string(),
+        body: v.string(),
+        tool: v.string(),
+        updatedAt: v.number(),
+        sources: v.array(v.object({ title: v.string(), url: v.string() })),
+      }),
+    ),
+  }),
+
+  settings: defineTable({
+    key: v.string(),
+    value: v.any(),
+  }).index("by_key", ["key"]),
 });

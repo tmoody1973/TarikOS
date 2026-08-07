@@ -12,7 +12,7 @@ import {
   type ResearchResult,
 } from "@/lib/research";
 
-// Webhook endpoint for Morpheus's ElevenLabs server tools. Authenticated by
+// Webhook endpoint for Zola's ElevenLabs server tools. Authenticated by
 // a shared secret header (configured on the agent), not a browser session —
 // proxy.ts exempts /api/tools from Clerk.
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
@@ -221,6 +221,31 @@ async function runTool(
             ? "No results found for that."
             : `${results.length} sources found; they're on the dashboard.`,
         data: { results },
+      };
+    }
+    case "get_brief": {
+      const brief = await convex.query(api.workflows.latestReadyBrief, {
+        secret,
+      });
+      await convex.mutation(api.workflows.markBriefToolHealthy, { secret });
+      if (!brief) {
+        return {
+          ok: true,
+          message:
+            "No pre-built brief is ready. Fall back to get_calendar and get_emails for a live briefing.",
+        };
+      }
+      return {
+        ok: true,
+        message: `Brief "${brief.title}" is ready with ${brief.sections.length} section(s). Speak from its sections.`,
+        data: {
+          title: brief.title,
+          builtAt: brief.runStartedAt,
+          sections: brief.sections.map((s) => ({
+            heading: s.heading,
+            body: s.body.slice(0, 1200),
+          })),
+        },
       };
     }
     default:

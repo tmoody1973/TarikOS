@@ -1,0 +1,117 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import {
+  expandSteps,
+  formatSection,
+  workflowTitle,
+} from "../convex/workflowLib.ts";
+
+const vars = {
+  today: "2026-08-07",
+  topics: ["Milwaukee news", "AI in radio"],
+};
+
+test("expandSteps preserves step order and resolves {{today}}", () => {
+  const out = expandSteps(
+    [
+      { tool: "get_calendar", args: { date: "{{today}}" } },
+      { tool: "get_emails", args: {} },
+    ],
+    vars,
+  );
+  assert.deepEqual(
+    out.map((s) => s.tool),
+    ["get_calendar", "get_emails"],
+  );
+  assert.equal(out[0].args.date, "2026-08-07");
+  assert.equal(out[0].label, "Calendar");
+  assert.equal(out[1].label, "Inbox");
+});
+
+test("a {{topics}} step fans out into one call per topic, in order", () => {
+  const out = expandSteps(
+    [
+      { tool: "get_calendar", args: {} },
+      { tool: "web_research", args: { query: "{{topics}}" } },
+    ],
+    vars,
+  );
+  assert.equal(out.length, 3);
+  assert.deepEqual(
+    out.slice(1).map((s) => s.args.query),
+    ["Milwaukee news", "AI in radio"],
+  );
+  assert.deepEqual(
+    out.slice(1).map((s) => s.label),
+    ["Milwaukee news", "AI in radio"],
+  );
+});
+
+test("{{topic}} resolves from run params (on-demand brief shape)", () => {
+  const out = expandSteps(
+    [{ tool: "web_research", args: { query: "latest on {{topic}}" } }],
+    { ...vars, topic: "Bandcamp" },
+  );
+  assert.equal(out[0].args.query, "latest on Bandcamp");
+});
+
+test("failed tool result becomes an error section, run continues", () => {
+  const { section, isError } = formatSection(
+    { tool: "get_emails", args: {}, label: "Inbox" },
+    { ok: false, message: "Email fetch failed: auth expired" },
+  );
+  assert.equal(isError, true);
+  assert.ok(section.body.startsWith("⚠️"));
+  assert.ok(section.body.includes("Email fetch failed"));
+});
+
+test("research result formats markdown body and source links", () => {
+  const { section, isError } = formatSection(
+    { tool: "web_research", args: { query: "x" }, label: "Milwaukee news" },
+    {
+      ok: true,
+      message: "2 sources found",
+      data: {
+        results: [
+          { title: "Story A", snippet: "Something happened", url: "https://a.example" },
+          { title: "Story B", snippet: "More happened" },
+        ],
+      },
+    },
+  );
+  assert.equal(isError, false);
+  assert.equal(section.heading, "Milwaukee news");
+  assert.ok(section.body.includes("**Story A**"));
+  assert.deepEqual(section.sources, [
+    { title: "Story A", url: "https://a.example" },
+  ]);
+});
+
+test("calendar result lists events with Chicago times", () => {
+  const { section } = formatSection(
+    { tool: "get_calendar", args: {}, label: "Calendar" },
+    {
+      ok: true,
+      message: "1 event(s)",
+      data: {
+        events: [
+          {
+            title: "Standup",
+            start: "2026-08-07T14:00:00Z",
+            allDay: false,
+            account: "work",
+          },
+        ],
+      },
+    },
+  );
+  assert.ok(section.body.includes("Standup"));
+  assert.ok(section.body.includes("9:00 AM")); // 14:00 UTC = 9:00 CDT
+});
+
+test("workflowTitle humanizes the workflow name", () => {
+  assert.equal(
+    workflowTitle("morning-brief", "2026-08-07"),
+    "Morning Brief — 2026-08-07",
+  );
+});

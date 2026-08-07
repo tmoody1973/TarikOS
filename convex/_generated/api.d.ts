@@ -8,9 +8,13 @@
  * @module
  */
 
+import type * as crons from "../crons.js";
 import type * as dashboard from "../dashboard.js";
 import type * as secondBrain from "../secondBrain.js";
 import type * as transcripts from "../transcripts.js";
+import type * as workflowLib from "../workflowLib.js";
+import type * as workflowRunner from "../workflowRunner.js";
+import type * as workflows from "../workflows.js";
 
 import type {
   ApiFromModules,
@@ -19,9 +23,13 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  crons: typeof crons;
   dashboard: typeof dashboard;
   secondBrain: typeof secondBrain;
   transcripts: typeof transcripts;
+  workflowLib: typeof workflowLib;
+  workflowRunner: typeof workflowRunner;
+  workflows: typeof workflows;
 }>;
 
 /**

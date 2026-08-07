@@ -8,7 +8,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-# Tarik OS (Morpheus)
+# Tarik OS (Zola — formerly Morpheus)
 
 Standalone real-time speech-to-speech personal AI assistant. Approved design
 spec: `docs/superpowers/specs/2026-08-06-tarik-os-morpheus-design.md`.

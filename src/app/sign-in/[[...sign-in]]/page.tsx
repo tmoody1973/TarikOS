@@ -8,7 +8,7 @@ export default function SignInPage() {
           TARIK OS
         </h1>
         <p className="mt-2 font-[family-name:var(--font-mono-hud)] text-xs tracking-[0.25em] text-[#99ccff]">
-          MORPHEUS · IDENTITY VERIFICATION REQUIRED
+          ZOLA · IDENTITY VERIFICATION REQUIRED
         </p>
       </div>
       <SignIn />

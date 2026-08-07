@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Tarik OS",
   description:
-    "Morpheus — real-time personal AI. Chief of staff, second brain, thought partner.",
+    "Zola — real-time personal AI. Chief of staff, second brain, thought partner.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

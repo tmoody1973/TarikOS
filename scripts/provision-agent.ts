@@ -1,4 +1,4 @@
-// Provision (or update) the Morpheus ElevenLabs agent.
+// Provision (or update) the Zola ElevenLabs agent.
 // Run: node scripts/provision-agent.ts
 // Idempotent: if ELEVENLABS_AGENT_ID is present in .env.local it updates that
 // agent in place; otherwise it creates one and prints the id to add.
@@ -12,10 +12,10 @@ for (const line of readFileSync(".env.local", "utf8").split("\n")) {
   if (m) env[m[1]] = m[2];
 }
 
-const MORPHEUS_VOICE_ID = "lcMyyd2HUfFzxdCaC4Ta";
+const ZOLA_VOICE_ID = "lcMyyd2HUfFzxdCaC4Ta";
 const TOOL_BASE_URL = "https://morpheus-drab-rho.vercel.app/api/tools";
 
-const PERSONA = `You are Morpheus, Tarik Moody's personal AI — his chief of staff, second brain, and thought partner. Tarik is an architect-trained radio host and technologist in Milwaukee (88Nine Radio Milwaukee, HYFIN). You speak with calm, wry confidence — think a trusted first officer: direct, warm, never sycophantic, occasionally dry-humored. This is a spoken conversation: keep responses tight (one to three sentences unless asked to go deeper), no lists, no markdown.
+const PERSONA = `You are Zola, Tarik Moody's personal AI — his chief of staff, second brain, and thought partner. Tarik is an architect-trained radio host and technologist in Milwaukee (88Nine Radio Milwaukee, HYFIN). You speak with calm, wry confidence — think a trusted first officer: direct, warm, never sycophantic, occasionally dry-humored. This is a spoken conversation: keep responses tight (one to three sentences unless asked to go deeper), no lists, no markdown.
 
 Standing context about Tarik from your memory:
 {{standing_context}}
@@ -31,7 +31,9 @@ Your tools:
 - web_research: live web search. Use whenever Tarik asks about current events, news, or anything you don't know. Summarize the results aloud in two or three sentences; source cards land on his dashboard automatically. If he says "remember this" afterward, store the key finding with remember.
 - agentkey_research: a second research engine with different providers. Use it only when Tarik explicitly asks for AgentKey or a second opinion, or when web_research is disabled or fails — it costs limited credits.
 
-Morning briefing: when Tarik greets you ("good morning" or similar) or asks for a briefing, call get_calendar then get_emails, and deliver one tight spoken briefing: schedule first, then only the emails that actually matter. Mention which account items come from when it's not obvious.
+- get_brief: the latest pre-built brief document (morning brief and other workflows). This is your FIRST choice for any briefing.
+
+Morning briefing: when Tarik greets you ("good morning" or similar) or asks for a briefing, call get_brief first — if a brief is ready, speak from its sections immediately (schedule first, then the emails that matter, then the headlines worth his time — a tight spoken digest, not a read-aloud). Only if get_brief reports no ready brief, fall back to get_calendar then get_emails live. Tell Tarik the full brief is on his Briefs page.
 
 Never invent memories. If a tool fails or reports it is disabled, tell Tarik that in plain words — never pretend or improvise the result.`;
 
@@ -178,6 +180,24 @@ const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
   },
   {
     type: "webhook" as const,
+    name: "get_brief",
+    description:
+      "Fetch the latest pre-built brief document (morning brief or other workflow output). Call this FIRST for any briefing or 'good morning' — it answers instantly without live tool calls. If it reports no ready brief, fall back to get_calendar and get_emails.",
+    responseTimeoutSecs: 15,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/get_brief`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: [],
+        description: "No parameters — returns the latest ready brief",
+        properties: {},
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
     name: "recall",
     description:
       "Search Tarik's second brain (thoughts and memories) for past ideas and facts. Use before answering any question about something previously discussed or captured.",
@@ -202,12 +222,12 @@ const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
 async function main() {
   const client = new ElevenLabsClient({ apiKey: env.ELEVENLABS_API_KEY });
 
-  const voice = await client.voices.get(MORPHEUS_VOICE_ID);
-  console.log(`Voice OK: ${voice.name} (${MORPHEUS_VOICE_ID})`);
+  const voice = await client.voices.get(ZOLA_VOICE_ID);
+  console.log(`Voice OK: ${voice.name} (${ZOLA_VOICE_ID})`);
 
   const conversationConfig = {
     agent: {
-      firstMessage: "Morpheus online. What's on your mind?",
+      firstMessage: "Zola online. What's on your mind?",
       language: "en",
       prompt: {
         prompt: PERSONA,
@@ -222,7 +242,7 @@ async function main() {
         },
       },
     },
-    tts: { voiceId: MORPHEUS_VOICE_ID },
+    tts: { voiceId: ZOLA_VOICE_ID },
     // The SDK's request type demands the *output* tool shape here; the API
     // accepts the input shape (verified live), so bridge the codegen quirk.
   } as unknown as ElevenLabs.ConversationalConfig;
@@ -230,12 +250,13 @@ async function main() {
   const existingId = env.ELEVENLABS_AGENT_ID;
   if (existingId) {
     await client.conversationalAi.agents.update(existingId, {
+      name: "Zola (Tarik OS)",
       conversationConfig,
     });
     console.log(`Updated agent ${existingId}`);
   } else {
     const agent = await client.conversationalAi.agents.create({
-      name: "Morpheus (Tarik OS)",
+      name: "Zola (Tarik OS)",
       conversationConfig,
     });
     console.log(`Created agent: ${agent.agentId}`);

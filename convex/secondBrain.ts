@@ -5,14 +5,14 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 // Tool-facing functions, called by the Next.js tool webhook routes on behalf
 // of the ElevenLabs agent. They authenticate with a shared secret rather than
 // a user identity — the caller is Morpheus, not a browser session.
-function checkToolSecret(secret: string) {
+export function checkToolSecret(secret: string) {
   const expected = process.env.MORPHEUS_TOOL_SECRET;
   if (!expected || secret !== expected) {
     throw new Error("Invalid tool secret");
   }
 }
 
-async function markToolHealthy(ctx: MutationCtx, name: string) {
+export async function markToolHealthy(ctx: MutationCtx, name: string) {
   const tool = await ctx.db
     .query("tools")
     .withIndex("by_name", (q) => q.eq("name", name))
