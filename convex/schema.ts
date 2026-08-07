@@ -11,14 +11,28 @@ export default defineSchema({
       v.literal("person"),
     ),
     transcriptId: v.optional(v.id("transcripts")),
-  }).searchIndex("search_content", { searchField: "content" }),
+    updatedAt: v.optional(v.number()),
+    // voyage-3.5-lite, 1024 dims; absent until the backfill action embeds the row
+    embedding: v.optional(v.array(v.float64())),
+  })
+    .searchIndex("search_content", { searchField: "content" })
+    .vectorIndex("by_embedding", {
+      vectorField: "embedding",
+      dimensions: 1024,
+    }),
 
   thoughts: defineTable({
     raw: v.string(),
     cleaned: v.string(),
     tags: v.array(v.string()),
     transcriptId: v.optional(v.id("transcripts")),
-  }).searchIndex("search_cleaned", { searchField: "cleaned" }),
+    embedding: v.optional(v.array(v.float64())),
+  })
+    .searchIndex("search_cleaned", { searchField: "cleaned" })
+    .vectorIndex("by_embedding", {
+      vectorField: "embedding",
+      dimensions: 1024,
+    }),
 
   transcripts: defineTable({
     title: v.string(),

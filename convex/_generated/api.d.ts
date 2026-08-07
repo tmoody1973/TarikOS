@@ -10,6 +10,8 @@
 
 import type * as crons from "../crons.js";
 import type * as dashboard from "../dashboard.js";
+import type * as embeddingsLib from "../embeddingsLib.js";
+import type * as memoryOps from "../memoryOps.js";
 import type * as secondBrain from "../secondBrain.js";
 import type * as transcripts from "../transcripts.js";
 import type * as workflowLib from "../workflowLib.js";
@@ -25,6 +27,8 @@ import type {
 declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   dashboard: typeof dashboard;
+  embeddingsLib: typeof embeddingsLib;
+  memoryOps: typeof memoryOps;
   secondBrain: typeof secondBrain;
   transcripts: typeof transcripts;
   workflowLib: typeof workflowLib;

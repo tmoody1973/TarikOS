@@ -1,7 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { Authenticated, AuthLoading, useMutation, useQuery } from "convex/react";
+import { useEffect, useRef, useState } from "react";
+import {
+  Authenticated,
+  AuthLoading,
+  useAction,
+  useMutation,
+  useQuery,
+} from "convex/react";
+import type { Doc } from "../../convex/_generated/dataModel";
 import { UserButton } from "@clerk/nextjs";
 import { ConversationProvider } from "@elevenlabs/react";
 import { api } from "../../convex/_generated/api";
@@ -41,11 +48,31 @@ function DashboardInner() {
   const tools = useQuery(api.dashboard.toolRegistry);
   const setToolEnabled = useMutation(api.dashboard.setToolEnabled);
 
+  // Hybrid (vector + text) search runs in a Convex action, so it's driven
+  // by a debounced effect rather than a live query.
   const [searchQuery, setSearchQuery] = useState("");
-  const searchResults = useQuery(
-    api.transcripts.searchSecondBrain,
-    searchQuery.trim() ? { searchQuery } : "skip",
-  );
+  const [searchResults, setSearchResults] = useState<{
+    thoughts: Doc<"thoughts">[];
+    memories: Doc<"memories">[];
+  } | null>(null);
+  const dashboardSearch = useAction(api.memoryOps.dashboardSearch);
+  const latestQuery = useRef("");
+  useEffect(() => {
+    const q = searchQuery.trim();
+    latestQuery.current = q;
+    if (!q) {
+      setSearchResults(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      dashboardSearch({ searchQuery: q })
+        .then((res) => {
+          if (latestQuery.current === q) setSearchResults(res);
+        })
+        .catch(() => {});
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery, dashboardSearch]);
   const searching = searchQuery.trim() !== "";
   const shownThoughts = searching ? searchResults?.thoughts : thoughts;
   const shownMemories = searching ? searchResults?.memories : memories;

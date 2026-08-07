@@ -13,4 +13,12 @@ crons.cron(
   { name: "morning-brief" },
 );
 
+// Nightly memory consolidation. 08:00 UTC = 3:00 AM CDT (2:00 AM CST).
+crons.cron(
+  "memory consolidation",
+  "0 8 * * *",
+  internal.workflowRunner.run,
+  { name: "memory-consolidation" },
+);
+
 export default crons;

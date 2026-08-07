@@ -12,7 +12,9 @@ import {
   type ResearchResult,
 } from "@/lib/research";
 import { fetchFeedGroup } from "@/lib/rss";
+import { runConsolidation } from "@/lib/consolidate";
 import { safeSlice } from "../../../../../convex/workflowLib";
+import type { Id } from "../../../../../convex/_generated/dataModel";
 
 // Webhook endpoint for Zola's ElevenLabs server tools. Authenticated by
 // a shared secret header (configured on the agent), not a browser session —
@@ -138,7 +140,7 @@ async function runTool(
       if (!searchQuery) {
         return { ok: false, message: "Recall needs a search query." };
       }
-      const results = await convex.query(api.secondBrain.recall, {
+      const results = await convex.action(api.memoryOps.hybridRecall, {
         secret,
         searchQuery,
       });
@@ -151,6 +153,36 @@ async function runTool(
             ? "Nothing in the second brain matches that."
             : `Found ${count} matching item(s).`,
         data: results,
+      };
+    }
+    case "consolidate_memories": {
+      const input = await convex.query(api.memoryOps.consolidationInput, {
+        secret,
+      });
+      if (input.transcripts.length === 0) {
+        return {
+          ok: true,
+          message: "No conversations in the last day — nothing to consolidate.",
+        };
+      }
+      const ops = await runConsolidation(input);
+      const result = await convex.action(
+        api.memoryOps.applyConsolidationFromTool,
+        {
+          secret,
+          newMemories: ops.newMemories as {
+            content: string;
+            type: "preference" | "fact" | "project" | "person";
+            transcriptId?: Id<"transcripts">;
+          }[],
+          updates: ops.updates as { id: Id<"memories">; content: string }[],
+          deletes: ops.deletes as Id<"memories">[],
+        },
+      );
+      return {
+        ok: true,
+        message: `Consolidated ${input.transcripts.length} conversation(s): ${result.added} new memories, ${result.updated} updated, ${result.deleted} merged away.`,
+        data: result,
       };
     }
     case "get_calendar": {

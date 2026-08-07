@@ -229,24 +229,39 @@ async function upsertSetting(
 export const seedPhase2 = internalMutation({
   args: {},
   handler: async (ctx) => {
-    const existing = await ctx.db
-      .query("workflows")
-      .withIndex("by_name", (q) => q.eq("name", "morning-brief"))
-      .unique();
-    if (!existing) {
-      await ctx.db.insert("workflows", {
-        name: "morning-brief",
-        // 12:00 UTC = 7:00 CDT (6:00 CST in winter — Convex crons are
-        // UTC-only; revisit at the DST flip if it matters).
-        trigger: { type: "cron", schedule: "0 12 * * 1-5" },
-        steps: MORNING_BRIEF_STEPS,
-        enabled: true,
-      });
-    } else {
-      await ctx.db.patch(existing._id, { steps: MORNING_BRIEF_STEPS });
+    async function upsertWorkflow(
+      name: string,
+      schedule: string,
+      steps: { tool: string; args: Record<string, string> }[],
+    ): Promise<string> {
+      const existing = await ctx.db
+        .query("workflows")
+        .withIndex("by_name", (q) => q.eq("name", name))
+        .unique();
+      if (!existing) {
+        await ctx.db.insert("workflows", {
+          name,
+          trigger: { type: "cron", schedule },
+          steps,
+          enabled: true,
+        });
+        return `${name} seeded`;
+      }
+      await ctx.db.patch(existing._id, { steps });
+      return `${name} updated`;
     }
+
+    const results = [
+      // 12:00 UTC = 7:00 CDT (6:00 CST in winter — Convex crons are
+      // UTC-only; revisit at the DST flip if it matters).
+      await upsertWorkflow("morning-brief", "0 12 * * 1-5", MORNING_BRIEF_STEPS),
+      // 08:00 UTC = 3:00 AM CDT nightly.
+      await upsertWorkflow("memory-consolidation", "0 8 * * *", [
+        { tool: "consolidate_memories", args: {} },
+      ]),
+    ];
     await upsertSetting(ctx, "briefTopics", STANDING_TOPICS);
     await upsertSetting(ctx, "briefFeeds", FEED_GROUPS);
-    return `morning-brief ${existing ? "updated" : "seeded"}; ${STANDING_TOPICS.length} search topics; ${FEED_GROUPS.length} feed groups`;
+    return `${results.join("; ")}; ${STANDING_TOPICS.length} search topics; ${FEED_GROUPS.length} feed groups`;
   },
 });
