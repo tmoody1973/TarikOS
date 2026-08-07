@@ -35,7 +35,9 @@ export const recentJournal = query({
   args: {},
   handler: async (ctx) => {
     await requireUser(ctx);
-    return await ctx.db.query("journalEntries").order("desc").take(30);
+    const entries = await ctx.db.query("journalEntries").order("desc").take(30);
+    // Strip embeddings — 1024 floats per row the UI never reads.
+    return entries.map(({ embedding: _e, ...rest }) => rest);
   },
 });
 

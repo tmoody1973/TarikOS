@@ -129,6 +129,7 @@ export default defineSchema({
     ),
     reviewedAt: v.number(),
     reviewCadenceDays: v.number(),
+    updatedAt: v.optional(v.number()),
     source: v.union(
       v.literal("import"),
       v.literal("interview"),

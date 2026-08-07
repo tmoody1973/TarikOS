@@ -13,6 +13,14 @@ crons.cron(
   { name: "morning-brief" },
 );
 
+// Sunday weekly telos review brief. 14:00 UTC = 9:00 AM CDT (8:00 AM CST).
+crons.cron(
+  "weekly review",
+  "0 14 * * 0",
+  internal.workflowRunner.run,
+  { name: "weekly-review" },
+);
+
 // Nightly memory consolidation. 08:00 UTC = 3:00 AM CDT (2:00 AM CST).
 crons.cron(
   "memory consolidation",

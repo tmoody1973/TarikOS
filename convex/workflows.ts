@@ -245,10 +245,17 @@ const FEED_GROUPS = [
 ];
 
 const MORNING_BRIEF_STEPS: { tool: string; args: Record<string, string> }[] = [
+  // GOALS leads (MOO-490): the brief opens against the telos.
+  { tool: "telos_brief", args: {} },
   { tool: "get_calendar", args: { date: "{{today}}" } },
   { tool: "get_emails", args: {} },
   { tool: "get_rss", args: { feeds: "{{feedGroups}}" } },
   { tool: "web_research", args: { query: "{{topics}}" } },
+];
+
+const WEEKLY_REVIEW_STEPS: { tool: string; args: Record<string, string> }[] = [
+  { tool: "telos_brief", args: {} },
+  { tool: "journal_digest", args: {} },
 ];
 
 async function upsertSetting(
@@ -301,6 +308,8 @@ export const seedPhase2 = internalMutation({
       await upsertWorkflow("memory-consolidation", "0 8 * * *", [
         { tool: "consolidate_memories", args: {} },
       ]),
+      // 14:00 UTC Sunday = 9:00 AM CDT (8:00 CST in winter).
+      await upsertWorkflow("weekly-review", "0 14 * * 0", WEEKLY_REVIEW_STEPS),
       // Voice-triggered ("build me a brief on X"); schedule ignored.
       await upsertWorkflow("research-brief", "voice", [
         { tool: "web_research", args: { query: "{{topic}} — overview and latest developments" } },

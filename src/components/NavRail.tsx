@@ -7,6 +7,7 @@ const LINKS = [
   { label: "HOME", href: "/", color: "bg-amber" },
   { label: "BRIEFS", href: "/briefs", color: "bg-lavender" },
   { label: "BRAIN", href: "/brain", color: "bg-hudblue" },
+  { label: "TELOS", href: "/telos", color: "bg-cyan-hud" },
   { label: "COMMS", href: "/conversations", color: "bg-salmon" },
   { label: "CTRL", href: "/control", color: "bg-steel" },
 ];

@@ -17,6 +17,8 @@ import { safeSlice } from "../../../../../convex/workflowLib";
 import {
   TELOS_KINDS,
   TELOS_STATUSES,
+  buildGoalsSection,
+  buildJournalDigest,
   type TelosKind,
   type TelosStatus,
 } from "../../../../../convex/telosLib";
@@ -355,6 +357,30 @@ async function runTool(
         },
       };
     }
+    case "telos_brief": {
+      const [items] = await Promise.all([
+        convex.query(api.telos.listItems, { secret }),
+        convex.mutation(api.secondBrain.markToolHealthyFromTool, {
+          secret,
+          name: "telos_brief",
+        }),
+      ]);
+      const body = buildGoalsSection(items, Date.now());
+      return { ok: true, message: "Goals section built.", data: { body } };
+    }
+    case "journal_digest": {
+      const [entries] = await Promise.all([
+        convex.query(api.journal.weekEntries, { secret }),
+        convex.mutation(api.secondBrain.markToolHealthyFromTool, {
+          secret,
+          name: "journal_digest",
+        }),
+      ]);
+      const body = buildJournalDigest(
+        entries.map((j) => ({ text: j.text, mode: j.mode, at: j._creationTime })),
+      );
+      return { ok: true, message: "Journal digest built.", data: { body } };
+    }
     case "journal_entry": {
       const text = strArg(body.text, 2000);
       const mode = body.mode === "reflection" ? "reflection" : "capture";
@@ -389,7 +415,15 @@ async function runTool(
       return {
         ok: true,
         message: `${items.length} active telos item(s). Speak from them naturally.`,
-        data: { items },
+        // Lean payload for the voice prompt — cadence bookkeeping stays home.
+        data: {
+          items: items.map(({ kind, text, measurable, status }) => ({
+            kind,
+            text,
+            measurable,
+            status,
+          })),
+        },
       };
     }
     case "add_telos_item": {

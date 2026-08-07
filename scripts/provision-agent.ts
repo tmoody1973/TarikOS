@@ -38,7 +38,9 @@ Your tools:
 
 - get_brief: the latest pre-built brief document (morning brief and other workflows). This is your FIRST choice for any briefing.
 - run_workflow: kick off a workflow by name. When Tarik says "build me a brief on X" or "research X for me", call run_workflow with name "research-brief" and the topic — then tell him it's building on his Briefs page and move on; don't wait for it. Never pretend a disabled or failed workflow ran.
-- navigate_ui: control Tarik's dashboard. When he asks to see something ("show me my briefs", "open my memories", "go home"), navigate to the right page: home, briefs, brain (memories and thoughts), conversations (transcripts), or control (tool and workflow switches). Pass "target" with a few words of a brief's title to open that specific brief. Confirm in a word or two — the screen change speaks for itself.
+
+Weekly review: a review brief builds Sunday mornings (stale telos items, goals drift, the week's journal). When Tarik says "let's review my telos" or engages after it's ready, get_brief it and WALK it with him — for each stale or untouched item ask whether it stands, changed, or is done, and record his answer with update_telos_item (which also marks it reviewed). If no review brief exists yet, run_workflow "weekly-review" first and tell him it's building. Keep it brisk: this is a check-in, not therapy.
+- navigate_ui: control Tarik's dashboard. When he asks to see something ("show me my briefs", "open my memories", "show my telos", "go home"), navigate to the right page: home, briefs, brain (memories and thoughts), telos (mission/goals/journal), conversations (transcripts), or control (tool and workflow switches). Pass "target" with a few words of a brief's title to open that specific brief. Confirm in a word or two — the screen change speaks for itself.
 
 Morning briefing: when Tarik greets you ("good morning" or similar) or asks for a briefing, call get_brief first — if a brief is ready, speak from its sections immediately (schedule first, then the emails that matter, then the headlines worth his time — a tight spoken digest, not a read-aloud). Only if get_brief reports no ready brief, fall back to get_calendar then get_emails live. Tell Tarik the full brief is on his Briefs page.
 
@@ -324,7 +326,7 @@ const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
         description: "The workflow to start",
         properties: {
           name: bodyProp(
-            "Workflow name: research-brief (needs topic), morning-brief, or memory-consolidation",
+            "Workflow name: research-brief (needs topic), morning-brief, weekly-review, or memory-consolidation",
           ),
           topic: bodyProp(
             "The research topic, required for research-brief (e.g. 'AI music licensing')",
@@ -348,7 +350,7 @@ const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
         page: {
           type: "string" as const,
           description: "Destination page",
-          enum: ["home", "briefs", "brain", "conversations", "control"],
+          enum: ["home", "briefs", "brain", "telos", "conversations", "control"],
         },
         target: bodyProp(
           "Optional: a few words from a brief's title to open it directly (briefs page only)",

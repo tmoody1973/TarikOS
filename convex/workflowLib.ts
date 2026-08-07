@@ -29,6 +29,8 @@ export const TOOL_BASE_URL = "https://morpheus-drab-rho.vercel.app/api/tools";
 const TOOL_LABELS: Record<string, string> = {
   get_calendar: "Calendar",
   get_emails: "Inbox",
+  telos_brief: "Goals",
+  journal_digest: "This Week's Journal",
 };
 
 function labelFor(tool: string): string {
@@ -175,6 +177,12 @@ export function formatSection(
     };
   }
   const data = asRecord(result.data);
+
+  // Tools that pre-build their own markdown (telos_brief, journal_digest, …)
+  // hand it over as data.body.
+  if (typeof data.body === "string" && data.body) {
+    return { section: { ...base, body: data.body, sources: [] }, isError: false };
+  }
 
   if (step.tool === "get_calendar") {
     const events = (Array.isArray(data.events) ? data.events : []) as CalendarEvent[];

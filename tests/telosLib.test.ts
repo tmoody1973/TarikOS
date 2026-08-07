@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import {
   parseTelosFile,
   compileTelosSummary,
+  buildGoalsSection,
+  buildJournalDigest,
   isStale,
   DEFAULT_CADENCE_DAYS,
 } from "../convex/telosLib.ts";
@@ -177,4 +179,72 @@ test("default cadences: goal 30, problem 90, mission 365", () => {
   assert.equal(DEFAULT_CADENCE_DAYS.goal, 30);
   assert.equal(DEFAULT_CADENCE_DAYS.problem, 90);
   assert.equal(DEFAULT_CADENCE_DAYS.mission, 365);
+});
+
+// ---- MOO-490: buildGoalsSection ----
+
+const WEEK = 7 * DAY;
+
+function goal(text: string, overrides: Record<string, unknown> = {}) {
+  return {
+    kind: "goal" as const,
+    text,
+    measurable: undefined as string | undefined,
+    status: "active" as const,
+    reviewedAt: NOW,
+    reviewCadenceDays: 30,
+    updatedAt: undefined as number | undefined,
+    createdAt: NOW - 60 * DAY,
+    ...overrides,
+  };
+}
+
+test("buildGoalsSection lists active goals with measurables", () => {
+  const body = buildGoalsSection(
+    [goal("Ship the thing", { measurable: "by Q4" }), goal("Done goal", { status: "done" })],
+    NOW,
+  );
+  assert.ok(body.includes("Ship the thing"));
+  assert.ok(body.includes("by Q4"));
+  assert.ok(!body.includes("Done goal"));
+});
+
+test("buildGoalsSection drift line separates moved from untouched", () => {
+  const body = buildGoalsSection(
+    [
+      goal("Moved goal", { updatedAt: NOW - 2 * DAY }),
+      goal("Fresh new goal", { createdAt: NOW - 1 * DAY }),
+      goal("Untouched goal"),
+    ],
+    NOW,
+  );
+  assert.ok(/moved this week.*Moved goal/i.test(body) || /Moved goal.*moved/i.test(body));
+  assert.ok(/untouched.*Untouched goal/i.test(body) || /Untouched goal.*untouched/i.test(body));
+  assert.ok(!new RegExp(`untouched[^\\n]*Fresh new goal`, "i").test(body));
+});
+
+test("buildGoalsSection nudges review when items are stale", () => {
+  const body = buildGoalsSection(
+    [goal("Old goal", { reviewedAt: NOW - 40 * DAY })],
+    NOW,
+  );
+  assert.ok(/review/i.test(body));
+});
+
+test("buildGoalsSection with empty telos prompts setup", () => {
+  const body = buildGoalsSection([], NOW);
+  assert.ok(/telos|interview|set up/i.test(body));
+});
+
+test("buildJournalDigest formats entries with day and reflection marker", () => {
+  const body = buildJournalDigest([
+    { text: "Shipped the thing", mode: "capture", at: NOW },
+    { text: "Tomorrow: rest", mode: "reflection", at: NOW - DAY },
+  ]);
+  assert.ok(/- \*\*\w{3}\*\* — Shipped the thing/.test(body));
+  assert.ok(body.includes("(reflection)"));
+});
+
+test("buildJournalDigest with no entries says so", () => {
+  assert.equal(buildJournalDigest([]), "No journal entries this week.");
 });

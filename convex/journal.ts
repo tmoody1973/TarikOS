@@ -1,4 +1,4 @@
-import { internalMutation, mutation } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { checkToolSecret, markToolHealthy } from "./secondBrain";
 
@@ -17,6 +17,21 @@ export const addEntry = mutation({
     const id = await ctx.db.insert("journalEntries", { text, mode });
     await markToolHealthy(ctx, "journal_entry");
     return id;
+  },
+});
+
+// weekly-review's journal_digest step: the last 7 days of entries.
+export const weekEntries = query({
+  args: { secret: v.string() },
+  handler: async (ctx, { secret }) => {
+    checkToolSecret(secret);
+    const since = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const entries = await ctx.db
+      .query("journalEntries")
+      .withIndex("by_creation_time", (q) => q.gt("_creationTime", since))
+      .order("desc")
+      .collect();
+    return entries.map(({ embedding: _e, ...rest }) => rest);
   },
 });
 

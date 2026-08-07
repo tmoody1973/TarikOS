@@ -1,5 +1,6 @@
 // Pure telos helpers — no Convex imports — usable from Convex functions,
 // the import script, and tests (same pattern as workflowLib).
+import { safeSlice } from "./workflowLib.ts";
 
 export const TELOS_KINDS = [
   "mission",
@@ -193,6 +194,59 @@ export type SummaryItem = {
   reviewedAt: number;
   reviewCadenceDays: number;
 };
+
+// GOALS section for the morning brief: active goals + drift + review nudge.
+export type GoalsSectionItem = SummaryItem & {
+  updatedAt?: number;
+  createdAt: number;
+};
+
+const WEEK_MS = 7 * DAY_MS;
+
+export function buildGoalsSection(
+  items: GoalsSectionItem[],
+  now: number,
+): string {
+  const active = items.filter((i) => i.status === "active");
+  const goals = active.filter((i) => i.kind === "goal");
+  // (single pass over `items` isn't worth losing `active` — staleCount needs it)
+  if (goals.length === 0) {
+    return "No telos set up yet — say “set up my telos” and Zola will run the interview.";
+  }
+  const lines = goals.map((g) => {
+    const m = g.measurable ? ` — ${g.measurable}` : "";
+    return `- **${g.text}**${m}`;
+  });
+  const touched = (g: GoalsSectionItem) =>
+    (g.updatedAt ?? 0) > now - WEEK_MS || g.createdAt > now - WEEK_MS;
+  const moved = goals.filter(touched).map((g) => g.text);
+  const untouched = goals.filter((g) => !touched(g)).map((g) => g.text);
+  const drift: string[] = [];
+  if (moved.length > 0) drift.push(`Moved this week: ${moved.join("; ")}.`);
+  if (untouched.length > 0) drift.push(`Untouched this week: ${untouched.join("; ")}.`);
+  const staleCount = active.filter((i) => isStale(i, now)).length;
+  const nudge =
+    staleCount > 0
+      ? `${staleCount} telos item(s) past review cadence — worth a review session ("let's review my telos").`
+      : "";
+  return [lines.join("\n"), drift.join(" "), nudge].filter(Boolean).join("\n\n");
+}
+
+// weekly-review's journal digest body (tested alongside buildGoalsSection).
+export function buildJournalDigest(
+  entries: { text: string; mode: string; at: number }[],
+): string {
+  if (entries.length === 0) return "No journal entries this week.";
+  return entries
+    .map((e) => {
+      const day = new Date(e.at).toLocaleDateString("en-US", {
+        timeZone: "America/Chicago",
+        weekday: "short",
+      });
+      return `- **${day}**${e.mode === "reflection" ? " (reflection)" : ""} — ${safeSlice(e.text, 300)}`;
+    })
+    .join("\n");
+}
 
 const SUMMARY_SECTIONS: { kind: TelosKind; heading: string }[] = [
   { kind: "mission", heading: "Mission" },
