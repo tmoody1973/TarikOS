@@ -30,6 +30,7 @@ const PAGES: Record<string, string> = {
   briefs: "/briefs",
   brain: "/brain",
   telos: "/telos",
+  mail: "/mail",
   conversations: "/conversations",
   control: "/control",
 };
@@ -82,7 +83,7 @@ export function VoiceDock() {
       navigate_ui: async (params: { page?: string; target?: string }) => {
         const path = PAGES[params.page ?? ""];
         if (!path) {
-          return `Unknown page "${params.page}". Valid pages: home, briefs, brain, telos, conversations, control.`;
+          return `Unknown page "${params.page}". Valid pages: home, briefs, brain, telos, mail, conversations, control.`;
         }
         if (params.page === "briefs" && params.target) {
           router.push(`/briefs?open=${encodeURIComponent(params.target)}`);

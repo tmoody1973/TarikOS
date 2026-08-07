@@ -17,9 +17,9 @@ const composio = new Composio({ apiKey: process.env.COMPOSIO_API_KEY });
 
 export class GoogleAuthError extends Error {}
 
-type Account = { id: string; label: string };
+export type Account = { id: string; label: string };
 
-async function connectedAccounts(toolkit: string): Promise<Account[]> {
+export async function connectedAccounts(toolkit: string): Promise<Account[]> {
   const { items } = await composio.connectedAccounts.list({
     userIds: [USER_ID],
     toolkitSlugs: [toolkit],
@@ -36,7 +36,7 @@ async function connectedAccounts(toolkit: string): Promise<Account[]> {
   }));
 }
 
-async function execute(
+export async function execute(
   slug: string,
   connectedAccountId: string,
   args: Record<string, unknown>,
