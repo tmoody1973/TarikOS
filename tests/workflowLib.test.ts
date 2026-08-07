@@ -82,10 +82,10 @@ test("research headlines are inline links; unlinked fall back to bold", () => {
   );
   assert.equal(isError, false);
   assert.equal(section.heading, "Milwaukee news");
-  assert.ok(section.body.includes("- [Story A](https://a.example) — Something happened"));
+  assert.ok(section.body.includes("- [Story A](https://a.example/) — Something happened"));
   assert.ok(section.body.includes("- **Story B** — More happened"));
   assert.deepEqual(section.sources, [
-    { title: "Story A", url: "https://a.example" },
+    { title: "Story A", url: "https://a.example/" },
   ]);
 });
 
