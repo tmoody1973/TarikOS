@@ -105,6 +105,13 @@ function chicagoTime(iso: string): string {
       });
 }
 
+// Truncation that never cuts an emoji in half: a bare .slice() can split a
+// surrogate pair, and Convex rejects strings with lone surrogates.
+export function safeSlice(raw: string, max: number): string {
+  const sliced = raw.slice(0, max);
+  return /[\uD800-\uDBFF]$/.test(sliced) ? sliced.slice(0, -1) : sliced;
+}
+
 // Tool snippets (Tavily etc.) arrive with raw markdown artifacts — headings,
 // emphasis marks, links, hard newlines. Scrub to plain prose for brief bodies.
 export function cleanText(raw: string): string {
@@ -186,7 +193,7 @@ export function formatSection(
         : emails
             .map(
               (e) =>
-                `- **${cleanText(e.subject ?? "") || "(no subject)"}** — ${e.from ?? "unknown"}${e.account ? ` (${e.account})` : ""}: ${cleanText(e.snippet ?? "").slice(0, 140)}`,
+                `- **${cleanText(e.subject ?? "") || "(no subject)"}** — ${e.from ?? "unknown"}${e.account ? ` (${e.account})` : ""}: ${safeSlice(cleanText(e.snippet ?? ""), 140)}`,
             )
             .join("\n");
     return { section: { ...base, body, sources: [] }, isError: false };
@@ -204,7 +211,7 @@ export function formatSection(
           cleanText(r.title ?? "").replace(/[[\]]/g, "") || "(untitled)";
         const url = absoluteHttpUrl(r.url);
         const head = url ? `[${title}](${url})` : `**${title}**`;
-        return `- ${head} — ${cleanText(r.snippet ?? "").slice(0, 220)}`;
+        return `- ${head} — ${safeSlice(cleanText(r.snippet ?? ""), 220)}`;
       })
       .join("\n");
     const sources = results.flatMap((r) => {

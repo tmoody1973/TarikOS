@@ -1,5 +1,6 @@
 import Parser from "rss-parser";
 import type { ResearchResult } from "./research";
+import { safeSlice } from "../../convex/workflowLib.ts";
 
 // RSS ingestion for the morning brief: fetch a group of feeds, keep recent
 // items, return them in the same shape as research results so the brief
@@ -33,7 +34,7 @@ export function itemsToResults(
     .map(({ item }) => ({
       title: item.title!,
       url: item.link!,
-      snippet: (item.contentSnippet ?? "").slice(0, 220),
+      snippet: safeSlice(item.contentSnippet ?? "", 220),
     }));
 }
 

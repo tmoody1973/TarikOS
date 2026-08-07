@@ -4,6 +4,7 @@ import {
   cleanText,
   expandSteps,
   formatSection,
+  safeSlice,
   workflowTitle,
 } from "../convex/workflowLib.ts";
 
@@ -128,6 +129,14 @@ test("relative/garbage result urls never become links or sources", () => {
   assert.deepEqual(section.sources, [
     { title: "Real Story", url: "https://real.example/a" },
   ]);
+});
+
+test("safeSlice never leaves a lone surrogate when cutting an emoji", () => {
+  const s = "weekend? 🍕 pizza";
+  const cut = safeSlice(s, 10); // 10 lands mid-🍕 surrogate pair
+  assert.equal(cut, "weekend? ");
+  assert.ok(!/[\uD800-\uDBFF]$/.test(cut));
+  assert.equal(safeSlice("plain text", 5), "plain");
 });
 
 test("cleanText strips markdown artifacts and hard newlines from snippets", () => {

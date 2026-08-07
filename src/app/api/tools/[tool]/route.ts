@@ -12,6 +12,7 @@ import {
   type ResearchResult,
 } from "@/lib/research";
 import { fetchFeedGroup } from "@/lib/rss";
+import { safeSlice } from "../../../../../convex/workflowLib";
 
 // Webhook endpoint for Zola's ElevenLabs server tools. Authenticated by
 // a shared secret header (configured on the agent), not a browser session —
@@ -186,7 +187,7 @@ async function runTool(
         cards: emails.slice(0, 6).map((e) => ({
           kind: "email" as const,
           title: e.subject || "(no subject)",
-          body: `${e.from} · ${e.account} — ${e.snippet.slice(0, 100)}`,
+          body: `${e.from} · ${e.account} — ${safeSlice(e.snippet, 100)}`,
         })),
       });
       return {

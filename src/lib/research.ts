@@ -1,4 +1,5 @@
 import { Composio } from "@composio/core";
+import { safeSlice } from "../../convex/workflowLib";
 
 export type ResearchResult = { title: string; url: string; snippet: string };
 
@@ -22,7 +23,7 @@ export async function composioResearch(
   return (data.results ?? []).slice(0, 6).map((r) => ({
     title: r.title ?? "(untitled)",
     url: r.url ?? "",
-    snippet: (r.content ?? "").slice(0, 220),
+    snippet: safeSlice(r.content ?? "", 220),
   }));
 }
 
@@ -53,6 +54,6 @@ export async function agentkeyResearch(
   return (payload.data?.web?.results ?? []).slice(0, 6).map((r) => ({
     title: r.title ?? "(untitled)",
     url: r.url ?? "",
-    snippet: (r.description ?? "").replace(/<[^>]+>/g, "").slice(0, 220),
+    snippet: safeSlice((r.description ?? "").replace(/<[^>]+>/g, ""), 220),
   }));
 }
