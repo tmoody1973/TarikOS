@@ -46,7 +46,7 @@ function HomeInner() {
   const [panel, setPanel] = useState<"today" | "inbox" | null>(null);
 
   return (
-    <div className="relative grid flex-1 grid-cols-1 gap-3 lg:grid-cols-2 lg:grid-rows-2">
+    <div className="relative grid flex-1 grid-cols-1 gap-3 lg:max-h-[calc(100dvh-7.75rem)] lg:grid-cols-2 lg:grid-rows-2">
       {/* Command center */}
       <Zone title="Command Center" accent="bg-hudblue">
         <div className="mb-3 flex gap-2">
