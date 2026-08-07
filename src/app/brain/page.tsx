@@ -32,11 +32,13 @@ export default function BrainPage() {
 function BrainInner() {
   const thoughts = useQuery(api.dashboard.recentThoughts);
   const memories = useQuery(api.dashboard.recentMemories);
+  const journal = useQuery(api.dashboard.recentJournal);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<{
     thoughts: Doc<"thoughts">[];
     memories: Doc<"memories">[];
+    journal: Doc<"journalEntries">[];
   } | null>(null);
   const dashboardSearch = useAction(api.memoryOps.dashboardSearch);
   const latestQuery = useRef("");
@@ -61,6 +63,7 @@ function BrainInner() {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [openMemory, setOpenMemory] = useState<Id<"memories"> | null>(null);
   const shownThoughts = searching ? searchResults?.thoughts : thoughts;
+  const shownJournal = searching ? searchResults?.journal : journal;
   const baseMemories = searching ? searchResults?.memories : memories;
   const shownMemories =
     typeFilter === "all"
@@ -74,10 +77,10 @@ function BrainInner() {
           type="search"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search thoughts and memories (semantic)…"
+          placeholder="Search thoughts, memories, and journal (semantic)…"
           className="mb-3 w-full rounded-md border border-panel-edge bg-black/40 px-3 py-1.5 text-sm text-foreground placeholder:text-steel focus:border-lavender focus:outline-none"
         />
-        <div className="grid flex-1 grid-cols-1 gap-6 overflow-y-auto md:grid-cols-2">
+        <div className="grid flex-1 grid-cols-1 gap-6 overflow-y-auto md:grid-cols-3">
           <div>
             <div className="flex flex-wrap items-center gap-1.5">
               <h3 className="mr-2 text-[10px] uppercase tracking-[0.3em] text-lavender">
@@ -141,6 +144,32 @@ function BrainInner() {
                         {t.tags.join(" · ")}
                       </span>
                     )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div>
+            <h3 className="text-[10px] uppercase tracking-[0.3em] text-lavender">
+              Journal
+            </h3>
+            {shownJournal === undefined ? (
+              <ZoneEmpty>syncing…</ZoneEmpty>
+            ) : shownJournal.length === 0 ? (
+              <ZoneEmpty>
+                {searching
+                  ? "No matches."
+                  : "No journal entries yet — tell Zola “journal this…”"}
+              </ZoneEmpty>
+            ) : (
+              <ul className="mt-2 space-y-2">
+                {shownJournal.map((j) => (
+                  <li key={j._id} className="text-sm text-foreground/80">
+                    {j.text}
+                    <span className="ml-2 text-[10px] uppercase tracking-wider text-lavender/60">
+                      {j.mode}
+                      {j.consolidatedAt !== undefined && " · mined"}
+                    </span>
                   </li>
                 ))}
               </ul>

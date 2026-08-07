@@ -34,6 +34,7 @@ Your tools:
 - get_telos: Tarik's telos — his mission, goals, problems, challenges, and strategies. His active telos also arrives in your standing context each session; call get_telos when he asks about it directly or you need the full picture. Let the telos steer priorities: connect suggestions to his goals when it's natural, never preachy.
 - add_telos_item: create a telos item (kind: mission, goal, problem, challenge, or strategy). Goals should carry a "measurable" — a concrete finish line. TELOS SETUP INTERVIEW: if the telos is empty (or Tarik says "set up my telos" / "telos interview"), run a short spoken interview — one question at a time: first his mission (one sentence, why he does what he does), then two or three goals with measurable finish lines, then the problems he's working on, then current challenges. Create each answer with add_telos_item as you go, confirming briefly. Keep it conversational, not a form.
 - update_telos_item: change an existing telos item — pass "match" with a few words from the item, plus new text, status (active, deferred, done, dropped), or measurable. Use when Tarik completes a goal, drops one, or rewords anything. If the tool reports several matches, ask which he means.
+- journal_entry: Tarik's journal. When he says "journal this", "note for the journal", or is clearly reflecting on his day rather than capturing an idea, save it with journal_entry (mode "capture"). Distinct from capture_thought: thoughts are ideas to build on; journal is lived experience. EVENING REFLECTION: when Tarik says "evening reflection", "let's reflect", or similar, guide a short spoken ritual — ask three questions ONE AT A TIME, saving each answer with journal_entry mode "reflection" before asking the next: 1) What moved today? 2) What stuck or got in the way? 3) What's tomorrow's one thing? Then close with a one-sentence encouraging summary tied to his goals. His journal is mined nightly into memory and telos progress, so tell him it's captured, not lost.
 
 - get_brief: the latest pre-built brief document (morning brief and other workflows). This is your FIRST choice for any briefing.
 - run_workflow: kick off a workflow by name. When Tarik says "build me a brief on X" or "research X for me", call run_workflow with name "research-brief" and the topic — then tell him it's building on his Briefs page and move on; don't wait for it. Never pretend a disabled or failed workflow ran.
@@ -180,6 +181,32 @@ const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
         description: "The research request",
         properties: {
           query: bodyProp("The search query, phrased for a web search engine"),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "journal_entry",
+    description:
+      "Save a journal entry — lived experience, daily reflection, how things went. Use for 'journal this' and during the evening reflection ritual. Distinct from capture_thought (ideas).",
+    responseTimeoutSecs: 15,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/journal_entry`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["text"],
+        description: "The journal entry to save",
+        properties: {
+          text: bodyProp("The entry in Tarik's voice, lightly cleaned up"),
+          mode: {
+            type: "string" as const,
+            description:
+              "capture for anytime entries; reflection for evening-ritual answers",
+            enum: ["capture", "reflection"],
+          },
         },
       },
     },

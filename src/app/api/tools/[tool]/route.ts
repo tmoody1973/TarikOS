@@ -179,10 +179,11 @@ async function runTool(
       const input = await convex.query(api.memoryOps.consolidationInput, {
         secret,
       });
-      if (input.transcripts.length === 0) {
+      if (input.transcripts.length === 0 && input.journal.length === 0) {
         return {
           ok: true,
-          message: "No conversations in the last day — nothing to consolidate.",
+          message:
+            "No conversations or journal entries in the last day — nothing to consolidate.",
         };
       }
       const ops = await runConsolidation(input);
@@ -197,11 +198,19 @@ async function runTool(
           }[],
           updates: ops.updates as { id: Id<"memories">; content: string }[],
           deletes: ops.deletes as Id<"memories">[],
+          telosUpdates: ops.telosUpdates as {
+            id: Id<"telosItems">;
+            text?: string;
+            status?: "active" | "deferred" | "done" | "dropped";
+            measurable?: string;
+            transcriptId?: Id<"transcripts">;
+          }[],
+          journalIds: input.journal.map((j) => j.id) as Id<"journalEntries">[],
         },
       );
       return {
         ok: true,
-        message: `Consolidated ${input.transcripts.length} conversation(s): ${result.added} new memories, ${result.updated} updated, ${result.deleted} merged away.`,
+        message: `Consolidated ${input.transcripts.length} conversation(s) and ${input.journal.length} journal entr(ies): ${result.added} new memories, ${result.updated} updated, ${result.deleted} merged away, ${result.telosApplied} telos update(s).`,
         data: result,
       };
     }
@@ -344,6 +353,19 @@ async function runTool(
             body: s.body.slice(0, 1200),
           })),
         },
+      };
+    }
+    case "journal_entry": {
+      const text = strArg(body.text, 2000);
+      const mode = body.mode === "reflection" ? "reflection" : "capture";
+      if (!text) {
+        return { ok: false, message: "Nothing to journal — empty entry." };
+      }
+      await convex.mutation(api.journal.addEntry, { secret, text, mode });
+      return {
+        ok: true,
+        message:
+          mode === "reflection" ? "Reflection saved." : "Journaled. It's in the book.",
       };
     }
     case "get_telos": {

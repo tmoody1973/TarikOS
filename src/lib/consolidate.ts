@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { TELOS_STATUSES, type TelosStatus } from "../../convex/telosLib.ts";
 
 // Nightly memory consolidation: Claude reads the day's transcripts against
 // the existing memory set and returns structured ops (new / update / delete).
@@ -12,6 +13,9 @@ export type ConsolidationInput = {
     turns: { role: string; text: string }[];
   }[];
   memories: { id: string; content: string; type: string }[];
+  // MOO-489: today's unconsolidated journal entries + active telos items.
+  journal: { id: string; text: string; mode: string }[];
+  telosItems: { id: string; kind: string; text: string; status: string }[];
 };
 
 export type ConsolidationOps = {
@@ -22,6 +26,13 @@ export type ConsolidationOps = {
   }[];
   updates: { id: string; content: string }[];
   deletes: string[];
+  telosUpdates: {
+    id: string;
+    text?: string;
+    status?: TelosStatus;
+    measurable?: string;
+    transcriptId?: string;
+  }[];
 };
 
 const MEMORY_TYPES = ["preference", "fact", "project", "person"] as const;
@@ -29,7 +40,7 @@ const MEMORY_TYPES = ["preference", "fact", "project", "person"] as const;
 export const OPS_SCHEMA = {
   type: "object" as const,
   additionalProperties: false,
-  required: ["new_memories", "updates", "deletes"],
+  required: ["new_memories", "updates", "deletes", "telos_updates"],
   properties: {
     new_memories: {
       type: "array" as const,
@@ -57,6 +68,23 @@ export const OPS_SCHEMA = {
       },
     },
     deletes: { type: "array" as const, items: { type: "string" as const } },
+    telos_updates: {
+      type: "array" as const,
+      // Empty string = "leave unchanged" (schema keeps every field required
+      // for structured output; the parser maps sentinels to undefined).
+      items: {
+        type: "object" as const,
+        additionalProperties: false,
+        required: ["telos_id", "text", "status", "measurable", "transcript_index"],
+        properties: {
+          telos_id: { type: "string" as const },
+          text: { type: "string" as const },
+          status: { type: "string" as const, enum: ["", ...TELOS_STATUSES] },
+          measurable: { type: "string" as const },
+          transcript_index: { type: "integer" as const },
+        },
+      },
+    },
   },
 };
 
@@ -71,7 +99,13 @@ export function buildPrompt(input: ConsolidationInput): string {
         t.turns.map((turn) => `${turn.role}: ${turn.text}`).join("\n"),
     )
     .join("\n\n");
-  return `You maintain the long-term memory of Zola, Tarik Moody's personal AI. Below are the existing memories and today's conversation transcripts.
+  const journal = input.journal
+    .map((j) => `[${j.id}] (${j.mode}) ${j.text}`)
+    .join("\n");
+  const telos = input.telosItems
+    .map((t) => `[${t.id}] (${t.kind}) ${t.text}`)
+    .join("\n");
+  return `You maintain the long-term memory of Zola, Tarik Moody's personal AI. Below are the existing memories, today's conversation transcripts, today's journal entries, and Tarik's active telos (mission/goals/problems).
 
 Extract durable facts about Tarik — his preferences, projects, people in his life, and stable facts — that are worth remembering long-term and are NOT already captured in the existing memories. Ignore small talk, one-off logistics, and anything ephemeral.
 
@@ -82,8 +116,16 @@ Also maintain the existing set:
 
 For each new memory, set transcript_index to the transcript it came from.
 
+Telos maintenance (telos_updates): when a transcript or journal entry shows a real change to a telos item — a completed or abandoned goal, a reworded understanding, a NEW finish line — emit a telos_update for that item's id. The measurable field is the goal's FINISH LINE (deadline/target): change it ONLY when Tarik explicitly changes the finish line itself. Day-to-day progress ("did 30 minutes of practice", "found the right course") belongs in new_memories, NEVER in measurable. Use "" for any field you are not changing, and status "" to leave status alone. Set transcript_index to the source transcript, or -1 if it came from a journal entry. Only report REAL change stated by Tarik; never invent progress, and an empty telos_updates list is the normal case.
+
 EXISTING MEMORIES:
 ${memories || "(none)"}
+
+ACTIVE TELOS:
+${telos || "(none)"}
+
+TODAY'S JOURNAL ENTRIES:
+${journal || "(none)"}
 
 TODAY'S TRANSCRIPTS:
 ${transcripts}`;
@@ -93,6 +135,13 @@ type RawOps = {
   new_memories?: { content?: unknown; type?: unknown; transcript_index?: unknown }[];
   updates?: { memory_id?: unknown; content?: unknown }[];
   deletes?: unknown[];
+  telos_updates?: {
+    telos_id?: unknown;
+    text?: unknown;
+    status?: unknown;
+    measurable?: unknown;
+    transcript_index?: unknown;
+  }[];
 };
 
 // Validate Claude's output against reality: drop unknown memory ids, resolve
@@ -130,7 +179,27 @@ export function opsFromResponse(
   );
   // Never delete a memory we're also updating.
   for (const u of updates) deleteSet.delete(u.id);
-  return { newMemories, updates, deletes: [...deleteSet] };
+  const knownTelosIds = new Set(input.telosItems.map((t) => t.id));
+  const telosUpdates = (raw.telos_updates ?? [])
+    .filter(
+      (t): t is { telos_id: string } & Record<string, unknown> =>
+        typeof t.telos_id === "string" && knownTelosIds.has(t.telos_id),
+    )
+    .map((t) => ({
+      id: t.telos_id,
+      text: typeof t.text === "string" && t.text.trim() ? t.text.trim() : undefined,
+      status: TELOS_STATUSES.includes(t.status as (typeof TELOS_STATUSES)[number])
+        ? (t.status as ConsolidationOps["telosUpdates"][number]["status"])
+        : undefined,
+      measurable:
+        typeof t.measurable === "string" && t.measurable.trim()
+          ? t.measurable.trim()
+          : undefined,
+      transcriptId: input.transcripts[t.transcript_index as number]?.id,
+    }))
+    // A sentinel-only entry changes nothing — drop it.
+    .filter((t) => t.text !== undefined || t.status !== undefined || t.measurable !== undefined);
+  return { newMemories, updates, deletes: [...deleteSet], telosUpdates };
 }
 
 export async function runConsolidation(

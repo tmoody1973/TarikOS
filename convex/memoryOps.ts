@@ -35,6 +35,8 @@ export const consolidationInput = query({
       turns: { role: string; text: string }[];
     }[];
     memories: { id: Id<"memories">; content: string; type: string }[];
+    journal: { id: Id<"journalEntries">; text: string; mode: string }[];
+    telosItems: { id: Id<"telosItems">; kind: string; text: string; status: string }[];
   }> => {
     checkToolSecret(secret);
     const since = Date.now() - DAY_MS;
@@ -42,6 +44,14 @@ export const consolidationInput = query({
       await ctx.db.query("transcripts").order("desc").take(50)
     ).filter((t) => t._creationTime > since && t.turns.length > 0);
     const memories = await ctx.db.query("memories").order("desc").take(200);
+    // ponytail: unconsolidated older than the newest 100 goes invisible;
+    // add an index if journaling volume ever makes that real.
+    const journal = (await ctx.db.query("journalEntries").order("desc").take(100)).filter(
+      (j) => j.consolidatedAt === undefined,
+    );
+    const telosItems = (await ctx.db.query("telosItems").take(200)).filter(
+      (t) => t.status === "active",
+    );
     return {
       transcripts: transcripts.map((t) => ({
         id: t._id,
@@ -52,6 +62,13 @@ export const consolidationInput = query({
         id: m._id,
         content: m.content,
         type: m.type,
+      })),
+      journal: journal.map((j) => ({ id: j._id, text: j.text, mode: j.mode })),
+      telosItems: telosItems.map((t) => ({
+        id: t._id,
+        kind: t.kind,
+        text: t.text,
+        status: t.status,
       })),
     };
   },
@@ -118,13 +135,55 @@ export const applyConsolidationFromTool = action({
       v.object({ id: v.id("memories"), content: v.string() }),
     ),
     deletes: v.array(v.id("memories")),
+    telosUpdates: v.array(
+      v.object({
+        id: v.id("telosItems"),
+        text: v.optional(v.string()),
+        status: v.optional(
+          v.union(
+            v.literal("active"),
+            v.literal("deferred"),
+            v.literal("done"),
+            v.literal("dropped"),
+          ),
+        ),
+        measurable: v.optional(v.string()),
+        transcriptId: v.optional(v.id("transcripts")),
+      }),
+    ),
+    journalIds: v.array(v.id("journalEntries")),
   },
   handler: async (
     ctx,
-    { secret, ...ops },
-  ): Promise<{ added: number; updated: number; deleted: number }> => {
+    { secret, telosUpdates, journalIds, ...ops },
+  ): Promise<{
+    added: number;
+    updated: number;
+    deleted: number;
+    telosApplied: number;
+  }> => {
     checkToolSecret(secret);
-    return await ctx.runMutation(internal.memoryOps.applyConsolidation, ops);
+    const result = await ctx.runMutation(internal.memoryOps.applyConsolidation, ops);
+    // Telos pass is isolated: its failure never sinks the memory pass, and it
+    // reports itself to the control panel. Journal entries stay unstamped on
+    // failure so tomorrow's run retries them (memory dedupe absorbs repeats).
+    let telosApplied = 0;
+    try {
+      telosApplied = await ctx.runMutation(
+        internal.telos.applyConsolidationUpdates,
+        { updates: telosUpdates },
+      );
+      await ctx.runMutation(internal.journal.stampConsolidated, { ids: journalIds });
+    } catch (err) {
+      await ctx
+        .runMutation(api.secondBrain.reportToolError, {
+          secret,
+          name: "consolidate_memories",
+          message: `telos pass failed: ${err instanceof Error ? err.message : String(err)}`,
+        })
+        .catch(() => {});
+    }
+    return { ...result, telosApplied };
   },
 });
 
@@ -138,6 +197,7 @@ export const unembedded = internalQuery({
     memories: { id: Id<"memories">; text: string }[];
     thoughts: { id: Id<"thoughts">; text: string }[];
     telos: { id: Id<"telosItems">; text: string }[];
+    journal: { id: Id<"journalEntries">; text: string }[];
   }> => {
     const memories = await ctx.db
       .query("memories")
@@ -151,10 +211,15 @@ export const unembedded = internalQuery({
       .query("telosItems")
       .filter((q) => q.eq(q.field("embedding"), undefined))
       .take(64);
+    const journal = await ctx.db
+      .query("journalEntries")
+      .filter((q) => q.eq(q.field("embedding"), undefined))
+      .take(64);
     return {
       memories: memories.map((m) => ({ id: m._id, text: m.content })),
       thoughts: thoughts.map((t) => ({ id: t._id, text: t.cleaned })),
       telos: telos.map((t) => ({ id: t._id, text: t.text })),
+      journal: journal.map((j) => ({ id: j._id, text: j.text })),
     };
   },
 });
@@ -170,8 +235,11 @@ export const storeEmbeddings = internalMutation({
     telos: v.array(
       v.object({ id: v.id("telosItems"), embedding: v.array(v.float64()) }),
     ),
+    journal: v.array(
+      v.object({ id: v.id("journalEntries"), embedding: v.array(v.float64()) }),
+    ),
   },
-  handler: async (ctx, { memories, thoughts, telos }): Promise<void> => {
+  handler: async (ctx, { memories, thoughts, telos, journal }): Promise<void> => {
     await Promise.all([
       ...memories.map(async (m) => {
         if (await ctx.db.get(m.id)) await ctx.db.patch(m.id, { embedding: m.embedding });
@@ -181,6 +249,9 @@ export const storeEmbeddings = internalMutation({
       }),
       ...telos.map(async (t) => {
         if (await ctx.db.get(t.id)) await ctx.db.patch(t.id, { embedding: t.embedding });
+      }),
+      ...journal.map(async (j) => {
+        if (await ctx.db.get(j.id)) await ctx.db.patch(j.id, { embedding: j.embedding });
       }),
     ]);
   },
@@ -202,11 +273,13 @@ export const backfillEmbeddings = internalAction({
         ...batch.memories.map((m) => m.text),
         ...batch.thoughts.map((t) => t.text),
         ...batch.telos.map((t) => t.text),
+        ...batch.journal.map((j) => j.text),
       ];
       if (texts.length === 0) break;
       const vectors = await voyageEmbed(apiKey, texts, "document");
       const thoughtBase = batch.memories.length;
       const telosBase = thoughtBase + batch.thoughts.length;
+      const journalBase = telosBase + batch.telos.length;
       await ctx.runMutation(internal.memoryOps.storeEmbeddings, {
         memories: batch.memories.map((m, i) => ({
           id: m.id,
@@ -219,6 +292,10 @@ export const backfillEmbeddings = internalAction({
         telos: batch.telos.map((t, i) => ({
           id: t.id,
           embedding: vectors[telosBase + i],
+        })),
+        journal: batch.journal.map((j, i) => ({
+          id: j.id,
+          embedding: vectors[journalBase + i],
         })),
       });
       total += texts.length;
@@ -255,6 +332,14 @@ export const getTelosByIds = internalQuery({
   },
 });
 
+export const getJournalByIds = internalQuery({
+  args: { ids: v.array(v.id("journalEntries")) },
+  handler: async (ctx, { ids }): Promise<Doc<"journalEntries">[]> => {
+    const docs = await Promise.all(ids.map((id) => ctx.db.get(id)));
+    return docs.filter((d): d is Doc<"journalEntries"> => d !== null);
+  },
+});
+
 // Shared: embed the query and fetch the vector-matched docs (null = no key).
 async function vectorHits(
   ctx: ActionCtx,
@@ -263,16 +348,18 @@ async function vectorHits(
   memDocs: Doc<"memories">[];
   thoughtDocs: Doc<"thoughts">[];
   telosDocs: Doc<"telosItems">[];
+  journalDocs: Doc<"journalEntries">[];
 } | null> {
   const apiKey = process.env.VOYAGE_API_KEY;
   if (!apiKey) return null;
   const [vector] = await voyageEmbed(apiKey, [searchQuery], "query");
-  const [memHits, thoughtHits, telosHits] = await Promise.all([
+  const [memHits, thoughtHits, telosHits, journalHits] = await Promise.all([
     ctx.vectorSearch("memories", "by_embedding", { vector, limit: 5 }),
     ctx.vectorSearch("thoughts", "by_embedding", { vector, limit: 5 }),
     ctx.vectorSearch("telosItems", "by_embedding", { vector, limit: 5 }),
+    ctx.vectorSearch("journalEntries", "by_embedding", { vector, limit: 5 }),
   ]);
-  const [memDocs, thoughtDocs, telosDocs] = await Promise.all([
+  const [memDocs, thoughtDocs, telosDocs, journalDocs] = await Promise.all([
     ctx.runQuery(internal.memoryOps.getMemoriesByIds, {
       ids: memHits.filter((h) => h._score >= MIN_SCORE).map((h) => h._id),
     }),
@@ -282,8 +369,11 @@ async function vectorHits(
     ctx.runQuery(internal.memoryOps.getTelosByIds, {
       ids: telosHits.filter((h) => h._score >= MIN_SCORE).map((h) => h._id),
     }),
+    ctx.runQuery(internal.memoryOps.getJournalByIds, {
+      ids: journalHits.filter((h) => h._score >= MIN_SCORE).map((h) => h._id),
+    }),
   ]);
-  return { memDocs, thoughtDocs, telosDocs };
+  return { memDocs, thoughtDocs, telosDocs, journalDocs };
 }
 
 function dedupeBy<T>(items: T[], key: (item: T) => string): T[] {
@@ -306,11 +396,10 @@ export const hybridRecall = action({
     semantic: boolean;
   }> => {
     checkToolSecret(secret);
-    const text = await ctx.runQuery(api.secondBrain.recall, {
-      secret,
-      searchQuery,
-    });
-    const vec = await vectorHits(ctx, searchQuery);
+    const [text, vec] = await Promise.all([
+      ctx.runQuery(api.secondBrain.recall, { secret, searchQuery }),
+      vectorHits(ctx, searchQuery),
+    ]);
     if (!vec) return { ...text, semantic: false };
     return {
       memories: dedupeBy(
@@ -328,6 +417,8 @@ export const hybridRecall = action({
       thoughts: dedupeBy(
         [
           ...vec.thoughtDocs.map((t) => ({ content: t.cleaned, tags: t.tags })),
+          // Journal hits ride along thought-shaped, tagged for the agent.
+          ...vec.journalDocs.map((j) => ({ content: j.text, tags: ["journal", j.mode] })),
           ...text.thoughts,
         ],
         (t) => t.content,
@@ -343,17 +434,22 @@ export const dashboardSearch = action({
   handler: async (
     ctx,
     { searchQuery },
-  ): Promise<{ thoughts: Doc<"thoughts">[]; memories: Doc<"memories">[] }> => {
+  ): Promise<{
+    thoughts: Doc<"thoughts">[];
+    memories: Doc<"memories">[];
+    journal: Doc<"journalEntries">[];
+  }> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
-    const text = await ctx.runQuery(api.transcripts.searchSecondBrain, {
-      searchQuery,
-    });
-    const vec = await vectorHits(ctx, searchQuery);
-    if (!vec) return text;
+    const [text, vec] = await Promise.all([
+      ctx.runQuery(api.transcripts.searchSecondBrain, { searchQuery }),
+      vectorHits(ctx, searchQuery),
+    ]);
+    if (!vec) return { ...text, journal: [] };
     return {
       memories: dedupeBy([...vec.memDocs, ...text.memories], (m) => m._id).slice(0, 10),
       thoughts: dedupeBy([...vec.thoughtDocs, ...text.thoughts], (t) => t._id).slice(0, 10),
+      journal: vec.journalDocs,
     };
   },
 });

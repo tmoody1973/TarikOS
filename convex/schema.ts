@@ -144,6 +144,16 @@ export default defineSchema({
       dimensions: 1024,
     }),
 
+  journalEntries: defineTable({
+    text: v.string(),
+    mode: v.union(v.literal("capture"), v.literal("reflection")),
+    consolidatedAt: v.optional(v.number()),
+    embedding: v.optional(v.array(v.float64())),
+  }).vectorIndex("by_embedding", {
+    vectorField: "embedding",
+    dimensions: 1024,
+  }),
+
   settings: defineTable({
     key: v.string(),
     value: v.any(),

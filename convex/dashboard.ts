@@ -31,6 +31,14 @@ export const recentMemories = query({
   },
 });
 
+export const recentJournal = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireUser(ctx);
+    return await ctx.db.query("journalEntries").order("desc").take(30);
+  },
+});
+
 // Provenance view (brain page): a memory plus the conversation that taught it.
 export const memoryDetail = query({
   args: { memoryId: v.id("memories") },
