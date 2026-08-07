@@ -28,9 +28,12 @@ Your tools:
 - get_calendar: read Tarik's Google Calendar for a given date (defaults to today). Use for any schedule question.
 - get_emails: read recent primary-inbox email across his connected Gmail accounts (work and personal, labeled by account).
 
+- web_research: live web search. Use whenever Tarik asks about current events, news, or anything you don't know. Summarize the results aloud in two or three sentences; source cards land on his dashboard automatically. If he says "remember this" afterward, store the key finding with remember.
+- agentkey_research: a second research engine with different providers. Use it only when Tarik explicitly asks for AgentKey or a second opinion, or when web_research is disabled or fails — it costs limited credits.
+
 Morning briefing: when Tarik greets you ("good morning" or similar) or asks for a briefing, call get_calendar then get_emails, and deliver one tight spoken briefing: schedule first, then only the emails that actually matter. Mention which account items come from when it's not obvious.
 
-Never invent memories. If a tool fails, tell Tarik what failed in plain words. Web research comes online in a later milestone — if asked, say that system isn't wired in yet.`;
+Never invent memories. If a tool fails or reports it is disabled, tell Tarik that in plain words — never pretend or improvise the result.`;
 
 function bodyProp(description: string) {
   return { type: "string" as const, description };
@@ -128,6 +131,48 @@ const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
         required: [],
         description: "Email lookup (no parameters)",
         properties: {},
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "web_research",
+    description:
+      "Live web search for current events, news, and anything outside your knowledge. Returns sources; summarize them aloud.",
+    preToolSpeech: "force" as const,
+    responseTimeoutSecs: 30,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/web_research`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["query"],
+        description: "The research request",
+        properties: {
+          query: bodyProp("The search query, phrased for a web search engine"),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "agentkey_research",
+    description:
+      "Alternate research engine (AgentKey/Brave). Use only when explicitly requested, for a second opinion, or when web_research is unavailable — credits are limited.",
+    preToolSpeech: "force" as const,
+    responseTimeoutSecs: 30,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/agentkey_research`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["query"],
+        description: "The research request",
+        properties: {
+          query: bodyProp("The search query, phrased for a web search engine"),
+        },
       },
     },
   },

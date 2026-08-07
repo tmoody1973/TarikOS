@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Authenticated, AuthLoading, useQuery } from "convex/react";
+import { Authenticated, AuthLoading, useMutation, useQuery } from "convex/react";
 import { UserButton } from "@clerk/nextjs";
 import { ConversationProvider } from "@elevenlabs/react";
 import { api } from "../../convex/_generated/api";
@@ -39,6 +39,7 @@ function DashboardInner() {
   const memories = useQuery(api.dashboard.recentMemories);
   const transcripts = useQuery(api.dashboard.recentTranscripts);
   const tools = useQuery(api.dashboard.toolRegistry);
+  const setToolEnabled = useMutation(api.dashboard.setToolEnabled);
 
   const [searchQuery, setSearchQuery] = useState("");
   const searchResults = useQuery(
@@ -176,21 +177,47 @@ function DashboardInner() {
               {tools.map((tool) => (
                 <li
                   key={tool._id}
-                  className="flex items-center gap-3 rounded-md border border-panel-edge bg-black/30 px-3 py-2"
+                  className="rounded-md border border-panel-edge bg-black/30 px-3 py-2"
                 >
-                  <span
-                    className={`h-2 w-2 rounded-full ${
-                      tool.health === "ok"
-                        ? "bg-cyan-hud"
-                        : tool.health === "error"
-                          ? "bg-salmon"
-                          : "bg-steel"
-                    }`}
-                  />
-                  <span className="text-sm text-foreground/90">{tool.name}</span>
-                  <span className="ml-auto text-[10px] uppercase tracking-[0.2em] text-steel">
-                    {tool.enabled ? "enabled" : "standby"}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={`h-2 w-2 rounded-full ${
+                        tool.health === "ok"
+                          ? "bg-cyan-hud"
+                          : tool.health === "error"
+                            ? "bg-salmon"
+                            : "bg-steel"
+                      }`}
+                    />
+                    <span className="text-sm text-foreground/90">
+                      {tool.name}
+                    </span>
+                    <button
+                      onClick={() =>
+                        setToolEnabled({
+                          toolId: tool._id,
+                          enabled: !tool.enabled,
+                        })
+                      }
+                      aria-label={`Toggle ${tool.name}`}
+                      className={`ml-auto flex h-5 w-10 items-center rounded-full border px-0.5 transition ${
+                        tool.enabled
+                          ? "justify-end border-cyan-hud/60 bg-cyan-hud/20"
+                          : "justify-start border-panel-edge bg-black/40"
+                      }`}
+                    >
+                      <span
+                        className={`h-3.5 w-3.5 rounded-full ${
+                          tool.enabled ? "bg-cyan-hud" : "bg-steel"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                  {tool.health === "error" && tool.lastError && (
+                    <p className="mt-1 pl-5 text-[11px] text-salmon/80">
+                      {tool.lastError}
+                    </p>
+                  )}
                 </li>
               ))}
             </ul>

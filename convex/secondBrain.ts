@@ -17,10 +17,57 @@ async function markToolHealthy(ctx: MutationCtx, name: string) {
     .query("tools")
     .withIndex("by_name", (q) => q.eq("name", name))
     .unique();
-  if (tool && (tool.health !== "ok" || !tool.enabled)) {
-    await ctx.db.patch(tool._id, { health: "ok", enabled: true });
+  if (!tool) {
+    await ctx.db.insert("tools", {
+      name,
+      description: "Registered automatically on first successful call",
+      enabled: true,
+      health: "ok",
+    });
+  } else if (tool.health !== "ok" || !tool.enabled) {
+    await ctx.db.patch(tool._id, {
+      health: "ok",
+      enabled: true,
+      lastError: undefined,
+    });
   }
 }
+
+// Gate for every incoming tool call: a tool that exists and has been
+// explicitly disabled (i.e. it has run before — health isn't "unknown")
+// is genuinely unavailable. Unknown/unregistered tools are allowed so
+// first use can auto-register them.
+export const toolGate = query({
+  args: { secret: v.string(), name: v.string() },
+  handler: async (ctx, { secret, name }) => {
+    checkToolSecret(secret);
+    const tool = await ctx.db
+      .query("tools")
+      .withIndex("by_name", (q) => q.eq("name", name))
+      .unique();
+    if (tool && !tool.enabled && tool.health !== "unknown") {
+      return { allowed: false };
+    }
+    return { allowed: true };
+  },
+});
+
+export const reportToolError = mutation({
+  args: { secret: v.string(), name: v.string(), message: v.string() },
+  handler: async (ctx, { secret, name, message }) => {
+    checkToolSecret(secret);
+    const tool = await ctx.db
+      .query("tools")
+      .withIndex("by_name", (q) => q.eq("name", name))
+      .unique();
+    if (tool) {
+      await ctx.db.patch(tool._id, {
+        health: "error",
+        lastError: message.slice(0, 300),
+      });
+    }
+  },
+});
 
 export const captureThought = mutation({
   args: {

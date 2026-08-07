@@ -47,6 +47,14 @@ export const toolRegistry = query({
   },
 });
 
+export const setToolEnabled = mutation({
+  args: { toolId: v.id("tools"), enabled: v.boolean() },
+  handler: async (ctx, { toolId, enabled }) => {
+    await requireUser(ctx);
+    await ctx.db.patch(toolId, { enabled });
+  },
+});
+
 export const seedDemo = mutation({
   args: { secret: v.string() },
   handler: async (ctx, { secret }) => {

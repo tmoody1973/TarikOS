@@ -6,6 +6,11 @@ import {
   getRecentEmails,
   GoogleAuthError,
 } from "@/lib/google";
+import {
+  composioResearch,
+  agentkeyResearch,
+  type ResearchResult,
+} from "@/lib/research";
 
 // Webhook endpoint for Morpheus's ElevenLabs server tools. Authenticated by
 // a shared secret header (configured on the agent), not a browser session —
@@ -46,6 +51,19 @@ export async function POST(
   }
 
   try {
+    const gate = await convex.query(api.secondBrain.toolGate, {
+      secret,
+      name: tool,
+    });
+    if (!gate.allowed) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: `The ${tool.replace(/_/g, " ")} tool is disabled in the control panel, so it can't be used right now.`,
+        },
+        { status: 200 },
+      );
+    }
     const result = await runTool(tool, body, secret);
     return NextResponse.json(result, { status: result.ok ? 200 : 400 });
   } catch (error) {
@@ -55,6 +73,13 @@ export async function POST(
         { status: 200 },
       );
     }
+    await convex
+      .mutation(api.secondBrain.reportToolError, {
+        secret,
+        name: tool,
+        message: error instanceof Error ? error.message : String(error),
+      })
+      .catch(() => {});
     console.error(`Tool ${tool} failed:`, error);
     return NextResponse.json(
       {
@@ -170,6 +195,32 @@ async function runTool(
             ? "No new primary inbox email in the last day."
             : `${emails.length} recent email(s).`,
         data: { emails },
+      };
+    }
+    case "web_research":
+    case "agentkey_research": {
+      const query = typeof body.query === "string" ? body.query : "";
+      if (!query) return { ok: false, message: "Research needs a query." };
+      const results: ResearchResult[] =
+        tool === "web_research"
+          ? await composioResearch(query)
+          : await agentkeyResearch(query);
+      await convex.mutation(api.secondBrain.pushBriefingCards, {
+        secret,
+        tool,
+        cards: results.slice(0, 4).map((r) => ({
+          kind: "research" as const,
+          title: r.title,
+          body: `${r.snippet}${r.url ? ` — ${r.url}` : ""}`,
+        })),
+      });
+      return {
+        ok: true,
+        message:
+          results.length === 0
+            ? "No results found for that."
+            : `${results.length} sources found; they're on the dashboard.`,
+        data: { results },
       };
     }
     default:
