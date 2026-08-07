@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listMailThreads } from "@/lib/mail";
-import { GoogleAuthError } from "@/lib/google";
+import { mailRouteError } from "@/lib/mailRouteError";
 
 // Mail thread list. Clerk-gated by proxy.ts (not in the public-route list).
 export async function GET(req: NextRequest) {
@@ -9,13 +9,6 @@ export async function GET(req: NextRequest) {
     const data = await listMailThreads(account);
     return NextResponse.json({ ok: true, ...data });
   } catch (error) {
-    const message =
-      error instanceof GoogleAuthError
-        ? error.message
-        : "Couldn't reach the mailbox.";
-    if (!(error instanceof GoogleAuthError)) {
-      console.error("mail threads failed:", error);
-    }
-    return NextResponse.json({ ok: false, error: message }, { status: 200 });
+    return mailRouteError(error, "Couldn't reach the mailbox.");
   }
 }

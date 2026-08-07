@@ -13,14 +13,27 @@ import { chicagoToday } from "../../convex/workflowLib.ts";
 // labeled separately. Single Composio user id for this single-user app.
 const USER_ID = "tarik";
 
-const composio = new Composio({ apiKey: process.env.COMPOSIO_API_KEY });
+// Lazy so importing this module (e.g. unit tests hitting only pure helpers)
+// doesn't require COMPOSIO_API_KEY; the key is demanded on first real call.
+let composioClient: Composio | null = null;
+function composio(): Composio {
+  composioClient ??= new Composio({ apiKey: process.env.COMPOSIO_API_KEY });
+  return composioClient;
+}
 
 export class GoogleAuthError extends Error {}
 
 export type Account = { id: string; label: string };
 
+// Accounts change ~never in this single-user app; a short TTL removes the
+// Composio list round trip from the front of every mail/calendar request.
+const accountsCache = new Map<string, { at: number; accounts: Account[] }>();
+const ACCOUNTS_TTL_MS = 60_000;
+
 export async function connectedAccounts(toolkit: string): Promise<Account[]> {
-  const { items } = await composio.connectedAccounts.list({
+  const hit = accountsCache.get(toolkit);
+  if (hit && Date.now() - hit.at < ACCOUNTS_TTL_MS) return hit.accounts;
+  const { items } = await composio().connectedAccounts.list({
     userIds: [USER_ID],
     toolkitSlugs: [toolkit],
   });
@@ -30,10 +43,37 @@ export async function connectedAccounts(toolkit: string): Promise<Account[]> {
       `No ${toolkit === "gmail" ? "Gmail" : "Google Calendar"} account is connected — run the connect-google script and approve access`,
     );
   }
-  return active.map((a) => ({
+  const accounts = active.map((a) => ({
     id: a.id,
     label: (a as { alias?: string }).alias ?? a.id.slice(0, 8),
   }));
+  accountsCache.set(toolkit, { at: Date.now(), accounts });
+  return accounts;
+}
+
+// The one account-selection policy: exact label, then substring, else fail
+// loud listing what's connected; no label prefers "work".
+export async function pickAccount(
+  toolkit: string,
+  label?: string,
+): Promise<Account> {
+  const accounts = await connectedAccounts(toolkit);
+  if (label) {
+    const needle = label.toLowerCase();
+    const hit =
+      accounts.find((a) => a.label === label) ??
+      accounts.find((a) => a.label.toLowerCase().includes(needle));
+    if (!hit) {
+      const noun = toolkit === "gmail" ? "Gmail" : "calendar";
+      throw new Error(
+        `No ${noun} account matches "${label}" — connected: ${accounts.map((a) => a.label).join(", ")}`,
+      );
+    }
+    return hit;
+  }
+  return (
+    accounts.find((a) => a.label.toLowerCase().includes("work")) ?? accounts[0]
+  );
 }
 
 export async function execute(
@@ -41,7 +81,7 @@ export async function execute(
   connectedAccountId: string,
   args: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
-  const result = await composio.tools.execute(slug, {
+  const result = await composio().tools.execute(slug, {
     userId: USER_ID,
     connectedAccountId,
     arguments: args,
@@ -125,19 +165,8 @@ export async function getCalendarEvents(date?: string): Promise<{
 // ---- Calendar writes (MOO-491). Confirm-before-write lives in the persona;
 // these never delete and never email attendees unless attendees are given. ----
 
-async function pickCalendarAccount(label?: string): Promise<Account> {
-  const accounts = await connectedAccounts("googlecalendar");
-  if (label) {
-    const needle = label.toLowerCase();
-    const hit = accounts.find((a) => a.label.toLowerCase().includes(needle));
-    if (!hit) {
-      throw new Error(
-        `No calendar account matches "${label}" — connected: ${accounts.map((a) => a.label).join(", ")}`,
-      );
-    }
-    return hit;
-  }
-  return accounts.find((a) => a.label.toLowerCase().includes("work")) ?? accounts[0];
+function pickCalendarAccount(label?: string): Promise<Account> {
+  return pickAccount("googlecalendar", label);
 }
 
 export async function createCalendarEvent(args: {

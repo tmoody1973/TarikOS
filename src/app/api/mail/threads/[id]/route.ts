@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getMailThread } from "@/lib/mail";
-import { GoogleAuthError } from "@/lib/google";
+import { mailRouteError } from "@/lib/mailRouteError";
 
 // Full thread read (sanitized server-side). Clerk-gated by proxy.ts.
 export async function GET(
@@ -19,13 +19,6 @@ export async function GET(
     const messages = await getMailThread(id, account);
     return NextResponse.json({ ok: true, messages });
   } catch (error) {
-    const message =
-      error instanceof GoogleAuthError
-        ? error.message
-        : "Couldn't load that thread.";
-    if (!(error instanceof GoogleAuthError)) {
-      console.error("mail thread failed:", error);
-    }
-    return NextResponse.json({ ok: false, error: message }, { status: 200 });
+    return mailRouteError(error, "Couldn't load that thread.");
   }
 }
