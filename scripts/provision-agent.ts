@@ -26,6 +26,7 @@ Your tools:
 - recall: when Tarik asks about past ideas, notes, or anything previously discussed ("what was that idea about..."), search before answering. Answer from the results, and say so plainly if nothing matches.
 
 - get_calendar: read Tarik's Google Calendar for a given date (defaults to today). Use for any schedule question.
+- create_calendar_event / update_calendar_event: put things ON the calendar or move them. THE RITUAL, no exceptions: before ANY calendar write, read back exactly what you're about to do — title, date, time, duration, and which account (work is the default; personal only when he says so) — and wait for his explicit yes. Compute concrete values first: date as YYYY-MM-DD, time as 24-hour HH:MM ("Friday at noon" → the actual date and 12:00). For moves/edits use update_calendar_event with match = a few words of the event's title plus the date it's on; if the tool reports several matches, ask which. You cannot delete events — if he asks, tell him to do it in Google Calendar.
 - get_emails: read recent primary-inbox email across his connected Gmail accounts (work and personal, labeled by account).
 
 - web_research: live web search. Use whenever Tarik asks about current events, news, or anything you don't know. Summarize the results aloud in two or three sentences; source cards land on his dashboard automatically. If he says "remember this" afterward, store the key finding with remember.
@@ -122,6 +123,73 @@ const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
           date: bodyProp(
             "Date to look up in YYYY-MM-DD format. Omit for today.",
           ),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "create_calendar_event",
+    description:
+      "Create a Google Calendar event — only after Tarik's explicit yes to the read-back (see the calendar ritual). Date as YYYY-MM-DD, time as 24-hour HH:MM.",
+    preToolSpeech: "force" as const,
+    responseTimeoutSecs: 20,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/create_calendar_event`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["title", "date", "time"],
+        description: "The event to create",
+        properties: {
+          title: bodyProp("Event title"),
+          date: bodyProp("Date, YYYY-MM-DD (compute from what Tarik said)"),
+          time: bodyProp("Start time, 24-hour HH:MM"),
+          duration_minutes: {
+            type: "integer" as const,
+            description: "Length in minutes; default 60",
+          },
+          location: bodyProp("Optional location"),
+          description: bodyProp("Optional description"),
+          attendees: bodyProp(
+            "Optional comma-separated attendee emails — ONLY when Tarik explicitly asks to invite people (they get emailed)",
+          ),
+          account: bodyProp(
+            "Optional account label (e.g. personal). Omit for the work default.",
+          ),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "update_calendar_event",
+    description:
+      "Move, retime, retitle, or resize an existing calendar event — only after Tarik's explicit yes to the read-back. Pass match (words from its title) and the date it currently sits on.",
+    preToolSpeech: "force" as const,
+    responseTimeoutSecs: 20,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/update_calendar_event`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["match"],
+        description: "Which event to change and how",
+        properties: {
+          match: bodyProp("A few words from the event's current title"),
+          date: bodyProp(
+            "Date the event is currently on, YYYY-MM-DD. Omit for today.",
+          ),
+          new_date: bodyProp("Optional: move to this date, YYYY-MM-DD"),
+          new_time: bodyProp("Optional: new start time, 24-hour HH:MM"),
+          new_duration_minutes: {
+            type: "integer" as const,
+            description: "Optional: new length in minutes",
+          },
+          new_title: bodyProp("Optional: new title"),
+          account: bodyProp("Optional account label filter"),
         },
       },
     },

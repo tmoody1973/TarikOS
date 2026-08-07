@@ -1,4 +1,11 @@
 import { Composio } from "@composio/core";
+import {
+  CHICAGO_TZ,
+  isoToChicagoNaive,
+  naiveChicago,
+  splitDuration,
+} from "./calendarLib.ts";
+import { chicagoToday } from "../../convex/workflowLib.ts";
 
 // Google access goes through Composio: it holds the OAuth tokens (verified
 // Google app — no consent-screen setup, no 7-day expiry) and supports
@@ -63,21 +70,17 @@ export type CalendarEvent = {
   location?: string;
 };
 
-export async function getCalendarEvents(date?: string): Promise<{
-  date: string;
-  events: CalendarEvent[];
-}> {
-  const day =
-    date ??
-    new Intl.DateTimeFormat("en-CA", {
-      timeZone: "America/Chicago",
-    }).format(new Date());
+type RawDayEvent = CalendarEvent & { eventId: string; accountId: string };
 
+async function listDayRaw(day: string): Promise<RawDayEvent[]> {
   const accounts = await connectedAccounts("googlecalendar");
   const perAccount = await Promise.all(
     accounts.map(async ({ id, label }) => {
       const data = await execute("GOOGLECALENDAR_EVENTS_LIST", id, {
         calendar_id: "primary",
+        // ponytail: fixed -06:00 window predates this refactor; in CDT it
+        // shifts the day edge by an hour (also bounds what update can match).
+        // Switch to real Chicago-offset rendering if an edge event ever hides.
         time_min: `${day}T00:00:00-06:00`,
         time_max: `${day}T23:59:59-06:00`,
         single_events: true,
@@ -85,6 +88,7 @@ export async function getCalendarEvents(date?: string): Promise<{
         max_results: 20,
       });
       type Item = {
+        id?: string;
         summary?: string;
         location?: string;
         start?: { dateTime?: string; date?: string };
@@ -92,6 +96,8 @@ export async function getCalendarEvents(date?: string): Promise<{
       };
       const items = ((data.items ?? data.events ?? []) as Item[]) ?? [];
       return items.map((e) => ({
+        eventId: e.id ?? "",
+        accountId: id,
         account: label,
         title: e.summary ?? "(untitled)",
         start: e.start?.dateTime ?? e.start?.date ?? "",
@@ -101,10 +107,129 @@ export async function getCalendarEvents(date?: string): Promise<{
       }));
     }),
   );
+  return perAccount.flat().sort((a, b) => a.start.localeCompare(b.start));
+}
 
+export async function getCalendarEvents(date?: string): Promise<{
+  date: string;
+  events: CalendarEvent[];
+}> {
+  const day = date ?? chicagoToday();
+  const raw = await listDayRaw(day);
   return {
     date: day,
-    events: perAccount.flat().sort((a, b) => a.start.localeCompare(b.start)),
+    events: raw.map(({ eventId: _i, accountId: _a, ...event }) => event),
+  };
+}
+
+// ---- Calendar writes (MOO-491). Confirm-before-write lives in the persona;
+// these never delete and never email attendees unless attendees are given. ----
+
+async function pickCalendarAccount(label?: string): Promise<Account> {
+  const accounts = await connectedAccounts("googlecalendar");
+  if (label) {
+    const needle = label.toLowerCase();
+    const hit = accounts.find((a) => a.label.toLowerCase().includes(needle));
+    if (!hit) {
+      throw new Error(
+        `No calendar account matches "${label}" — connected: ${accounts.map((a) => a.label).join(", ")}`,
+      );
+    }
+    return hit;
+  }
+  return accounts.find((a) => a.label.toLowerCase().includes("work")) ?? accounts[0];
+}
+
+export async function createCalendarEvent(args: {
+  title: string;
+  date: string;
+  time: string;
+  durationMinutes: number;
+  location?: string;
+  description?: string;
+  attendees?: string[];
+  account?: string;
+}): Promise<{ account: string }> {
+  const acct = await pickCalendarAccount(args.account);
+  const { hours, minutes } = splitDuration(args.durationMinutes);
+  await execute("GOOGLECALENDAR_CREATE_EVENT", acct.id, {
+    calendar_id: "primary",
+    summary: args.title,
+    start_datetime: naiveChicago(args.date, args.time),
+    timezone: CHICAGO_TZ,
+    event_duration_hour: hours,
+    event_duration_minutes: minutes,
+    ...(args.location ? { location: args.location } : {}),
+    ...(args.description ? { description: args.description } : {}),
+    // send_updates is documented as boolean but validated as an enum.
+    ...(args.attendees && args.attendees.length > 0
+      ? { attendees: args.attendees, send_updates: "all" }
+      : { send_updates: "none" }),
+  });
+  return { account: acct.label };
+}
+
+type UpdateEventResult =
+  | { outcome: "updated"; title: string; start: string; account: string }
+  | { outcome: "ambiguous"; candidates: string[] }
+  | { outcome: "not_found" };
+
+export async function updateCalendarEventByMatch(args: {
+  match: string;
+  date: string;
+  newDate?: string;
+  newTime?: string;
+  newDurationMinutes?: number;
+  newTitle?: string;
+  account?: string;
+}): Promise<UpdateEventResult> {
+  const needle = args.match.toLowerCase();
+  // A bad account label fails loud here (listing the real ones) instead of
+  // degrading into a misleading not_found.
+  const acct = args.account ? await pickCalendarAccount(args.account) : null;
+  // All-day events are excluded: moving them needs date semantics v1 skips.
+  const hits = (await listDayRaw(args.date)).filter(
+    (e) =>
+      !e.allDay &&
+      e.title.toLowerCase().includes(needle) &&
+      (!acct || e.accountId === acct.id),
+  );
+  if (hits.length === 0) return { outcome: "not_found" };
+  if (hits.length > 1) {
+    return {
+      outcome: "ambiguous",
+      candidates: hits
+        .slice(0, 4)
+        .map((h) => `${h.title} at ${isoToChicagoNaive(h.start).slice(11, 16)} (${h.account})`),
+    };
+  }
+  const hit = hits[0];
+  const origNaive = isoToChicagoNaive(hit.start);
+  const date = args.newDate ?? origNaive.slice(0, 10);
+  const time = args.newTime ?? origNaive.slice(11, 16);
+  // Keep the event's current length unless a new one was asked for — UPDATE
+  // with no duration would let Google pick a default and silently resize.
+  const currentMinutes =
+    hit.end && hit.start
+      ? Math.round((Date.parse(hit.end) - Date.parse(hit.start)) / 60000)
+      : 60;
+  const duration = splitDuration(args.newDurationMinutes ?? currentMinutes);
+  await execute("GOOGLECALENDAR_UPDATE_EVENT", hit.accountId, {
+    calendar_id: "primary",
+    event_id: hit.eventId,
+    // UPDATE requires start_datetime even for title-only edits.
+    start_datetime: naiveChicago(date, time),
+    timezone: CHICAGO_TZ,
+    summary: args.newTitle ?? hit.title,
+    event_duration_hour: duration.hours,
+    event_duration_minutes: duration.minutes,
+    send_updates: "none",
+  });
+  return {
+    outcome: "updated",
+    title: args.newTitle ?? hit.title,
+    start: `${date} ${time}`,
+    account: hit.account,
   };
 }
 

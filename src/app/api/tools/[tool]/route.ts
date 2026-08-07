@@ -2,10 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import {
+  createCalendarEvent,
   getCalendarEvents,
   getRecentEmails,
+  updateCalendarEventByMatch,
   GoogleAuthError,
 } from "@/lib/google";
+import { isValidDate, isValidTime } from "@/lib/calendarLib";
+import { chicagoToday } from "../../../../../convex/workflowLib";
 import {
   composioResearch,
   agentkeyResearch,
@@ -43,6 +47,20 @@ function strArg(value: unknown, max: number): string | undefined {
   return typeof value === "string" && value.trim()
     ? safeSlice(value.trim(), max)
     : undefined;
+}
+
+function dateArg(value: unknown): string | undefined {
+  const s = strArg(value, 10);
+  return s && isValidDate(s) ? s : undefined;
+}
+
+function timeArg(value: unknown): string | undefined {
+  const s = strArg(value, 5);
+  return s && isValidTime(s) ? s : undefined;
+}
+
+function minutesArg(value: unknown): number | undefined {
+  return typeof value === "number" && value > 0 ? Math.round(value) : undefined;
 }
 
 function formatTime(iso: string): string {
@@ -217,10 +235,7 @@ async function runTool(
       };
     }
     case "get_calendar": {
-      const date =
-        typeof body.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.date)
-          ? body.date
-          : undefined;
+      const date = dateArg(body.date);
       const { date: day, events } = await getCalendarEvents(date);
       await convex.mutation(api.secondBrain.pushBriefingCards, {
         secret,
@@ -240,6 +255,92 @@ async function runTool(
             ? `Nothing on the calendar for ${day}.`
             : `${events.length} event(s) on ${day}.`,
         data: { date: day, events },
+      };
+    }
+    case "create_calendar_event": {
+      const title = strArg(body.title, 200);
+      const date = dateArg(body.date);
+      const time = timeArg(body.time);
+      if (!title) return { ok: false, message: "The event needs a title." };
+      if (!date) {
+        return { ok: false, message: "Pass date as YYYY-MM-DD — compute it from what Tarik said first." };
+      }
+      if (!time) {
+        return { ok: false, message: "Pass time as 24-hour HH:MM — compute it from what Tarik said first." };
+      }
+      const durationMinutes = minutesArg(body.duration_minutes) ?? 60;
+      // Attendees trigger real invite emails — parse strictly, cap the list.
+      const attendees =
+        typeof body.attendees === "string"
+          ? body.attendees
+              .split(/[\s,]+/)
+              .filter((a) => a.includes("@"))
+              .slice(0, 10)
+          : undefined;
+      const res = await createCalendarEvent({
+        title,
+        date,
+        time,
+        durationMinutes,
+        location: strArg(body.location, 200),
+        description: strArg(body.description, 500),
+        attendees,
+        account: strArg(body.account, 40),
+      });
+      void convex
+        .mutation(api.secondBrain.markToolHealthyFromTool, {
+          secret,
+          name: "create_calendar_event",
+        })
+        .catch(() => {});
+      return {
+        ok: true,
+        message: `Created "${title}" on ${date} at ${time} (${durationMinutes} min) on the ${res.account} calendar.`,
+      };
+    }
+    case "update_calendar_event": {
+      const match = strArg(body.match, 100);
+      if (!match) {
+        return { ok: false, message: "update_calendar_event needs match text from the event title." };
+      }
+      const date = dateArg(body.date) ?? chicagoToday();
+      const newDate = dateArg(body.new_date);
+      const newTime = timeArg(body.new_time);
+      const newDurationMinutes = minutesArg(body.new_duration_minutes);
+      const newTitle = strArg(body.new_title, 200);
+      if (!newDate && !newTime && newDurationMinutes === undefined && !newTitle) {
+        return { ok: false, message: "Nothing to change — pass a new time, date, duration, or title." };
+      }
+      const res = await updateCalendarEventByMatch({
+        match,
+        date,
+        newDate,
+        newTime,
+        newDurationMinutes,
+        newTitle,
+        account: strArg(body.account, 40),
+      });
+      if (res.outcome === "not_found") {
+        return {
+          ok: true,
+          message: `No timed event matching "${match}" on ${date}. Ask Tarik which event he means (all-day events can't be moved yet).`,
+        };
+      }
+      if (res.outcome === "ambiguous") {
+        return {
+          ok: true,
+          message: `Several events match — ask Tarik which one: ${res.candidates.join("; ")}.`,
+        };
+      }
+      void convex
+        .mutation(api.secondBrain.markToolHealthyFromTool, {
+          secret,
+          name: "update_calendar_event",
+        })
+        .catch(() => {});
+      return {
+        ok: true,
+        message: `Updated "${res.title}" — now ${res.start} on the ${res.account} calendar.`,
       };
     }
     case "get_emails": {
