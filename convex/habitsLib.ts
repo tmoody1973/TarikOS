@@ -81,3 +81,36 @@ export function summarizeTrajectory(days: DayVote[]): Trajectory {
 
   return { logged, byLevel, longestGap, returns };
 }
+
+export type HabitWeek = {
+  pillar: string;
+  days: DayVote[];
+  friction: string[];
+};
+
+/* The weekly review section. It reports trajectory and friction, then asks
+ * for exactly one change — changing several at once makes it impossible to
+ * tell which one helped. */
+export function buildHabitReview(weeks: HabitWeek[]): string {
+  if (weeks.length === 0) {
+    return "No active habits this week. Set a pillar up when you're ready.";
+  }
+
+  const lines: string[] = [];
+  for (const week of weeks) {
+    const t = summarizeTrajectory(week.days);
+    const parts = [`${t.logged} logged`];
+    if (t.returns > 0) parts.push(`came back ${t.returns}×`);
+    if (t.longestGap > 0) parts.push(`longest gap ${t.longestGap}d`);
+    lines.push(`- **${week.pillar}** — ${parts.join(" · ")}`);
+    if (week.friction.length > 0) {
+      lines.push(`  - friction: ${week.friction.join("; ")}`);
+    }
+  }
+
+  lines.push("");
+  lines.push(
+    "Adjust one variable only: the cue, the size, the location, the backup plan, or pause it.",
+  );
+  return lines.join("\n");
+}

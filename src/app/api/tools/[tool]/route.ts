@@ -31,6 +31,7 @@ import {
   type TelosKind,
   type TelosStatus,
 } from "../../../../../convex/telosLib";
+import { buildHabitReview } from "../../../../../convex/habitsLib";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
 // Webhook endpoint for Zola's ElevenLabs server tools. Authenticated by
@@ -654,6 +655,31 @@ async function runTool(
       ]);
       const body = buildGoalsSection(items, Date.now());
       return { ok: true, message: "Goals section built.", data: { body } };
+    }
+    case "habit_review": {
+      const [habits] = await Promise.all([
+        convex.query(api.habits.list, { secret }),
+        convex.mutation(api.secondBrain.markToolHealthyFromTool, {
+          secret,
+          name: "habit_review",
+        }),
+      ]);
+      const weeks = await Promise.all(
+        habits.map(async (h) => {
+          const traj = await convex.query(api.habits.trajectory, {
+            habitId: h._id,
+            days: 7,
+            secret,
+          });
+          const friction = await convex.query(api.habits.weekFriction, {
+            habitId: h._id,
+            secret,
+          });
+          return { pillar: h.pillar, days: traj.series, friction };
+        }),
+      );
+      const body = buildHabitReview(weeks);
+      return { ok: true, message: "Habits section built.", data: { body } };
     }
     case "journal_digest": {
       const [entries] = await Promise.all([

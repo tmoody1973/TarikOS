@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildHabitReview,
   canSuggest,
   cycleEndsAt,
   isCycleActive,
@@ -103,4 +104,35 @@ test("every vote level has a counter", () => {
   for (const level of VOTE_LEVELS) {
     assert.equal(t.byLevel[level], 0, `${level} must be counted`);
   }
+});
+
+test("the review names the most frictional habit and asks for one change", () => {
+  const body = buildHabitReview(
+    [
+      {
+        pillar: "Work / Craft",
+        days: [
+          { date: "2026-08-01", level: "standard" },
+          { date: "2026-08-02", level: null },
+          { date: "2026-08-03", level: "minimum" },
+        ],
+        friction: ["back-to-back meetings"],
+      },
+      {
+        pillar: "Health",
+        days: [{ date: "2026-08-01", level: "missed" }],
+        friction: [],
+      },
+    ],
+  );
+  assert.match(body, /Work \/ Craft/);
+  assert.match(body, /back-to-back meetings/);
+  assert.match(body, /one variable/i);
+  // The review must never present a streak.
+  assert.ok(!/streak/i.test(body));
+});
+
+test("an empty week still produces a usable review", () => {
+  const body = buildHabitReview([]);
+  assert.match(body, /no active habits/i);
 });

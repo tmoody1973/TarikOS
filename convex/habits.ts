@@ -82,18 +82,24 @@ export const today = query({
 });
 
 export const list = query({
-  args: {},
-  handler: async (ctx) => {
-    await requireUser(ctx);
+  args: { secret: v.optional(v.string()) },
+  handler: async (ctx, { secret }) => {
+    if (secret) checkToolSecret(secret);
+    else await requireUser(ctx);
     return await activeHabits(ctx);
   },
 });
 
 /** Trajectory for one habit over the last `days` days. */
 export const trajectory = query({
-  args: { habitId: v.id("habits"), days: v.optional(v.number()) },
-  handler: async (ctx, { habitId, days = 30 }) => {
-    await requireUser(ctx);
+  args: {
+    habitId: v.id("habits"),
+    days: v.optional(v.number()),
+    secret: v.optional(v.string()),
+  },
+  handler: async (ctx, { habitId, days = 30, secret }) => {
+    if (secret) checkToolSecret(secret);
+    else await requireUser(ctx);
     const votes = await ctx.db
       .query("habitVotes")
       .withIndex("by_habit_date", (q) => q.eq("habitId", habitId))
