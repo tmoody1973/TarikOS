@@ -1,5 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
+import {
+  SemanticConventions,
+  OpenInferenceSpanKind,
+  LLMProvider,
+} from "@arizeai/openinference-semantic-conventions";
 import { TELOS_STATUSES, type TelosStatus } from "../../convex/telosLib.ts";
+import { getTracer, safeSetAttrs, safeEndSpan } from "./tracing.ts";
+
+const MODEL = "claude-opus-5";
 
 // Nightly memory consolidation: Claude reads the day's transcripts against
 // the existing memory set and returns structured ops (new / update / delete).
@@ -206,18 +214,57 @@ export async function runConsolidation(
   input: ConsolidationInput,
 ): Promise<ConsolidationOps> {
   const client = new Anthropic();
-  const response = await client.messages.create({
-    model: "claude-opus-5",
-    max_tokens: 16000,
-    output_config: { format: { type: "json_schema", schema: OPS_SCHEMA } },
-    messages: [{ role: "user", content: buildPrompt(input) }],
+  const prompt = buildPrompt(input);
+  // The nightly run is the only unattended write path in the system: it
+  // inserts, rewrites, and hard-deletes memories that then flow into
+  // standingContext and shape every later session. Being able to read exactly
+  // what it was asked and what it returned is the point of this span.
+  const span = getTracer().startSpan("llm.consolidate_memories");
+  safeSetAttrs(span, {
+    [SemanticConventions.OPENINFERENCE_SPAN_KIND]: OpenInferenceSpanKind.LLM,
+    [SemanticConventions.LLM_MODEL_NAME]: MODEL,
+    [SemanticConventions.LLM_PROVIDER]: LLMProvider.ANTHROPIC,
+    [SemanticConventions.INPUT_VALUE]: prompt,
+    "consolidate.transcript_count": input.transcripts.length,
+    "consolidate.existing_memory_count": input.memories.length,
+    "consolidate.journal_count": input.journal.length,
   });
-  if (response.stop_reason === "refusal") {
-    throw new Error("Consolidation model refused the request");
+  try {
+    const response = await client.messages.create({
+      model: MODEL,
+      max_tokens: 16000,
+      output_config: { format: { type: "json_schema", schema: OPS_SCHEMA } },
+      messages: [{ role: "user", content: prompt }],
+    });
+    safeSetAttrs(span, {
+      [SemanticConventions.LLM_TOKEN_COUNT_PROMPT]: response.usage?.input_tokens,
+      [SemanticConventions.LLM_TOKEN_COUNT_COMPLETION]: response.usage?.output_tokens,
+      [SemanticConventions.LLM_FINISH_REASON]: response.stop_reason,
+    });
+    if (response.stop_reason === "refusal") {
+      throw new Error("Consolidation model refused the request");
+    }
+    const text = response.content.find((b) => b.type === "text");
+    if (!text || text.type !== "text") {
+      throw new Error("Consolidation returned no text content");
+    }
+    const ops = opsFromResponse(JSON.parse(text.text), input);
+    // Post-validation counts: what actually survived opsFromResponse, not what
+    // the model asked for. Deletes are unrecoverable, so they are recorded.
+    safeSetAttrs(span, {
+      [SemanticConventions.OUTPUT_VALUE]: text.text,
+      "consolidate.new_count": ops.newMemories.length,
+      "consolidate.update_count": ops.updates.length,
+      "consolidate.delete_count": ops.deletes.length,
+      "consolidate.deleted_ids": ops.deletes,
+      "consolidate.telos_update_count": ops.telosUpdates.length,
+    });
+    safeEndSpan(span);
+    return ops;
+  } catch (error) {
+    // Every throw path above lands here, so the span is always closed and the
+    // error recorded. The error itself is rethrown unchanged.
+    safeEndSpan(span, error);
+    throw error;
   }
-  const text = response.content.find((b) => b.type === "text");
-  if (!text || text.type !== "text") {
-    throw new Error("Consolidation returned no text content");
-  }
-  return opsFromResponse(JSON.parse(text.text), input);
 }
