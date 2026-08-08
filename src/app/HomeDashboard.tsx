@@ -7,6 +7,8 @@ import { UserButton } from "@clerk/nextjs";
 import { api } from "../../convex/_generated/api";
 import { Zone, ZoneEmpty } from "@/components/hud/Zone";
 import { TodayPanel, InboxPanel } from "@/components/DayPanels";
+import { ReaderPane } from "@/components/ReaderPane";
+import { splitLinks, firstLink } from "@/lib/linkify";
 
 // Home (MOO-483): command center + summary cards. Zones summarize; pages
 // hold the detail; the voice dock (AppShell) is the conversation surface.
@@ -45,6 +47,7 @@ function HomeInner() {
   const cards = useQuery(api.dashboard.briefingCards);
   const summary = useQuery(api.dashboard.homeSummary);
   const [panel, setPanel] = useState<"today" | "inbox" | null>(null);
+  const [readerUrl, setReaderUrl] = useState<string | null>(null);
 
   return (
     <div className="relative grid flex-1 grid-cols-1 gap-3 lg:max-h-[calc(100dvh-7.75rem)] lg:grid-cols-2 lg:grid-rows-2">
@@ -77,13 +80,34 @@ function HomeInner() {
                   : c.kind === "email"
                     ? ("inbox" as const)
                     : null;
+              // Research/note cards carry their source URL in the body text
+              // (no url column on briefingCards), so the card opens the reader
+              // when one is there — same panel /briefs uses.
+              const source = opens ? null : firstLink(c.body);
+              const action = opens
+                ? () => setPanel(opens)
+                : source
+                  ? () => setReaderUrl(source)
+                  : null;
               return (
                 <li key={c._id}>
                   <div
-                    onClick={opens ? () => setPanel(opens) : undefined}
+                    onClick={action ?? undefined}
+                    role={action ? "button" : undefined}
+                    tabIndex={action ? 0 : undefined}
+                    onKeyDown={
+                      action
+                        ? (e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              action();
+                            }
+                          }
+                        : undefined
+                    }
                     className={`rounded-md border border-panel-edge bg-black/30 p-3 ${
-                      opens
-                        ? "cursor-pointer transition hover:border-hudblue/40"
+                      action
+                        ? "cursor-pointer transition hover:border-hudblue/40 focus-visible:outline-2 focus-visible:outline-cyan-hud"
                         : ""
                     }`}
                   >
@@ -95,7 +119,24 @@ function HomeInner() {
                     <div className="mt-1 font-[family-name:var(--font-display)] text-lg text-foreground">
                       {c.title}
                     </div>
-                    <p className="mt-1 text-sm text-foreground/70">{c.body}</p>
+                    <p className="mt-1 text-sm text-foreground/70">
+                      {splitLinks(c.body).map((part, i) =>
+                        part.type === "link" ? (
+                          <button
+                            key={i}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setReaderUrl(part.value);
+                            }}
+                            className="break-all text-left text-lavender underline underline-offset-2 transition hover:text-lavender/80 focus-visible:outline-2 focus-visible:outline-cyan-hud"
+                          >
+                            {part.value}
+                          </button>
+                        ) : (
+                          <span key={i}>{part.value}</span>
+                        )
+                      )}
+                    </p>
                   </div>
                 </li>
               );
@@ -200,6 +241,7 @@ function HomeInner() {
 
       <TodayPanel open={panel === "today"} onClose={() => setPanel(null)} />
       <InboxPanel open={panel === "inbox"} onClose={() => setPanel(null)} />
+      <ReaderPane url={readerUrl} onClose={() => setReaderUrl(null)} />
     </div>
   );
 }
