@@ -51,16 +51,16 @@ export const today = query({
       habits.map(async (h) => {
         const vote = await ctx.db
           .query("habitVotes")
-          .withIndex("by_habit_date", (q: any) =>
+          .withIndex("by_habit_date", (q) =>
             q.eq("habitId", h._id).eq("date", date),
           )
           .unique();
         const suggestion = await ctx.db
           .query("habitSuggestions")
-          .withIndex("by_habit_date", (q: any) =>
+          .withIndex("by_habit_date", (q) =>
             q.eq("habitId", h._id).eq("date", date),
           )
-          .filter((q: any) => q.eq(q.field("status"), "pending"))
+          .filter((q) => q.eq(q.field("status"), "pending"))
           .first();
         return {
           id: h._id,
