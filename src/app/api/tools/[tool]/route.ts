@@ -862,13 +862,25 @@ async function runTool(
       return { ok: true, message: "Logged." };
     }
     case "add_habit": {
+      const pillar = strArg(body.pillar, 80);
+      const identity = strArg(body.identity, 200);
+      const minimumAction = strArg(body.minimum_action, 200);
+      const standardAction = strArg(body.standard_action, 200);
+      const cue = strArg(body.cue, 200);
+      if (!pillar || !identity || !minimumAction || !standardAction || !cue) {
+        return {
+          ok: false,
+          message:
+            "I need the pillar, identity, minimum action, standard action, and cue to set this up.",
+        };
+      }
       const res = await convex.mutation(api.habits.upsertHabit, {
         secret,
-        pillar: strArg(body.pillar, 80) || undefined,
-        identity: strArg(body.identity, 200) || undefined,
-        minimumAction: strArg(body.minimum_action, 200) || undefined,
-        standardAction: strArg(body.standard_action, 200) || undefined,
-        cue: strArg(body.cue, 200) || undefined,
+        pillar,
+        identity,
+        minimumAction,
+        standardAction,
+        cue,
         backupPlan: strArg(body.backup_plan, 200) || undefined,
       });
       return {
