@@ -104,15 +104,24 @@ PHOENIX_DEFAULT_ADMIN_INITIAL_PASSWORD=<strong password>
 PHOENIX_DEFAULT_RETENTION_POLICY_DAYS=90
 ```
 
-Copy back into Vercel afterward:
+Copy back into **Vercel** afterward (not `.env.local` — that only affects local dev, and traces
+originate from the deployed app):
 
 ```
-PHOENIX_OTLP_ENDPOINT=https://<railway-domain>/v1/traces
-PHOENIX_API_KEY=<generated in the Phoenix UI>
+OTEL_EXPORTER_OTLP_ENDPOINT=https://<railway-domain>
+OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer <phoenix-api-key>
 ```
+
+The OTel SDK appends `/v1/traces` to the base endpoint. Phoenix's own SDKs use
+`PHOENIX_COLLECTOR_ENDPOINT` + `PHOENIX_API_KEY` for the same thing; since this app uses
+`@vercel/otel`, the standard `OTEL_*` names are the right ones. Both resolve to the same request:
+`POST <endpoint>/v1/traces` with an `Authorization: Bearer` header.
 
 Use HTTP/protobuf OTLP rather than gRPC — it passes through platform proxies without special
 handling, and at single-user volume the performance difference is irrelevant.
+
+**Railway port gotcha:** Phoenix listens on 6006, not Railway's default. If the generated domain
+returns a 502, set the target port to 6006 under Settings → Networking.
 
 ### 2. `src/lib/tracing.ts` (new)
 
