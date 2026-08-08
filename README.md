@@ -143,12 +143,27 @@ vercel deploy --prod  # app
 - **Viewport** — a slide-in panel showing a real hosted browser that Zola drives by voice ("go dig into X") while you watch; click into the frame to take over, or open a blank session and browse yourself. Findings become a brief with a session-replay link.
 - **Feed manager** — add news sources by voice ("add The Verge to tech headlines") or by pasting a URL in the Control Panel; feeds are autodiscovered and validated before saving, with per-feed health dots.
 - **Calendar by voice** — list, create, and move events with a confirm-before-write ritual.
-- **Telos** (`/telos`) — long-term goals as data: voice capture, semantic recall, goal-aware briefs, Sunday weekly review.
+- **Telos** (`/telos`) — the life-context layer that makes everything else goal-aware. Full write-up in [The telos layer](#the-telos-layer) below.
 - **Voice journaling** — journal entries by voice; a nightly pass mines them for goal signals.
 - **Semantic memory** — conversations consolidated nightly and recalled by meaning, not keywords.
 - **Research workflows** — scheduled or on-demand multi-step research (RSS + web search) rendered as briefing cards with an in-app reader.
 - **Control panel** (`/control`) — every tool's health, last error, and an enable/disable toggle; disabled tools are blocked at the route.
 - **Voice console** — mic waveform, live transcripts, and a tool-activity matrix so you can see Zola working.
+
+## The telos layer
+
+The idea comes from [Daniel Miessler's TELOS framework](https://github.com/danielmiessler/Telos) (part of his [PAI](https://github.com/danielmiessler/PAI) / LifeOS thinking): a personal AI is only useful if it knows what you're actually trying to do with your life — your mission, goals, problems, and challenges — in a structured form it can reason over, not scattered across chat history. LifeOS keeps that as markdown files read at session start. Tarik OS ports the concept onto its own stack: what LifeOS does with files, this does with realtime database rows, embeddings, and cron jobs.
+
+How it works here:
+
+- **Structured rows, not a document.** The telos is a `telosItems` table — mission, goals (each with a *measurable*, the finish line), problems, challenges, strategies — each row carrying status, review timestamps, and provenance. Structured because everything downstream (briefs, drift lines, staleness) queries fields, not prose.
+- **Seeded by conversation.** Zola populates it through a voice interview ("what are you actually working toward?") and maintains it by voice — `get_telos`, `add_telos_item`, `update_telos_item` tools.
+- **Standing context.** A summary of your active telos rides into *every* voice session as agent context, so Zola connects day-to-day requests to long-term goals without being asked.
+- **It updates itself.** The nightly consolidation pass mines the day's conversations and journal entries for goal-relevant signals and updates telos items *with provenance* — every change links back to the conversation it came from.
+- **It surfaces everywhere.** The morning brief opens with a GOALS section (active goals, a drift line like "this week served G2; nothing touched G0", review nudges); a Sunday cron compiles a weekly review brief that Zola walks you through by voice; the `/telos` page shows every item with staleness dots by review cadence and a provenance panel.
+- **Semantic recall spans it.** Telos items are embedded alongside memories and journal entries, so "what did I say about the certification goal?" finds them by meaning.
+
+The loop this closes: you tell your AI what matters once, it holds you to it every morning, and it quietly keeps the record current from how you actually spend your days.
 
 ## Design specs
 
