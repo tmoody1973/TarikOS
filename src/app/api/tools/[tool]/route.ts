@@ -1000,6 +1000,64 @@ async function runTool(
         message: "Noted. We'll change one thing at the weekly review.",
       };
     }
+    /* Zola calls Tarik's phone. The guardrail is that there is no destination
+     * parameter — the number comes from OWNER_PHONE and nothing in `body` can
+     * redirect it. A persona instruction can be argued with; a parameter that
+     * does not exist cannot. tests/callGuardrails.test.ts scans for this.
+     * MOO-522 covers dialling anyone else, which needs spoken confirmation. */
+    case "call_tarik": {
+      const to = process.env.OWNER_PHONE?.trim();
+      const agentId = process.env.ELEVENLABS_AGENT_ID;
+      const phoneNumberId = process.env.ELEVENLABS_PHONE_NUMBER_ID;
+      const apiKey = process.env.ELEVENLABS_API_KEY;
+      if (!to || !agentId || !phoneNumberId || !apiKey) {
+        return {
+          ok: false,
+          message:
+            "Calling isn't configured yet — OWNER_PHONE or the ElevenLabs phone settings are missing.",
+        };
+      }
+
+      const reason = strArg(body.reason, 200);
+      const res = await fetch(
+        "https://api.elevenlabs.io/v1/convai/sip-trunk/outbound-call",
+        {
+          method: "POST",
+          headers: {
+            "xi-api-key": apiKey,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            agent_id: agentId,
+            agent_phone_number_id: phoneNumberId,
+            to_number: to,
+          }),
+        },
+      );
+      // The provider returns 200 with success:false when SIP rejects the call,
+      // so status alone is not the outcome. Verified against a real call.
+      const payload = (await res.json().catch(() => ({}))) as {
+        success?: boolean;
+        message?: string;
+      };
+      if (!res.ok || payload.success === false) {
+        return {
+          ok: false,
+          message: `I couldn't place the call: ${payload.message ?? res.status}`,
+        };
+      }
+      await convex.mutation(api.secondBrain.markToolHealthyFromTool, {
+        secret,
+        name: "call_tarik",
+      });
+      return {
+        ok: true,
+        message: reason
+          ? `Calling you now about ${reason}.`
+          : "Calling you now.",
+      };
+    }
+
     default:
       return { ok: false, message: `Unknown tool: ${tool}` };
   }

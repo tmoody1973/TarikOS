@@ -694,6 +694,29 @@ export const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
       },
     },
   },
+  {
+    type: "webhook" as const,
+    name: "call_tarik",
+    description:
+      "Call Tarik's phone. Use only when something genuinely needs his voice and a message would not do — a browse session needing takeover, or a failure he must know about now. There is no way to call anyone else.",
+    responseTimeoutSecs: 20,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/call_tarik`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: [],
+        // Deliberately no destination field. The number lives in OWNER_PHONE
+        // on the server, so the agent cannot be talked into dialling anyone
+        // else. tests/callGuardrails.test.ts fails if one appears here.
+        description: "Call Tarik",
+        properties: {
+          reason: bodyProp("Why you're calling, in a few words"),
+        },
+      },
+    },
+  },
 ];
 
 async function main() {
