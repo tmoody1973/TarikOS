@@ -109,4 +109,7 @@ test("the agent instruction carries the habit tone and escalation rules", () => 
   assert.match(provision, /HABIT_GUARDRAILS/);
   assert.match(provision, /never shame/i);
   assert.match(provision, /human support/i);
+  // Mutation guard: the constant must actually be wired into the prompt, not just declared.
+  // If someone reverts the concatenation, this fails and catches the silent breakage.
+  assert.match(provision, /prompt:\s*PERSONA\s*\+\s*HABIT_GUARDRAILS/);
 });

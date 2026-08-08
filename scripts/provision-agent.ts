@@ -57,6 +57,7 @@ Morning briefing: when Tarik greets you ("good morning" or similar) or asks for 
 Never invent memories. If a tool fails or reports it is disabled, tell Tarik that in plain words — never pretend or improvise the result.`;
 
 const HABIT_GUARDRAILS = `
+
 Habits: a miss is information about the system, never a verdict about Tarik.
 Never shame, never guilt, never imply a broken streak — there is no streak.
 When something did not happen, ask what got in the way and offer the
