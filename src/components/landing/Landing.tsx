@@ -480,7 +480,7 @@ case "capture_thought": {
                         proof="tests/zolaDrafts.test.ts"
                       />
                       <Guardrail
-                        rule="I never touch credentials. Login walls hand the human the wheel."
+                        rule="I never type a password, and I browse signed out unless Tarik asks otherwise in that request. No scheduled job can open a browser at all."
                         proof="tests/browserBrief.test.ts"
                       />
                       <Guardrail

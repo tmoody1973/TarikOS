@@ -41,7 +41,7 @@ A voice-first personal OS where every capability is one webhook case away: add a
 - **Structural guardrails (enforced by tests, must be preserved):**
   - Zola can draft email; only a human can send it. No send path exists on the agent's tool surface.
   - Calendar writes go through a spoken confirm ritual before committing.
-  - The browser agent never touches credentials; login walls stop it and hand the human the wheel.
+  - The browser agent never types a password. Sessions are signed out by default; they carry the owner's saved logins (a Browserbase Context he signs into by hand) only when he asks for them in that request, and no scheduled job can start a browser session at all.
 - Stack: Next.js 16 (App Router), React 19, Tailwind CSS 4, Convex (state/realtime/crons/vector), Clerk (auth on every page and non-webhook route), ElevenLabs Agents, Anthropic SDK, Composio, Browserbase + Stagehand, TipTap (compose), three.js (HUD flourishes). Vercel + Convex Cloud hosting.
 - Terminology: "Zola" (assistant persona; formerly Morpheus — internal names like `MORPHEUS_TOOL_SECRET` persist in code), "telos" (long-term goals), "briefing cards", "Viewport" (browser panel), "tool" (agent webhook capability).
 - **Zero analytics/telemetry, by design.** No usage tracking, no phone-home — a product fact, part of the trust story for a self-hosted personal OS. Future work must not add any without an explicit product decision.

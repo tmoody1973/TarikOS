@@ -229,7 +229,7 @@ const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
     type: "webhook" as const,
     name: "browse",
     description:
-      "Drive a real browser to research or investigate something on the live web while Tarik watches. Drafting-and-reading only — the agent never logs in, never enters credentials, never purchases. Findings become a brief.",
+      "Drive a real browser to research or investigate something on the live web while Tarik watches. Reading and research only — never enter a password, never purchase. Findings become a brief. Sessions are signed out unless Tarik explicitly asks you to use his saved logins.",
     preToolSpeech: "force" as const,
     responseTimeoutSecs: 30,
     apiSchema: {
@@ -244,6 +244,11 @@ const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
           task: bodyProp(
             "Plain-language instructions for what to research or do in the browser, e.g. 'find the three most-discussed AI stories on Hacker News right now and summarize the comments'",
           ),
+          use_my_logins: {
+            type: "boolean" as const,
+            description:
+              "Set true ONLY when Tarik explicitly asks you to browse as him or use his saved logins (e.g. 'check my Bandcamp sales', 'use my browser session'). Otherwise omit it — the session is signed out by default, which is safer. Never set it on your own initiative.",
+          },
         },
       },
     },

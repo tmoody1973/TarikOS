@@ -3,9 +3,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { browseSections } from "../src/lib/browserBrief.ts";
 
-// Structural guardrails (MOO-485), same pattern as the mail no-send scan:
-// the runner must always carry the no-credentials rules into the agent
-// instruction, and sessions must stay bare (no persisted auth contexts).
+// Structural guardrails (MOO-485), same pattern as the mail no-send scan.
+// The agent never types a password — that has not changed. What changed
+// (MOO-503) is that a session may now carry Tarik's own saved logins from a
+// Browserbase Context, so the rule is re-scoped rather than dropped: bare by
+// default, credentials only when this request asked for them.
 test("runner instruction always carries the no-credentials guardrails", () => {
   const src = readFileSync(
     new URL("../src/app/api/browser/run/route.ts", import.meta.url),
@@ -16,12 +18,52 @@ test("runner instruction always carries the no-credentials guardrails", () => {
   assert.ok(/\$\{GUARDRAILS\}/.test(src));
 });
 
-test("browser sessions are always bare — no persisted auth context", () => {
+test("sessions are bare unless the caller opts in", () => {
   const src = readFileSync(
     new URL("../src/lib/browserSession.ts", import.meta.url),
     "utf8",
   );
-  assert.ok(!/contextId|browserSettings.*context/.test(src));
+  // The default must be false at the signature — an opt-in that defaults to
+  // true is not an opt-in.
+  assert.match(src, /withLogins = false/);
+  // Write-back is opt-in too: only the session Tarik signs in through should
+  // be able to rewrite the shared profile.
+  assert.match(src, /persist = false/);
+  // A context may only be attached behind that flag.
+  assert.match(src, /useContext = withLogins && !!contextId/);
+  assert.ok(
+    !/browserSettings:\s*\{\s*context/.test(src.replace(/useContext[\s\S]*?:\s*\{\}/, "")),
+    "context must not be attached outside the opt-in branch",
+  );
+});
+
+test("the agent only gets logins when the request explicitly says so", () => {
+  const src = readFileSync(
+    new URL("../src/app/api/tools/[tool]/route.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(src, /body\.use_my_logins === true/);
+  assert.ok(
+    !/createBrowserSession\(\{\s*withLogins:\s*true\s*\}\)/.test(src),
+    "the tool route must never hardcode withLogins: true",
+  );
+});
+
+test("no scheduled path can reach the browser", () => {
+  // The whole safety story rests on browsing being attended. A cron that could
+  // browse as Tarik while he sleeps is the failure this test exists to catch.
+  for (const file of ["../convex/crons.ts", "../convex/workflowRunner.ts"]) {
+    let src: string;
+    try {
+      src = readFileSync(new URL(file, import.meta.url), "utf8");
+    } catch {
+      continue; // file may not exist; nothing to guard
+    }
+    assert.ok(
+      !/api\/browser\/|createBrowserSession|"browse"/.test(src),
+      `${file} must not start a browser session`,
+    );
+  }
 });
 
 const base = {

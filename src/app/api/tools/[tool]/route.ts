@@ -403,7 +403,11 @@ async function runTool(
       if (!task) {
         return { ok: false, message: "What should I go look into?" };
       }
-      const session = await createBrowserSession();
+      // Bare unless Tarik asked for his logins in this request. Never a
+      // default: an agent holding live cookies while reading arbitrary pages
+      // is what prompt injection aims at.
+      const withLogins = body.use_my_logins === true;
+      const session = await createBrowserSession({ withLogins });
       try {
         // startSession's insert is the atomic one-at-a-time guard.
         await convex.mutation(api.browserSessions.startSession, {

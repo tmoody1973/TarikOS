@@ -24,12 +24,41 @@ export function replayUrl(sessionId: string): string {
   return `https://browserbase.com/sessions/${sessionId}`;
 }
 
-// v1 guardrail: sessions are always bare — no persisted profile — so there
-// is never a stored login the agent could use. A test scans this file to
-// keep it that way.
-export async function createBrowserSession(): Promise<BrowserSession> {
+type SessionOptions = {
+  /** Attach the saved-login context. Off unless the caller asks. */
+  withLogins?: boolean;
+  /** Write this session's browser state back into the context. Only the
+   *  session Tarik signs in through should do this — the agent reads the
+   *  logins, it does not get to rewrite the profile it borrowed. */
+  persist?: boolean;
+};
+
+/* Sessions are bare by default: no persisted profile, so there is no stored
+ * login for the agent to use. That default is the guardrail, and a test keeps
+ * it — `withLogins` must be asked for, never assumed.
+ *
+ * When BROWSERBASE_CONTEXT_ID is set (see scripts/create-browser-context.ts),
+ * a caller may opt into that persistent context: a Browserbase Context holds
+ * cookies and localStorage, encrypted at rest, so a login Tarik performs by
+ * hand in the Viewport survives into later sessions.
+ *
+ * Two callers, two postures. The VIEW button is Tarik at his own keyboard, so
+ * it gets the context. The `browse` tool is the agent, so it gets the context
+ * only when Tarik says to — an agent carrying live cookies across arbitrary
+ * pages is a prompt-injection target, and that risk is only worth taking
+ * deliberately, per request. */
+export async function createBrowserSession(
+  { withLogins = false, persist = false }: SessionOptions = {},
+): Promise<BrowserSession> {
   const bb = client();
-  const session = await bb.sessions.create({ projectId: projectId() });
+  const contextId = process.env.BROWSERBASE_CONTEXT_ID;
+  const useContext = withLogins && !!contextId;
+  const session = await bb.sessions.create({
+    projectId: projectId(),
+    ...(useContext
+      ? { browserSettings: { context: { id: contextId, persist } } }
+      : {}),
+  });
   const debug = await bb.sessions.debug(session.id);
   return {
     sessionId: session.id,

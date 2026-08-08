@@ -37,7 +37,7 @@ Three guardrails are structural, not polite requests:
 
 - **Zola can draft email; only a human can send it.** The send endpoint exists solely behind the browser UI's Send button. The agent's tool surface has no send path — a test fails the suite if one ever appears.
 - **Calendar writes confirm before they commit.** Event creation and edits go through a confirm ritual in conversation.
-- **The browser agent never touches credentials.** Zola can drive a real browser (see Viewport below), but sessions are always bare — no stored logins exist — and login walls stop the agent and hand you the wheel. Also enforced by tests.
+- **The browser agent never types a password, and browsing is always attended.** Zola can drive a real browser (see Viewport below). Sessions are signed out by default; a login wall stops the agent and hands you the wheel. If you set up a persistent [Browserbase Context](#logged-in-browsing-optional) and sign in by hand, a session can carry those logins — but only when you ask for them in that request, never by the agent's own initiative. No scheduled job can start a browser session at all. All three parts are enforced by tests.
 
 ## Tech stack
 
@@ -148,6 +148,26 @@ Values live in `.env.local` (gitignored) and in Vercel/Convex env settings in pr
 | `TOOL_BASE_URL` | Your deployment's tool webhook base, e.g. `https://<your-app>/api/tools` |
 
 `MORPHEUS_TOOL_SECRET` must be set in both the Convex deployment (`npx convex env set`) and the app env, and is baked into the agent by the provision script.
+
+### Logged-in browsing (optional)
+
+By default every browser session is signed out, and that is the safe setting.
+If you want Zola to reach pages behind your own logins:
+
+```bash
+node --experimental-strip-types scripts/create-browser-context.ts
+# put the printed id in BROWSERBASE_CONTEXT_ID (local + Vercel)
+```
+
+Then click **VIEW** in the rail and sign in to the sites you want remembered.
+Browserbase encrypts context data at rest. After that, "check my orders on X"
+works — but only when you say so out loud; the agent never opts in by itself.
+
+**Only sign into things you would not mind an agent reaching.** A context is
+one browser profile, so everything in it is reachable by any session that opts
+in, and a hostile page can try to steer an agent that is holding live cookies.
+No code can enforce what you choose to log into. Keep email, banking, and
+anything holding a card out of it.
 
 ### Locking your instance to you
 

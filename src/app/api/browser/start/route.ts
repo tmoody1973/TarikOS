@@ -10,7 +10,13 @@ export async function POST() {
   try {
     const secret = process.env.MORPHEUS_TOOL_SECRET;
     if (!secret) throw new Error("MORPHEUS_TOOL_SECRET missing");
-    const session = await createBrowserSession();
+    // Tarik at his own keyboard, Clerk-gated: this is the session he signs in
+    // through, so it both carries the context and writes back to it — that
+    // write-back is how a login he performs here survives to later sessions.
+    const session = await createBrowserSession({
+      withLogins: true,
+      persist: true,
+    });
     try {
       await convexServer().mutation(api.browserSessions.startSession, {
         secret,
