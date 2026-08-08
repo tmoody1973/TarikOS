@@ -161,11 +161,11 @@ A dataset is a saved collection of examples: an input, an expected output, some 
 
 The dataset lives in Phoenix, not in git. This repo is public under MIT, and fifty real utterances are fifty pieces of your actual life — your calendar, your inbox, your goals, your habits. `evals/.gitignore` blocks every CSV for that reason. Only the code ships.
 
-### Experiments — later, and worth the wait
+### Experiments — wired up, use them for runs worth keeping
 
 An experiment runs a task over every example in a dataset, scores each result, and saves the run. Then you change something and run it again, and Phoenix shows you both.
 
-That's the loop that turns "I think the new tool description is better" into "accuracy went from 67% to 74%." You need a labelled dataset first, which is why it comes after annotations.
+`evals/replay.py --phoenix NAME` does this. Two experiments already sit on `tool-selection-v1` — `baseline` and `baseline-repeat` — and the second one exists to answer a question you need answered before you trust any number here. See "How much movement is real" below.
 
 ### Prompts — skip
 
@@ -249,7 +249,45 @@ evals/.venv/bin/python evals/replay.py --compare baseline
 
 You'll get the new accuracy, the delta, and a line for every single utterance that changed its answer. That per-utterance list is the important part. A flat overall number can hide two fixes and two regressions cancelling out.
 
-Runs aren't perfectly repeatable — the model doesn't accept a temperature setting — so a point or two of wobble is noise. The list of changed utterances isn't.
+### How much movement is real
+
+Before trusting any delta, you need to know how much this thing moves when you change *nothing*. So the same harness was run twice against the same dataset with no changes at all:
+
+| | accuracy | utterances that changed answer |
+|---|---|---|
+| `baseline` | 68.5% (74/108) | — |
+| `baseline-repeat` | 69.4% (75/108) | **10 of 108 (9.3%)** |
+
+Read that carefully, because the two columns say different things.
+
+The **aggregate** barely moved — 0.9 points. That's the wobble you'd expect from a model that won't accept a temperature setting.
+
+The **per-utterance churn was 9.3%.** Ten utterances flipped which tool they reached for, and the aggregate hid all ten because the flips cancelled out. That's the exact failure mode `--compare`'s per-utterance list was built to catch, and now it has a number.
+
+What this means in practice:
+
+- A per-utterance diff showing **one to three changed rows means nothing.** That is inside the noise.
+- The aggregate is the more stable signal, but only for changes bigger than a point or two.
+- If a change looks borderline, run it twice. Two runs cost five minutes.
+
+That's not a flaw in the harness — it's the honest resolution of a single-shot LLM eval on 108 examples, and knowing it stops you from shipping a description rewrite on the strength of noise.
+
+### Keep the runs worth keeping
+
+`--save`/`--compare` is the inner loop: offline, instant, no network. Use it while you're actually editing a sentence.
+
+When a run is worth keeping, push it to Phoenix:
+
+```bash
+evals/.venv/bin/python evals/replay.py --upload-dataset       # once, creates tool-selection-v1
+evals/.venv/bin/python evals/replay.py --phoenix recall-v2    # score + save as an experiment
+```
+
+`--phoenix` scores the rows **Phoenix** hands back rather than the CSV, so every run attaches to a real dataset example and pins to a dataset version. That's what makes two experiments genuinely comparable in the UI instead of just similar-looking.
+
+Each run writes a `tool_match` evaluation per example — `correct`/`incorrect`, score 1.0/0.0, with the expected-vs-got in the explanation — and stamps the experiment's metadata with the model, the tool count, the accuracy, and `unreviewed_labels`. That last one matters: **all 108 labels are currently unreviewed**, so the dataset says so about itself and no future you can mistake 68.5% for a measurement.
+
+To make the numbers mean something, open `tool-selection-v1` in Phoenix, read rows, and correct the ones where `expected_tool` is wrong. The `actually_called` metadata is right there for reference. Then re-upload under `tool-selection-v2` and the scores start being about Zola rather than about the harness.
 
 When a change helps, ship it:
 
@@ -277,6 +315,10 @@ That's the loop. Rewrite a sentence, see the number move, deploy. Minutes instea
 
 **`replay.py` says no tools.json.** Run `node evals/export_tools.ts` first.
 
+**`--phoenix` says no dataset called tool-selection-v1.** Run `--upload-dataset` first. It reads `OTEL_EXPORTER_OTLP_ENDPOINT` and `PHOENIX_API_KEY` from `.env.local` — the same two values the tracing uses, so there's no second place to configure.
+
+**An experiment shows runs but no scores.** The evaluation is a separate write from the run, keyed on the run id Phoenix assigns at creation. If runs landed and `tool_match` didn't, the second call failed — `replay.py` will have exited loudly rather than leaving a silently score-less experiment.
+
 ---
 
 ## The short version
@@ -285,7 +327,7 @@ Daily: open the newest trace, look for red, note anything surprising.
 
 Weekly: check metrics for shape changes, look for failures with a pattern, confirm your crons ran, label five utterances.
 
-Monthly or when something bugs you: run the harness, read the confusion matrix, rewrite one tool description, measure, deploy.
+Monthly or when something bugs you: run the harness, read the confusion matrix, rewrite one tool description, measure, deploy. Anything under about ten changed utterances is noise — check the numbers twice before believing them.
 
 Skip Sessions and Prompts. Use Annotations more than you think you should — they're labels, and labels are the scarce thing.
 
