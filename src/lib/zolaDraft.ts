@@ -1,6 +1,14 @@
 import Anthropic from "@anthropic-ai/sdk";
+import {
+  SemanticConventions,
+  OpenInferenceSpanKind,
+  LLMProvider,
+} from "@arizeai/openinference-semantic-conventions";
 import { safeSlice } from "../../convex/workflowLib.ts";
+import { getTracer, safeSetAttrs, safeEndSpan } from "./tracing.ts";
 import type { MailMessage } from "./mail.ts";
+
+const MODEL = "claude-opus-5";
 
 // Zola's email drafting (MOO-494) — server-side Claude, consolidation
 // pattern. Writes a body ONLY; creating the Gmail draft happens in the tool
@@ -50,20 +58,41 @@ Tarik's instruction for this email: "${safeSlice(args.intent, 1200)}"
 
 Write only the email body as simple HTML. Keep it short — say what Tarik asked, nothing invented.`;
   const client = new Anthropic();
-  const response = await client.messages.create({
-    model: "claude-opus-5",
-    max_tokens: 2000,
-    output_config: { format: { type: "json_schema", schema: BODY_SCHEMA } },
-    messages: [{ role: "user", content: prompt }],
+  const span = getTracer().startSpan("llm.draft_email");
+  safeSetAttrs(span, {
+    [SemanticConventions.OPENINFERENCE_SPAN_KIND]: OpenInferenceSpanKind.LLM,
+    [SemanticConventions.LLM_MODEL_NAME]: MODEL,
+    [SemanticConventions.LLM_PROVIDER]: LLMProvider.ANTHROPIC,
+    [SemanticConventions.INPUT_VALUE]: prompt,
   });
-  if (response.stop_reason === "refusal") {
-    throw new Error("Drafting model refused the request");
+  try {
+    const response = await client.messages.create({
+      model: MODEL,
+      max_tokens: 2000,
+      output_config: { format: { type: "json_schema", schema: BODY_SCHEMA } },
+      messages: [{ role: "user", content: prompt }],
+    });
+    safeSetAttrs(span, {
+      [SemanticConventions.LLM_TOKEN_COUNT_PROMPT]: response.usage?.input_tokens,
+      [SemanticConventions.LLM_TOKEN_COUNT_COMPLETION]: response.usage?.output_tokens,
+      [SemanticConventions.LLM_FINISH_REASON]: response.stop_reason,
+    });
+    if (response.stop_reason === "refusal") {
+      throw new Error("Drafting model refused the request");
+    }
+    const text = response.content.find((b) => b.type === "text");
+    if (!text || text.type !== "text") {
+      throw new Error("Drafting returned no text content");
+    }
+    const bodyHtml = String(JSON.parse(text.text).bodyHtml ?? "").trim();
+    if (!bodyHtml) throw new Error("Drafting returned an empty body");
+    safeSetAttrs(span, { [SemanticConventions.OUTPUT_VALUE]: bodyHtml });
+    safeEndSpan(span);
+    return bodyHtml;
+  } catch (error) {
+    // Every throw path above lands here, so the span is always closed and the
+    // error recorded. The error itself is rethrown unchanged.
+    safeEndSpan(span, error);
+    throw error;
   }
-  const text = response.content.find((b) => b.type === "text");
-  if (!text || text.type !== "text") {
-    throw new Error("Drafting returned no text content");
-  }
-  const bodyHtml = String(JSON.parse(text.text).bodyHtml ?? "").trim();
-  if (!bodyHtml) throw new Error("Drafting returned an empty body");
-  return bodyHtml;
 }
