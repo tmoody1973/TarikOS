@@ -1,4 +1,5 @@
 import { mutation, query } from "./_generated/server";
+import type { QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { checkToolSecret, markToolHealthy } from "./secondBrain";
 import { requireUser } from "./dashboard";
@@ -20,23 +21,23 @@ const voteLevel = v.union(...VOTE_LEVELS.map((l) => v.literal(l)));
 const evidenceMode = v.union(...EVIDENCE_MODES.map((m) => v.literal(m)));
 const habitStatus = v.union(...HABIT_STATUSES.map((s) => v.literal(s)));
 
-async function activeCycle(ctx: { db: any }) {
+async function activeCycle(ctx: QueryCtx) {
   return await ctx.db
     .query("habitCycles")
-    .filter((q: any) => q.eq(q.field("status"), "active"))
+    .filter((q) => q.eq(q.field("status"), "active"))
     .first();
 }
 
-async function activeHabits(ctx: { db: any }) {
+async function activeHabits(ctx: QueryCtx) {
   const cycle = await activeCycle(ctx);
   if (!cycle) return [];
   const rows = await ctx.db
     .query("habits")
-    .withIndex("by_cycle", (q: any) => q.eq("cycleId", cycle._id))
+    .withIndex("by_cycle", (q) => q.eq("cycleId", cycle._id))
     .collect();
   return rows
-    .filter((h: any) => h.status === "active")
-    .sort((a: any, b: any) => a.order - b.order);
+    .filter((h) => h.status === "active")
+    .sort((a, b) => a.order - b.order);
 }
 
 /** Today's habits with their vote and any pending suggestion. */
@@ -47,7 +48,7 @@ export const today = query({
     const date = chicagoToday();
     const habits = await activeHabits(ctx);
     return await Promise.all(
-      habits.map(async (h: any) => {
+      habits.map(async (h) => {
         const vote = await ctx.db
           .query("habitVotes")
           .withIndex("by_habit_date", (q: any) =>

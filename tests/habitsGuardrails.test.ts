@@ -29,7 +29,16 @@ test("the suggestion path never inserts a vote", () => {
 });
 
 test("suggestions are gated by canSuggest, not by the caller", () => {
-  assert.match(habits, /canSuggest\(/);
+  const fn = habits.slice(
+    habits.indexOf("export const suggestFromEvidence"),
+    habits.indexOf("export const resolveSuggestion"),
+  );
+  assert.ok(fn.length > 0, "suggestFromEvidence must exist");
+  assert.match(
+    fn,
+    /if\s*\(\s*!canSuggest/,
+    "suggestFromEvidence must guard with !canSuggest",
+  );
 });
 
 test("evidenceMode defaults to self_report in the schema", () => {

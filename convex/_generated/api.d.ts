@@ -13,6 +13,8 @@ import type * as crons from "../crons.js";
 import type * as dashboard from "../dashboard.js";
 import type * as embeddingsLib from "../embeddingsLib.js";
 import type * as feeds from "../feeds.js";
+import type * as habits from "../habits.js";
+import type * as habitsLib from "../habitsLib.js";
 import type * as journal from "../journal.js";
 import type * as memoryOps from "../memoryOps.js";
 import type * as secondBrain from "../secondBrain.js";
@@ -37,6 +39,8 @@ declare const fullApi: ApiFromModules<{
   dashboard: typeof dashboard;
   embeddingsLib: typeof embeddingsLib;
   feeds: typeof feeds;
+  habits: typeof habits;
+  habitsLib: typeof habitsLib;
   journal: typeof journal;
   memoryOps: typeof memoryOps;
   secondBrain: typeof secondBrain;
