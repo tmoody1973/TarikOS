@@ -9,10 +9,21 @@ import { ViewportPanel } from "./ViewportPanel";
 
 // App chrome (MOO-483): nav rail + persistent voice dock around every page.
 // The dock lives here — not in a page — so the WebRTC session survives
-// route changes. Sign-in renders bare.
-export function AppShell({ children }: { children: React.ReactNode }) {
+// route changes. Sign-in renders bare; so does the signed-out landing, whose
+// `signedIn` comes from the server so the page ships fully rendered (MOO-500).
+export function AppShell({
+  children,
+  signedIn,
+}: {
+  children: React.ReactNode;
+  signedIn: boolean;
+}) {
   const pathname = usePathname();
-  if (pathname.startsWith("/sign-in")) return <>{children}</>;
+  if (!signedIn || pathname.startsWith("/sign-in")) return <>{children}</>;
+  return <AppShellInner>{children}</AppShellInner>;
+}
+
+function AppShellInner({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col">
       <div className="flex flex-1 gap-3 p-3 pb-28">

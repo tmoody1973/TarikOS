@@ -1,0 +1,8 @@
+{
+  "prompt": "Desktop web landing page UI design, exact layout scaffold: (1) top bar — left: an amber (#ff9900) horizontal pill end-cap (rounded only on its left side) containing black condensed uppercase 'TARIK OS'; right: two smaller pill end-caps, amber 'VIEW SOURCE' and glowing cyan 'ENGAGE', black uppercase labels. (2) upper-center hero region: a levitating spherical 3D orb of cyan (#35e0ff) energy — particle shell, faint wireframe, soft glow — floating in near-black space (#050608), taking ~35% of viewport height. (3) directly beneath the orb, centered: a typed uppercase condensed display headline 'ZOLA, WHAT ARE YOU?' in pale ice-blue (#d8e4f0) with a blinking cursor. (4) beneath that, a centered narrow column of monospace text streaming an answer, glowing soft cyan on the last line, calm pale blue for settled lines. (5) bottom edge of viewport: three small flat dark panels (#0b0e14) with 1px steel-blue (#1a2233) borders and tiny uppercase widely-letter-spaced steel (#6688aa) micro-labels, hinting the next conversation beat. Star-Trek-LCARS-inspired instrument aesthetic: completely flat surfaces, no drop shadows, no gradients as decoration, glow only on live elements. Condensed sans display type like Antonio, monospace body. Dark, calm, precise. This is a full webpage screenshot mockup, not an illustration.",
+  "createdAt": "2026-08-08T10:48:09.542Z",
+  "tool": "generate-image.mjs",
+  "model": "gpt-image-2",
+  "approved": true,
+  "approvalNote": "Combined: A supplies the hero (orb-dominant, centered typed question), B supplies the body (LCARS-rail conversation index + evidence panels). Approved by Tarik 2026-08-08."
+}

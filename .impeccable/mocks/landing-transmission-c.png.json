@@ -1,0 +1,6 @@
+{
+  "prompt": "Desktop web landing page UI design, exact layout scaffold: (1) dominant full-bleed hero: a huge glowing 3D orb of cyan (#35e0ff) particle energy with faint wireframe shell, centered, filling ~60% of the viewport against deep space black (#050608), volumetric but calm. (2) typed across the orb's vertical center: large condensed uppercase display headline 'ZOLA, WHAT ARE YOU?' in pale ice-blue (#d8e4f0) with cursor. (3) lower third, centered: one line of glowing cyan monospace answer text streaming, plus a small steel (#6688aa) uppercase letter-spaced micro-label 'INCOMING TRANSMISSION'. (4) two pill end-cap buttons bottom-center — amber (#ff9900) 'VIEW SOURCE' and cyan 'ENGAGE' — rounded on one side only, black uppercase labels. (5) visible below the fold edge: a dense broadsheet band of small flat dark panels (#0b0e14, 1px #1a2233 borders) in a multi-column grid with steel micro-labels and thin double horizontal rules, newspaper-dense. LCARS instrument aesthetic: flat, no shadows, glow reserved for the orb and live text line. Condensed sans display, monospace body. Full webpage screenshot mockup, not a poster.",
+  "createdAt": "2026-08-08T10:51:46.125Z",
+  "tool": "generate-image.mjs",
+  "model": "gpt-image-2"
+}

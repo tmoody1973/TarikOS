@@ -1,0 +1,8 @@
+{
+  "prompt": "Desktop web landing page UI design, exact layout scaffold: (1) fixed left sidebar rail, ~160px wide: a vertical stack of LCARS-style horizontal pill end-caps (each rounded only on its left side), colors top to bottom amber (#ff9900) masthead cap 'TARIK OS' then lavender (#cc99cc) 'ORIGIN', pale blue (#99ccff) 'MECHANISM', cyan (#35e0ff) 'CAPABILITIES', salmon (#ff7788) 'TRUST', steel (#6688aa) 'FORK' — black condensed uppercase labels, right-aligned, acting as a conversation index; inactive caps dimmed to 50% opacity. (2) main content right of the rail on near-black (#050608): top-right corner holds a medium 3D orb of cyan particle energy with soft glow, Zola's presence. (3) main column: a large typed condensed uppercase question 'ZOLA, WHAT ARE YOU?' in pale ice-blue (#d8e4f0), followed by streaming monospace answer text with the newest line glowing cyan. (4) beside the transcript, two flat evidence panels (#0b0e14, 1px #1a2233 borders, tiny uppercase letter-spaced steel micro-labels): one showing an email draft interface, one showing a tool registry list with small colored health dots. (5) bottom-right: amber pill cap button 'VIEW SOURCE'. Flat instrument-panel aesthetic, no shadows, glow only on live data, condensed display + monospace type. Full webpage screenshot mockup.",
+  "createdAt": "2026-08-08T10:49:51.121Z",
+  "tool": "generate-image.mjs",
+  "model": "gpt-image-2",
+  "approved": true,
+  "approvalNote": "Combined: A supplies the hero (orb-dominant, centered typed question), B supplies the body (LCARS-rail conversation index + evidence panels). Approved by Tarik 2026-08-08."
+}

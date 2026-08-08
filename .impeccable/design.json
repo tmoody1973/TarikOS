@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-08T10:05:00-05:00",
+  "title": "Design System: Tarik OS",
+  "extensions": {
+    "colorMeta": {
+      "space-black": { "role": "neutral", "displayName": "Space Black", "canonical": "#050608", "tonalRamp": ["#050608", "#0b0e14", "#141a24", "#1f2937", "#374151", "#6b7280", "#9ca3af", "#e5e7eb"] },
+      "panel": { "role": "neutral", "displayName": "Panel", "canonical": "#0b0e14", "tonalRamp": ["#05070a", "#0b0e14", "#131826", "#1a2233", "#2a3650", "#41527a", "#7386ab", "#c3cde0"] },
+      "panel-edge": { "role": "neutral", "displayName": "Panel Edge", "canonical": "#1a2233", "tonalRamp": ["#0b0e14", "#131826", "#1a2233", "#243048", "#334467", "#4c6394", "#7f95c0", "#ccd6ea"] },
+      "ice-signal": { "role": "neutral", "displayName": "Ice Signal", "canonical": "#d8e4f0", "tonalRamp": ["#1c2530", "#2e3d50", "#48607d", "#6684a8", "#8fa9c7", "#b4c8dd", "#d8e4f0", "#eef4fa"] },
+      "lcars-steel": { "role": "neutral", "displayName": "LCARS Steel", "canonical": "#6688aa", "tonalRamp": ["#131a22", "#243342", "#364d63", "#4a6885", "#6688aa", "#8aa5c0", "#b3c5d8", "#dbe4ee"] },
+      "lcars-amber": { "role": "primary", "displayName": "LCARS Amber", "canonical": "#ff9900", "tonalRamp": ["#3d2500", "#663d00", "#995c00", "#cc7a00", "#ff9900", "#ffb340", "#ffcd80", "#ffe6bf"] },
+      "hud-cyan": { "role": "primary", "displayName": "HUD Cyan", "canonical": "#35e0ff", "tonalRamp": ["#003340", "#005266", "#007a99", "#00a3cc", "#35e0ff", "#66e8ff", "#99efff", "#ccf7ff"] },
+      "lcars-lavender": { "role": "secondary", "displayName": "LCARS Lavender", "canonical": "#cc99cc", "tonalRamp": ["#2e1f2e", "#4d334d", "#734d73", "#996699", "#cc99cc", "#d9b3d9", "#e6cce6", "#f2e6f2"] },
+      "lcars-salmon": { "role": "secondary", "displayName": "LCARS Salmon", "canonical": "#ff7788", "tonalRamp": ["#40161c", "#66242e", "#993645", "#cc4d5f", "#ff7788", "#ff99a6", "#ffbbc3", "#ffdde1"] },
+      "lcars-blue": { "role": "secondary", "displayName": "LCARS Blue", "canonical": "#99ccff", "tonalRamp": ["#14293d", "#204466", "#306699", "#4d8ccc", "#99ccff", "#b3d9ff", "#cce6ff", "#e6f2ff"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display (Antonio)", "purpose": "Uppercase only; black type on colored LCARS caps and reader headings." },
+      "body": { "displayName": "Body (Geist Mono)", "purpose": "All prose and data; long-form at 85% foreground mix." },
+      "label": { "displayName": "Micro-label", "purpose": "10px uppercase 0.3em-tracked steel — the header voice of panels and sections." }
+    },
+    "shadows": [
+      { "name": "overlay", "value": "0 25px 50px -12px rgba(0,0,0,0.25)", "purpose": "SlideOver overlay layer only — the single sanctioned shadow (Flat-At-Rest Rule)." }
+    ],
+    "motion": [
+      { "name": "slide-over", "value": "transform 300ms ease, opacity 300ms ease", "purpose": "SlideOver entry/exit; disabled under prefers-reduced-motion." },
+      { "name": "pulse-soft", "value": "pulse-soft 2.4s ease-in-out infinite (opacity 1 → 0.35)", "purpose": "Waiting/standby breath on status text." },
+      { "name": "hud-glow", "value": "text-shadow: 0 0 8px color-mix(in srgb, currentColor 60%, transparent)", "purpose": "Live-data glow; never on static content." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "LCARS Nav Cap",
+      "kind": "nav",
+      "refersTo": "nav-cap",
+      "description": "One-sided pill navigation bar in its channel color; black Antonio label, dim-until-active.",
+      "html": "<a class=\"ds-nav-cap\" aria-current=\"page\"><span>BRIEFS</span></a>",
+      "css": ".ds-nav-cap { display: flex; align-items: center; justify-content: flex-end; height: 48px; width: 160px; padding: 12px; background: var(--lcars-lavender, #cc99cc); border-radius: 9999px 0 0 9999px; opacity: 0.5; transition: opacity 0.2s; text-decoration: none; cursor: pointer; } .ds-nav-cap:hover { opacity: 0.8; } .ds-nav-cap[aria-current=\"page\"] { opacity: 1; } .ds-nav-cap span { font-family: Antonio, sans-serif; font-size: 0.875rem; color: #000; text-transform: uppercase; }"
+    },
+    {
+      "name": "Filter Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Full-pill bordered micro-chip; steel at rest, channel color when selected.",
+      "html": "<button class=\"ds-chip\">ALL</button> <button class=\"ds-chip ds-chip--selected\">EDITORIAL</button>",
+      "css": ".ds-chip { border-radius: 9999px; border: 1px solid var(--panel-edge, #1a2233); background: transparent; padding: 2px 10px; font-family: 'Geist Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--lcars-steel, #6688aa); transition: color 0.2s, border-color 0.2s; cursor: pointer; } .ds-chip:hover { color: var(--foreground, #d8e4f0); border-color: var(--lcars-steel, #6688aa); } .ds-chip:focus-visible { outline: 2px solid var(--hud-cyan, #35e0ff); } .ds-chip--selected { color: var(--hud-cyan, #35e0ff); border-color: var(--hud-cyan, #35e0ff); }"
+    },
+    {
+      "name": "Quiet Button",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "Default control: bordered, steel, shifts toward the action's channel color on hover.",
+      "html": "<button class=\"ds-btn-quiet\">CLOSE</button>",
+      "css": ".ds-btn-quiet { border-radius: 0.375rem; border: 1px solid var(--panel-edge, #1a2233); background: transparent; padding: 4px 10px; font-family: 'Geist Mono', monospace; font-size: 0.75rem; color: var(--lcars-steel, #6688aa); transition: color 0.2s, border-color 0.2s; cursor: pointer; } .ds-btn-quiet:hover { color: var(--lcars-salmon, #ff7788); border-color: color-mix(in srgb, var(--lcars-salmon, #ff7788) 50%, transparent); } .ds-btn-quiet:focus-visible { outline: 2px solid var(--hud-cyan, #35e0ff); }"
+    },
+    {
+      "name": "Panel",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "The universal raised surface: tonal step up from space-black, 1px edge, micro-label header, no shadow.",
+      "html": "<div class=\"ds-panel\"><h3 class=\"ds-panel-label\">SYSTEM STATUS</h3><p class=\"ds-panel-body\">All tools nominal.</p></div>",
+      "css": ".ds-panel { background: var(--panel, #0b0e14); border: 1px solid var(--panel-edge, #1a2233); border-radius: 0.5rem; padding: 12px; } .ds-panel-label { font-family: 'Geist Mono', monospace; font-size: 10px; font-weight: 400; text-transform: uppercase; letter-spacing: 0.3em; color: var(--hud-cyan, #35e0ff); border-bottom: 1px solid var(--panel-edge, #1a2233); padding-bottom: 4px; margin: 0 0 8px; } .ds-panel-body { font-family: 'Geist Mono', monospace; font-size: 0.875rem; line-height: 1.7; color: var(--foreground, #d8e4f0); margin: 0; }"
+    },
+    {
+      "name": "Micro-label",
+      "kind": "custom",
+      "refersTo": "chip",
+      "description": "The system's header voice — 10px uppercase, 0.3em tracking, steel.",
+      "html": "<span class=\"ds-microlabel\">MORNING BRIEF</span>",
+      "css": ".ds-microlabel { font-family: 'Geist Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.3em; color: var(--lcars-steel, #6688aa); }"
+    },
+    {
+      "name": "Live Status Line",
+      "kind": "custom",
+      "refersTo": "chip",
+      "description": "Glowing cyan telemetry for live data — the Glow Means Live Rule made visible.",
+      "html": "<span class=\"ds-live\">SYSTEMS ONLINE</span>",
+      "css": ".ds-live { font-family: 'Geist Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.2em; color: var(--hud-cyan, #35e0ff); text-shadow: 0 0 8px color-mix(in srgb, currentColor 60%, transparent); }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "panel",
+      "description": "Panel-toned field with edge border; brightens on focus with the cyan outline.",
+      "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"SEARCH BRIEFS\" />",
+      "css": ".ds-input { background: var(--panel, #0b0e14); border: 1px solid var(--panel-edge, #1a2233); border-radius: 0.375rem; padding: 6px 10px; font-family: 'Geist Mono', monospace; font-size: 0.75rem; color: var(--foreground, #d8e4f0); } .ds-input::placeholder { color: var(--lcars-steel, #6688aa); letter-spacing: 0.1em; } .ds-input:focus-visible { outline: 2px solid var(--hud-cyan, #35e0ff); border-color: var(--lcars-steel, #6688aa); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Bridge Console",
+    "overview": "Tarik OS looks like a starship bridge station wired to one person's actual life. The screen is an instrument, not a document: near-black space, ice-blue monospace telemetry, and LCARS end-caps routing you to each subsystem. The room is dark and calm; the data is what glows. Nothing decorates — every color, glow, and pulse is a reading. The system is quiet by default and alive by exception. Static information sits flat in bordered panels; anything currently live earns the cyan HUD glow. Density is embraced; hierarchy comes from tracking-spaced micro-labels and channel color, never from size inflation.",
+    "keyCharacteristics": [
+      "Dark, flat, instrument-panel surfaces — depth from borders and tone, not shadows",
+      "LCARS one-sided pill caps as the navigation signature; black display type on colored caps",
+      "Monospace body voice throughout; wide-tracked uppercase micro-labels as wayfinding",
+      "Color is routing and status, never mood",
+      "Glow and pulse are reserved signals for live/waiting states; motion-reduce always respected"
+    ],
+    "rules": [
+      { "name": "The Channel Color Rule", "body": "Every surface owns an LCARS hue (amber HOME, lavender BRIEFS/MAIL, blue BRAIN, cyan TELOS/VIEW, salmon COMMS, steel CTRL). Color assignments route and identify; they never express mood, and new surfaces claim a channel color before shipping.", "section": "colors" },
+      { "name": "The Glow Means Live Rule", "body": "hud-glow (soft currentColor text-shadow) appears only on data that is live right now — an open session, streaming state, fresh telemetry. Glowing static text is a defect.", "section": "colors" },
+      { "name": "The Two Voices Rule", "body": "Antonio speaks only in caps, on caps and headings; Geist Mono says everything else. No third typeface enters the bridge.", "section": "typography" },
+      { "name": "The Flat-At-Rest Rule", "body": "Surfaces are flat, by doctrine. Depth is conveyed by tone and the 1px panel-edge border — never by resting shadows. Exactly one layer is allowed shadow: the overlay layer.", "section": "elevation" },
+      { "name": "The One-Sided Pill Rule", "body": "The LCARS end-cap — fully rounded on exactly one side — is the system's signature silhouette. Everything else is quiet geometry: 6px controls, 8px panels, full pills for chips.", "section": "shapes" }
+    ],
+    "dos": [
+      "Do give every new surface a channel color from the LCARS family and use it consistently in its nav cap, chips, and accents.",
+      "Do use the micro-label (10px uppercase, 0.3em tracking, steel) as the header voice for panels and sections.",
+      "Do keep all interactive elements on the focus-visible:outline-2 outline-cyan-hud treatment and pair every transition with motion-reduce.",
+      "Do hand-roll chips and status styling in Tailwind utilities per house style — shared logic goes in src/lib, not a component library.",
+      "Do render text on colored caps in black Antonio uppercase."
+    ],
+    "donts": [
+      "Don't add resting shadows, gradients-as-decoration, or glow on static content — flat at rest, glow means live.",
+      "Don't introduce a third typeface, humanist sans body text, or lowercase display type.",
+      "Don't use channel colors for mood or emphasis outside their surface (salmon is COMMS/destructive-hover, not a highlight color).",
+      "Don't ship borderless floating panels — every raised surface carries the 1px panel-edge border.",
+      "Don't bring in a component library for visual primitives; the system is hand-rolled Tailwind on the token set."
+    ]
+  }
+}

@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# design review scratch (screenshots, playwright output)
+/*-desktop-*.png
+/*-mobile-*.png
+/v[0-9]-*.png
+.playwright-mcp/

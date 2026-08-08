@@ -4,6 +4,7 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 // browsers); /api/browser/run is the server-to-server Stagehand runner,
 // gated by the same x-morpheus-secret check inside the route.
 const isPublicRoute = createRouteMatcher([
+  "/",
   "/sign-in(.*)",
   "/api/tools(.*)",
   "/api/browser/run",

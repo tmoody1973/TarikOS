@@ -129,6 +129,39 @@ body {
   padding: 0.4em 0.6em;
 }
 
+/* Landing transmission reveal (MOO-500): lines exist in the DOM at full
+ * content (SEO, no-JS, reduced-motion all see everything); JS arms a section
+ * before it scrolls in, the observer flips it live, and each line streams in
+ * with a brief hud-glow that settles flat — Glow Means Live, enacted. */
+.t-armed .t-line {
+  opacity: 0;
+}
+.t-live .t-line {
+  animation: t-line-in 0.36s ease-out forwards;
+  animation-delay: var(--d, 0ms);
+}
+@keyframes t-line-in {
+  0% {
+    opacity: 0;
+    text-shadow: 0 0 8px color-mix(in srgb, currentColor 60%, transparent);
+  }
+  60% {
+    opacity: 1;
+    text-shadow: 0 0 8px color-mix(in srgb, currentColor 60%, transparent);
+  }
+  100% {
+    opacity: 1;
+    text-shadow: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .t-armed .t-line,
+  .t-live .t-line {
+    opacity: 1;
+    animation: none;
+  }
+}
+
 @keyframes pulse-soft {
   0%,
   100% {

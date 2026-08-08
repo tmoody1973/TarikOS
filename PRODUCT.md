@@ -33,6 +33,7 @@ A voice-first personal OS where every capability is one webhook case away: add a
 - Scheduled rhythms: nightly memory consolidation, 3am journal→goal mining, morning brief, Sunday weekly review (Convex crons).
 - Gmail + Google Calendar via Composio (holds OAuth, multi-account). Claude does drafting/reasoning server-side. Voyage AI embeddings power semantic recall of past conversations.
 - Viewport: Zola can drive a hosted Browserbase session with a live view panel; sessions are always credential-free.
+- **Committed, not yet built** (MOO-497/498/499): Zola reachable beyond the browser — SMS and real phone calls via a Telnyx number (SIP into the same ElevenLabs agent; proactive texts/calls to the owner; outbound to others only behind a spoken-confirm ritual), backed by a contacts store synced one-way from Google Contacts and Apple/iCloud Contacts so "text Marcus" resolves to a real number.
 
 ## Capabilities and Constraints
 
@@ -43,7 +44,7 @@ A voice-first personal OS where every capability is one webhook case away: add a
   - The browser agent never touches credentials; login walls stop it and hand the human the wheel.
 - Stack: Next.js 16 (App Router), React 19, Tailwind CSS 4, Convex (state/realtime/crons/vector), Clerk (auth on every page and non-webhook route), ElevenLabs Agents, Anthropic SDK, Composio, Browserbase + Stagehand, TipTap (compose), three.js (HUD flourishes). Vercel + Convex Cloud hosting.
 - Terminology: "Zola" (assistant persona; formerly Morpheus — internal names like `MORPHEUS_TOOL_SECRET` persist in code), "telos" (long-term goals), "briefing cards", "Viewport" (browser panel), "tool" (agent webhook capability).
-- Undecided: no accessibility standard has been established; no analytics/telemetry commitment recorded.
+- **Zero analytics/telemetry, by design.** No usage tracking, no phone-home — a product fact, part of the trust story for a self-hosted personal OS. Future work must not add any without an explicit product decision.
 
 ## Brand Commitments
 
@@ -66,3 +67,7 @@ A voice-first personal OS where every capability is one webhook case away: add a
 3. **One pattern for every capability.** New powers follow the webhook-tool pattern end to end; no bespoke integrations that bypass the registry.
 4. **One person, fully served.** Depth for a single real life beats breadth for hypothetical users; multi-tenancy is a non-goal.
 5. **Readable enough to fork.** Every subsystem should teach the pattern it implements — the repo is documentation.
+
+## Accessibility & Inclusion
+
+WCAG 2.2 AA is the standard (decided 2026-08-08): keyboard operability, visible focus, and AA contrast across all dashboard surfaces — including within the LCARS/HUD aesthetic, which must meet the bar rather than exempt itself from it. Existing surfaces have not yet been audited against it.

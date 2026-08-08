@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Antonio, Geist_Mono } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { ConvexClientProvider } from "@/components/ConvexClientProvider";
 import { AppShell } from "@/components/AppShell";
 import "./globals.css";
@@ -21,7 +22,8 @@ export const metadata: Metadata = {
     "Zola — real-time personal AI. Chief of staff, second brain, thought partner.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const { isAuthenticated } = await auth();
   return (
     <ClerkProvider>
       <html
@@ -30,7 +32,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       >
         <body className="min-h-full flex flex-col">
           <ConvexClientProvider>
-            <AppShell>{children}</AppShell>
+            <AppShell signedIn={isAuthenticated}>{children}</AppShell>
           </ConvexClientProvider>
         </body>
       </html>
