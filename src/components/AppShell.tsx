@@ -5,6 +5,7 @@ import { Authenticated } from "convex/react";
 import { ConversationProvider } from "@elevenlabs/react";
 import { NavRail } from "./NavRail";
 import { VoiceDock } from "./VoiceDock";
+import { ViewportPanel } from "./ViewportPanel";
 
 // App chrome (MOO-483): nav rail + persistent voice dock around every page.
 // The dock lives here — not in a page — so the WebRTC session survives
@@ -19,6 +20,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <main className="flex min-w-0 flex-1 flex-col">{children}</main>
       </div>
       <Authenticated>
+        <ViewportPanel />
         <ConversationProvider>
           <VoiceDock />
         </ConversationProvider>

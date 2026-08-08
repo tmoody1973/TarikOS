@@ -16,7 +16,7 @@ import { seedSettingIfAbsent, upsertSetting } from "./settingsLib";
 // these internal functions; the public ones serve the Briefs page and the
 // get_brief voice tool.
 
-const sectionValidator = v.object({
+export const sectionValidator = v.object({
   heading: v.string(),
   body: v.string(),
   tool: v.string(),

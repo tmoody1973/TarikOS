@@ -20,6 +20,7 @@ import { runConsolidation } from "@/lib/consolidate";
 import { createDraft, resolveReplyTarget } from "@/lib/mail";
 import { draftEmailBody } from "@/lib/zolaDraft";
 import { discoverFeed } from "@/lib/feedDiscovery";
+import { createBrowserSession, endBrowserSession } from "@/lib/browserSession";
 import { safeSlice } from "../../../../../convex/workflowLib";
 import {
   TELOS_KINDS,
@@ -111,7 +112,7 @@ export async function POST(
         { status: 200 },
       );
     }
-    const result = await runTool(tool, body, secret);
+    const result = await runTool(tool, body, secret, req.nextUrl.origin);
     return NextResponse.json(result, { status: result.ok ? 200 : 400 });
   } catch (error) {
     if (error instanceof GoogleAuthError) {
@@ -142,6 +143,7 @@ async function runTool(
   tool: string,
   body: Record<string, unknown>,
   secret: string,
+  origin: string,
 ): Promise<ToolResult> {
   switch (tool) {
     case "capture_thought": {
@@ -390,6 +392,69 @@ async function runTool(
             ? "No results found for that."
             : `${results.length} sources found; they're on the dashboard.`,
         data: { results },
+      };
+    }
+    // Viewport (MOO-485): Zola drives a real browser; findings become a
+    // brief. The runner is fired-and-forgotten so the voice reply is instant.
+    case "browse": {
+      const task = strArg(body.task, 600);
+      if (!task) {
+        return { ok: false, message: "What should I go look into?" };
+      }
+      const session = await createBrowserSession();
+      try {
+        // startSession's insert is the atomic one-at-a-time guard.
+        await convex.mutation(api.browserSessions.startSession, {
+          secret,
+          sessionId: session.sessionId,
+          status: "running",
+          task,
+          liveViewUrl: session.liveViewUrl,
+          replayUrl: session.replayUrl,
+        });
+      } catch {
+        await endBrowserSession(session.sessionId).catch(() => {});
+        return {
+          ok: false,
+          message:
+            "The viewport already has a session open — end it first, or take a look at what's running.",
+        };
+      }
+      try {
+        const fired = await fetch(new URL("/api/browser/run", origin), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-morpheus-secret": secret,
+          },
+          body: JSON.stringify({ sessionId: session.sessionId, task }),
+        });
+        if (!fired.ok) throw new Error(`runner refused: ${fired.status}`);
+      } catch (error) {
+        await convex.mutation(api.browserSessions.updateSession, {
+          secret,
+          sessionId: session.sessionId,
+          status: "error",
+          error: error instanceof Error ? error.message : String(error),
+        });
+        await endBrowserSession(session.sessionId).catch(() => {});
+        return {
+          ok: false,
+          message:
+            "The browser runner wouldn't start — tell Tarik to check the control panel.",
+        };
+      }
+      void convex
+        .mutation(api.secondBrain.markToolHealthyFromTool, {
+          secret,
+          name: "browse",
+        })
+        .catch(() => {});
+      return {
+        ok: true,
+        message:
+          "On it — watch the viewport. I'll write up what I find as a brief.",
+        data: { sessionId: session.sessionId },
       };
     }
     // Feed manager by voice (MOO-486): mutates the briefFeeds setting the

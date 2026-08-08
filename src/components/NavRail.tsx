@@ -26,6 +26,25 @@ export function NavRail() {
           OS
         </span>
       </div>
+      {/* Viewport (MOO-485): opens a blank Browserbase session; the panel
+          slides in via its live query once the row lands. */}
+      <button
+        onClick={async () => {
+          try {
+            const res = await fetch("/api/browser/start", { method: "POST" });
+            const json = await res.json();
+            // Busy case: the reopen tab on the right edge is the way back in.
+            if (!json.ok) console.warn("viewport:", json.error);
+          } catch {
+            console.warn("viewport: start request failed");
+          }
+        }}
+        className="lcars-cap-left flex h-12 items-center justify-end bg-cyan-hud p-3 opacity-50 transition hover:opacity-80"
+      >
+        <span className="font-[family-name:var(--font-display)] text-sm text-black">
+          VIEW
+        </span>
+      </button>
       {LINKS.map((l) => {
         const active =
           l.href === "/" ? pathname === "/" : pathname.startsWith(l.href);

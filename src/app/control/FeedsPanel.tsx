@@ -4,17 +4,10 @@ import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Zone, ZoneEmpty } from "@/components/hud/Zone";
+import { hostLabel } from "@/lib/hostLabel";
 
 // Feed manager panel (MOO-486): CRUD over the briefFeeds setting. Adds go
 // through /api/feeds/discover so only validated feeds ever get saved.
-
-function feedName(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return url;
-  }
-}
 
 export function FeedsPanel() {
   const data = useQuery(api.feeds.feedGroups);
@@ -161,7 +154,7 @@ export function FeedsPanel() {
                         }`}
                       />
                       <span className="text-xs text-foreground/80" title={url}>
-                        {feedName(url)}
+                        {hostLabel(url)}
                       </span>
                       {moving === url ? (
                         <select

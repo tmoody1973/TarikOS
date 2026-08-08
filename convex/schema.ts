@@ -1,6 +1,16 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+// One declaration of the Viewport status union — table, mutations, and the
+// panel's active test all derive from it.
+export const browserSessionStatus = v.union(
+  v.literal("idle"),
+  v.literal("running"),
+  v.literal("needs_takeover"),
+  v.literal("done"),
+  v.literal("error"),
+);
+
 export default defineSchema({
   memories: defineTable({
     content: v.string(),
@@ -166,4 +176,17 @@ export default defineSchema({
     draftId: v.string(),
     account: v.string(),
   }).index("by_draftId", ["draftId"]),
+
+  // Viewport (MOO-485): one row per Browserbase session; the panel is a live
+  // query on the latest row. One session at a time by policy.
+  browserSessions: defineTable({
+    sessionId: v.string(),
+    status: browserSessionStatus,
+    task: v.optional(v.string()),
+    liveViewUrl: v.string(),
+    replayUrl: v.string(),
+    briefId: v.optional(v.id("briefs")),
+    error: v.optional(v.string()),
+    updatedAt: v.number(),
+  }).index("by_sessionId", ["sessionId"]),
 });
