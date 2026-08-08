@@ -43,7 +43,14 @@ export function safeSetAttrs(
   }
 }
 
-export function safeEndSpan(span: Span | undefined, error?: unknown): void {
+// endTimeMs is used when replaying historical spans (the ElevenLabs post-call
+// webhook arrives after the conversation is over, so wall-clock end times would
+// collapse every turn to the moment the webhook landed).
+export function safeEndSpan(
+  span: Span | undefined,
+  error?: unknown,
+  endTimeMs?: number,
+): void {
   if (!span) return;
   if (error !== undefined) {
     try {
@@ -54,7 +61,7 @@ export function safeEndSpan(span: Span | undefined, error?: unknown): void {
     }
   }
   try {
-    span.end();
+    span.end(endTimeMs);
   } catch (endError) {
     console.error("[tracing] span.end failed:", endError);
   }
