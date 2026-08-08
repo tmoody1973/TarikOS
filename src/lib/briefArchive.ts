@@ -33,6 +33,14 @@ export function briefKind(workflowName: string): BriefKind {
   );
 }
 
+// The filterable editorial kinds, in rail-chip order.
+export const EDITORIAL_KINDS: BriefKind[] = [
+  KINDS["morning-brief"],
+  KINDS["research-brief"],
+  KINDS["weekly-review"],
+  KINDS["browse"],
+];
+
 // Tarik's rule: consolidation runs and errored runs are operational logs,
 // not editions of the paper. This predicate is the ONE owner of that rule.
 export function isSystemBrief(

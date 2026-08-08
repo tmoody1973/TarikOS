@@ -8,6 +8,7 @@ import {
   chicagoDayKey,
   rankBriefs,
   BRIEF_STATUS_DOT,
+  EDITORIAL_KINDS,
   type BriefSummary,
 } from "@/lib/briefArchive";
 
@@ -120,13 +121,16 @@ function MonthGrid({
           const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
           const has = briefDays.has(key);
           const isToday = key === todayKey;
+          // Today is always clickable even before its first edition lands
+          // (4am gap: consolidation is SYSTEM, morning brief comes at 7).
+          const clickable = has || isToday;
           return (
             <button
               key={key}
-              onClick={() => has && onJump(key)}
-              disabled={!has}
+              onClick={() => clickable && onJump(key)}
+              disabled={!clickable}
               className={`relative rounded py-0.5 text-[10px] transition focus-visible:outline-2 focus-visible:outline-cyan-hud ${
-                has
+                clickable
                   ? "text-foreground hover:bg-lavender/15"
                   : "text-steel/50"
               } ${isToday ? "border border-cyan-hud/50" : ""}`}
@@ -153,14 +157,22 @@ export function ArchiveRail({
   onSelect: (id: string) => void;
 }) {
   const [query, setQuery] = useState("");
+  const [kindFilter, setKindFilter] = useState<string>("all");
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [systemOpen, setSystemOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { editorial, system } = useMemo(() => splitBriefs(briefs), [briefs]);
+  const filtered = useMemo(
+    () =>
+      kindFilter === "all"
+        ? editorial
+        : editorial.filter((b) => briefKind(b.workflowName).key === kindFilter),
+    [editorial, kindFilter],
+  );
   const groups = useMemo(
-    () => groupBriefsByDay(editorial, Date.now()),
-    [editorial],
+    () => groupBriefsByDay(filtered, Date.now()),
+    [filtered],
   );
   const briefDays = useMemo(
     () => new Set(groups.map((g) => g.key)),
@@ -168,17 +180,26 @@ export function ArchiveRail({
   );
 
   const searching = query.trim().length > 0;
-  const results = useMemo(
-    () => (searching ? rankBriefs(briefs, query, 20) : []),
-    [briefs, query, searching],
-  );
+  const results = useMemo(() => {
+    if (!searching) return [];
+    const pool =
+      kindFilter === "all"
+        ? briefs
+        : briefs.filter((b) => briefKind(b.workflowName).key === kindFilter);
+    return rankBriefs(pool, query, 20);
+  }, [briefs, query, searching, kindFilter]);
 
   function jumpToDay(dayKey: string) {
     setCalendarOpen(false);
     setQuery("");
-    scrollRef.current
-      ?.querySelector(`[data-day="${dayKey}"]`)
-      ?.scrollIntoView({ block: "start", behavior: "smooth" });
+    const target = scrollRef.current?.querySelector(`[data-day="${dayKey}"]`);
+    if (target) {
+      target.scrollIntoView({ block: "start", behavior: "smooth" });
+    } else {
+      // No group for that day yet (today before the first edition) — the
+      // newest content is at the top.
+      scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    }
   }
 
   return (
@@ -195,15 +216,34 @@ export function ArchiveRail({
         <button
           onClick={() => setCalendarOpen((v) => !v)}
           aria-expanded={calendarOpen}
-          aria-label="Jump to date"
-          className={`rounded-md border px-2 py-1.5 text-xs transition focus-visible:outline-2 focus-visible:outline-cyan-hud ${
+          className={`flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[10px] uppercase tracking-[0.15em] transition focus-visible:outline-2 focus-visible:outline-cyan-hud ${
             calendarOpen
               ? "border-cyan-hud/60 bg-cyan-hud/10 text-foreground"
-              : "border-panel-edge text-steel hover:border-cyan-hud/40"
+              : "border-panel-edge text-steel hover:border-cyan-hud/40 hover:text-foreground/80"
           }`}
         >
-          ▦
+          <span aria-hidden>▦</span> DATE
         </button>
+      </div>
+
+      {/* Kind filter */}
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by kind">
+        {[{ key: "all", label: "ALL", symbol: "" }, ...EDITORIAL_KINDS].map(
+          (k) => (
+            <button
+              key={k.key}
+              onClick={() => setKindFilter(k.key)}
+              aria-pressed={kindFilter === k.key}
+              className={`rounded-full border px-2.5 py-0.5 text-[10px] uppercase tracking-wider transition focus-visible:outline-2 focus-visible:outline-cyan-hud ${
+                kindFilter === k.key
+                  ? "border-lavender/70 bg-lavender/15 text-foreground"
+                  : "border-panel-edge text-steel hover:border-lavender/40 hover:text-foreground/80"
+              }`}
+            >
+              {k.symbol ? `${k.symbol} ${k.label}` : k.label}
+            </button>
+          ),
+        )}
       </div>
 
       {calendarOpen && <MonthGrid briefDays={briefDays} onJump={jumpToDay} />}
