@@ -9,6 +9,7 @@ import { Zone, ZoneEmpty } from "@/components/hud/Zone";
 import { TodayPanel, InboxPanel } from "@/components/DayPanels";
 import { ReaderPane } from "@/components/ReaderPane";
 import { splitLinks, firstLink } from "@/lib/linkify";
+import { hostLabel } from "@/lib/hostLabel";
 
 // Home (MOO-483): command center + summary cards. Zones summarize; pages
 // hold the detail; the voice dock (AppShell) is the conversation surface.
@@ -80,10 +81,10 @@ function HomeInner() {
                   : c.kind === "email"
                     ? ("inbox" as const)
                     : null;
-              // Research/note cards carry their source URL in the body text
-              // (no url column on briefingCards), so the card opens the reader
-              // when one is there — same panel /briefs uses.
-              const source = opens ? null : firstLink(c.body);
+              // Cards written since the url field exists carry it structured;
+              // older ones kept it inside the body prose, so fall back to
+              // finding it there. Either way the card opens the reader.
+              const source = opens ? null : (c.url ?? firstLink(c.body));
               const action = opens
                 ? () => setPanel(opens)
                 : source
@@ -119,6 +120,11 @@ function HomeInner() {
                     <div className="mt-1 font-[family-name:var(--font-display)] text-lg text-foreground">
                       {c.title}
                     </div>
+                    {c.url && (
+                      <div className="mt-1 text-[10px] uppercase tracking-[0.2em] text-lavender/70">
+                        {hostLabel(c.url)} · read
+                      </div>
+                    )}
                     <p className="mt-1 text-sm text-foreground/70">
                       {splitLinks(c.body).map((part, i) =>
                         part.type === "link" ? (

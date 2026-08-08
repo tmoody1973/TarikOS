@@ -79,6 +79,10 @@ export default defineSchema({
     ),
     title: v.string(),
     body: v.string(),
+    // Source article, when the card has one. Optional because cards written
+    // before this field kept the URL inside `body`; the dashboard falls back
+    // to finding it there (src/lib/linkify.ts) so old cards still open.
+    url: v.optional(v.string()),
   }),
 
   workflows: defineTable({

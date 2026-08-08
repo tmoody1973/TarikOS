@@ -169,6 +169,7 @@ export const pushBriefingCards = mutation({
         ),
         title: v.string(),
         body: v.string(),
+        url: v.optional(v.string()),
       }),
     ),
   },

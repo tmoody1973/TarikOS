@@ -383,7 +383,8 @@ async function runTool(
         cards: results.slice(0, 4).map((r) => ({
           kind: "research" as const,
           title: r.title,
-          body: `${r.snippet}${r.url ? ` — ${r.url}` : ""}`,
+          body: r.snippet,
+          url: r.url || undefined,
         })),
       });
       return {
@@ -547,7 +548,8 @@ async function runTool(
           cards: results.slice(0, 4).map((r) => ({
             kind: "research" as const,
             title: r.title,
-            body: `${r.snippet}${r.url ? ` — ${r.url}` : ""}`,
+            body: r.snippet,
+            url: r.url || undefined,
           })),
         }),
       ]);
