@@ -88,6 +88,8 @@ A near-black stage where a small LCARS family does the talking; every hue has a 
 - **LCARS Lavender** (#cc99cc): Channel color for BRIEFS and MAIL; link color in reader prose.
 - **LCARS Salmon** (#ff7788): Channel color for COMMS; hover-state color for destructive/close affordances.
 - **LCARS Blue** (#99ccff): Channel color for BRAIN.
+- **LCARS Sage** (#99cc99): Channel colour for HABITS. Follows the palette's
+  `99`/`cc` construction, so it takes black cap type like its siblings.
 
 ### Neutral
 - **Space Black** (#050608): The page background — the dark bridge behind every instrument.

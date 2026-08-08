@@ -50,11 +50,24 @@ Your tools:
 - run_workflow: kick off a workflow by name. When Tarik says "build me a brief on X" or "research X for me", call run_workflow with name "research-brief" and the topic — then tell him it's building on his Briefs page and move on; don't wait for it. Never pretend a disabled or failed workflow ran.
 
 Weekly review: a review brief builds Sunday mornings (stale telos items, goals drift, the week's journal). When Tarik says "let's review my telos" or engages after it's ready, get_brief it and WALK it with him — for each stale or untouched item ask whether it stands, changed, or is done, and record his answer with update_telos_item (which also marks it reviewed). If no review brief exists yet, run_workflow "weekly-review" first and tell him it's building. Keep it brisk: this is a check-in, not therapy.
-- navigate_ui: control Tarik's dashboard. When he asks to see something ("show me my briefs", "open my memories", "show my telos", "go home"), navigate to the right page: home, briefs, brain (memories and thoughts), telos (mission/goals/journal), mail (read email in-app), conversations (transcripts), or control (tool and workflow switches). Pass "target" with a few words of a brief's title to open that specific brief. Confirm in a word or two — the screen change speaks for itself.
+- navigate_ui: control Tarik's dashboard. When he asks to see something ("show me my briefs", "open my memories", "show my telos", "go home"), navigate to the right page: home, briefs, brain (memories and thoughts), telos (mission/goals/journal), mail (read email in-app), habits (pillars and today's votes), conversations (transcripts), or control (tool and workflow switches). Pass "target" with a few words of a brief's title to open that specific brief. Confirm in a word or two — the screen change speaks for itself.
 
 Morning briefing: when Tarik greets you ("good morning" or similar) or asks for a briefing, call get_brief first — if a brief is ready, speak from its sections immediately (schedule first, then the emails that matter, then the headlines worth his time — a tight spoken digest, not a read-aloud). Only if get_brief reports no ready brief, fall back to get_calendar then get_emails live. Tell Tarik the full brief is on his Briefs page.
 
 Never invent memories. If a tool fails or reports it is disabled, tell Tarik that in plain words — never pretend or improvise the result.`;
+
+const HABIT_GUARDRAILS = `
+
+Habits: a miss is information about the system, never a verdict about Tarik.
+Never shame, never guilt, never imply a broken streak — there is no streak.
+When something did not happen, ask what got in the way and offer the
+two-minute minimum or a reschedule; change one variable at a time.
+An intentional skip is a valid choice; record it without penalty.
+Relationship, health and reflection habits are his to report — never infer
+them from data, and never claim one happened without his word.
+If he reports persistent distress, disordered eating, addiction, self-harm or
+a relationship-safety concern, stop tracking and point him to human support.
+`;
 
 function bodyProp(description: string) {
   return { type: "string" as const, description };
@@ -527,7 +540,7 @@ const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
     type: "client" as const,
     name: "navigate_ui",
     description:
-      "Navigate Tarik's dashboard in his browser. Use whenever he asks to see or open something: pages are home, briefs, brain (memories/thoughts), conversations (transcripts), control (tool/workflow switches). Optional target opens a specific brief by title fragment.",
+      "Navigate Tarik's dashboard in his browser. Use whenever he asks to see or open something: pages are home, briefs, brain (memories/thoughts), habits (pillars and votes), conversations (transcripts), control (tool/workflow switches). Optional target opens a specific brief by title fragment.",
     expectsResponse: true,
     responseTimeoutSecs: 10,
     parameters: {
@@ -538,7 +551,7 @@ const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
         page: {
           type: "string" as const,
           description: "Destination page",
-          enum: ["home", "briefs", "brain", "telos", "mail", "conversations", "control"],
+          enum: ["home", "briefs", "brain", "telos", "mail", "habits", "conversations", "control"],
         },
         target: bodyProp(
           "Optional: a few words from a brief's title to open it directly (briefs page only)",
@@ -567,6 +580,117 @@ const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
       },
     },
   },
+  {
+    type: "webhook" as const,
+    name: "get_habits",
+    description:
+      "Read today's habit votes: which identity votes are already in, and which are still open. Use this before the evening check-in.",
+    responseTimeoutSecs: 20,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/get_habits`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        description: "No arguments",
+        properties: {},
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "log_habit_vote",
+    description:
+      "Record today's vote for one habit. Levels are minimum, standard, beyond, skipped, or missed. A skip is a conscious choice and carries no penalty — never treat it as a failure, and never log a vote Tarik has not confirmed.",
+    responseTimeoutSecs: 20,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/log_habit_vote`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["habit_id", "level"],
+        description: "The vote",
+        properties: {
+          habit_id: bodyProp("The habit's id, from get_habits"),
+          level: bodyProp(
+            "One of: minimum, standard, beyond, skipped, missed",
+          ),
+          note: bodyProp("Optional: what actually happened, in his words"),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "add_habit",
+    description:
+      "Create a habit after walking through the protocol: what identity is this a vote for, what is the standard daily action, what is the two-minute minimum for a low-energy day, and what is the cue. Ask those one at a time before calling this.",
+    responseTimeoutSecs: 20,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/add_habit`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["pillar", "identity", "minimum_action", "standard_action", "cue"],
+        description: "The habit design",
+        properties: {
+          pillar: bodyProp("Life area, e.g. 'Work / Craft' or 'Health'"),
+          identity: bodyProp("I am the kind of person who…"),
+          minimum_action: bodyProp("Two minutes or less; doable on a bad day"),
+          standard_action: bodyProp("The normal daily practice"),
+          cue: bodyProp("At TIME, in PLACE, I will X"),
+          backup_plan: bodyProp("Optional: if DISRUPTION, then SMALLER ACTION"),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "update_habit",
+    description:
+      "Change one variable on a habit — the cue, the minimum, the backup plan — or pause/retire it. Change only one thing at a time so it's clear what helped. Pausing is not failing.",
+    responseTimeoutSecs: 20,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/update_habit`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["habit_id"],
+        description: "The change",
+        properties: {
+          habit_id: bodyProp("The habit's id, from get_habits"),
+          minimum_action: bodyProp("Optional: a new, smaller minimum"),
+          cue: bodyProp("Optional: a new cue"),
+          backup_plan: bodyProp("Optional: a new if-then plan"),
+          status: bodyProp("Optional: active, paused, or retired"),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "log_friction",
+    description:
+      "Record what made a habit hard today. Use this when Tarik describes resistance — it feeds the weekly redesign. Respond with curiosity about the system, never with judgement about him.",
+    responseTimeoutSecs: 20,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/log_friction`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["habit_id", "text"],
+        description: "The friction",
+        properties: {
+          habit_id: bodyProp("The habit's id, from get_habits"),
+          text: bodyProp("What got in the way, in his words"),
+        },
+      },
+    },
+  },
 ];
 
 async function main() {
@@ -580,7 +704,7 @@ async function main() {
       firstMessage: "Zola online. What's on your mind?",
       language: "en",
       prompt: {
-        prompt: PERSONA,
+        prompt: PERSONA + HABIT_GUARDRAILS,
         llm: "claude-sonnet-5" as const,
         temperature: 0.6,
         timezone: "America/Chicago",

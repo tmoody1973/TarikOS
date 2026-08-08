@@ -32,6 +32,7 @@ const TOOL_LABELS: Record<string, string> = {
   get_calendar: "Calendar",
   get_emails: "Inbox",
   telos_brief: "Goals",
+  habit_review: "Habits",
   journal_digest: "This Week's Journal",
 };
 

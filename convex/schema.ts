@@ -1,5 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { VOTE_LEVELS, EVIDENCE_MODES, HABIT_STATUSES } from "./habitsLib.ts";
 
 // One declaration of the Viewport status union — table, mutations, and the
 // panel's active test all derive from it.
@@ -193,4 +194,66 @@ export default defineSchema({
     error: v.optional(v.string()),
     updatedAt: v.number(),
   }).index("by_sessionId", ["sessionId"]),
+
+  habitCycles: defineTable({
+    startsAt: v.number(),
+    endsAt: v.number(),
+    status: v.union(v.literal("active"), v.literal("closed")),
+    note: v.optional(v.string()),
+  }),
+
+  habits: defineTable({
+    cycleId: v.id("habitCycles"),
+    pillar: v.string(),
+    identity: v.string(),
+    telosItemId: v.optional(v.id("telosItems")),
+    minimumAction: v.string(),
+    standardAction: v.string(),
+    growthAction: v.optional(v.string()),
+    cue: v.string(),
+    habitStack: v.optional(v.string()),
+    backupPlan: v.optional(v.string()),
+    obvious: v.optional(v.string()),
+    attractive: v.optional(v.string()),
+    easy: v.optional(v.string()),
+    satisfying: v.optional(v.string()),
+    // Optional so existing rows and terse creates default to self_report,
+    // which is the private setting.
+    evidenceMode: v.optional(
+      v.union(...EVIDENCE_MODES.map((m) => v.literal(m))),
+    ),
+    status: v.union(...HABIT_STATUSES.map((s) => v.literal(s))),
+    order: v.number(),
+  }).index("by_cycle", ["cycleId"]),
+
+  habitVotes: defineTable({
+    habitId: v.id("habits"),
+    date: v.string(),
+    level: v.union(...VOTE_LEVELS.map((l) => v.literal(l))),
+    note: v.optional(v.string()),
+    source: v.union(
+      v.literal("voice"),
+      v.literal("ui"),
+      v.literal("suggestion_accepted"),
+    ),
+  }).index("by_habit_date", ["habitId", "date"]),
+
+  habitSuggestions: defineTable({
+    habitId: v.id("habits"),
+    date: v.string(),
+    reason: v.string(),
+    source: v.literal("calendar"),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("accepted"),
+      v.literal("dismissed"),
+    ),
+  }).index("by_habit_date", ["habitId", "date"]),
+
+  habitFriction: defineTable({
+    habitId: v.id("habits"),
+    date: v.string(),
+    text: v.string(),
+    variableChanged: v.optional(v.string()),
+  }).index("by_habit", ["habitId"]),
 });

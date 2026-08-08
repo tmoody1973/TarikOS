@@ -301,6 +301,7 @@ const MORNING_BRIEF_STEPS: { tool: string; args: Record<string, string> }[] = [
 
 const WEEKLY_REVIEW_STEPS: { tool: string; args: Record<string, string> }[] = [
   { tool: "telos_brief", args: {} },
+  { tool: "habit_review", args: {} },
   { tool: "journal_digest", args: {} },
 ];
 

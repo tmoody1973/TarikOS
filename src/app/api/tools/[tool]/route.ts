@@ -31,6 +31,7 @@ import {
   type TelosKind,
   type TelosStatus,
 } from "../../../../../convex/telosLib";
+import { buildHabitReview } from "../../../../../convex/habitsLib";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
 // Webhook endpoint for Zola's ElevenLabs server tools. Authenticated by
@@ -655,6 +656,31 @@ async function runTool(
       const body = buildGoalsSection(items, Date.now());
       return { ok: true, message: "Goals section built.", data: { body } };
     }
+    case "habit_review": {
+      const [habits] = await Promise.all([
+        convex.query(api.habits.list, { secret }),
+        convex.mutation(api.secondBrain.markToolHealthyFromTool, {
+          secret,
+          name: "habit_review",
+        }),
+      ]);
+      const weeks = await Promise.all(
+        habits.map(async (h) => {
+          const traj = await convex.query(api.habits.trajectory, {
+            habitId: h._id,
+            days: 7,
+            secret,
+          });
+          const friction = await convex.query(api.habits.weekFriction, {
+            habitId: h._id,
+            secret,
+          });
+          return { pillar: h.pillar, days: traj.series, friction };
+        }),
+      );
+      const body = buildHabitReview(weeks);
+      return { ok: true, message: "Habits section built.", data: { body } };
+    }
     case "journal_digest": {
       const [entries] = await Promise.all([
         convex.query(api.journal.weekEntries, { secret }),
@@ -824,6 +850,120 @@ async function runTool(
       return {
         ok: true,
         message: `Updated: ${res.item.text} (${res.item.status}).`,
+      };
+    }
+    case "get_habits": {
+      const [rows] = await Promise.all([
+        convex.query(api.habits.today, { secret }),
+        convex.mutation(api.secondBrain.markToolHealthyFromTool, {
+          secret,
+          name: "get_habits",
+        }),
+      ]);
+      if (rows.length === 0) {
+        return {
+          ok: true,
+          message: "You don't have any active habits yet. Want to set one up?",
+        };
+      }
+      const done = rows.filter((r) => r.level);
+      const open = rows.filter((r) => !r.level);
+      const openList = open.map((r) => r.pillar).join(", ");
+      return {
+        ok: true,
+        message:
+          open.length === 0
+            ? `All ${rows.length} votes are in for today.`
+            : `${done.length} of ${rows.length} votes are in. Still open: ${openList}.`,
+        data: rows,
+      };
+    }
+    case "log_habit_vote": {
+      const habitId = strArg(body.habit_id, 64);
+      const level = strArg(body.level, 20);
+      if (!habitId || !level) {
+        return { ok: false, message: "Which habit, and at what level?" };
+      }
+      const voted = await convex.mutation(api.habits.logVote, {
+        secret,
+        habitId: habitId as Id<"habits">,
+        level: level as "minimum" | "standard" | "beyond" | "skipped" | "missed",
+        note: strArg(body.note, 400) || undefined,
+        source: "voice",
+      });
+      return { ok: true, message: `Logged as ${voted.level}.` };
+    }
+    case "add_habit": {
+      const pillar = strArg(body.pillar, 80);
+      const identity = strArg(body.identity, 200);
+      const minimumAction = strArg(body.minimum_action, 200);
+      const standardAction = strArg(body.standard_action, 200);
+      const cue = strArg(body.cue, 200);
+      if (!pillar || !identity || !minimumAction || !standardAction || !cue) {
+        return {
+          ok: false,
+          message:
+            "I need the pillar, identity, minimum action, standard action, and cue to set this up.",
+        };
+      }
+      const res = await convex.mutation(api.habits.upsertHabit, {
+        secret,
+        pillar,
+        identity,
+        minimumAction,
+        standardAction,
+        cue,
+        backupPlan: strArg(body.backup_plan, 200) || undefined,
+      });
+      return {
+        ok: true,
+        message: "Added. That's the system — the vote is what counts.",
+        data: res,
+      };
+    }
+    case "update_habit": {
+      const habitId = strArg(body.habit_id, 64);
+      if (!habitId) return { ok: false, message: "Which habit?" };
+      const minimumAction = strArg(body.minimum_action, 200) || undefined;
+      const cue = strArg(body.cue, 200) || undefined;
+      const backupPlan = strArg(body.backup_plan, 200) || undefined;
+      const status =
+        (strArg(body.status, 20) as "active" | "paused" | "retired") ||
+        undefined;
+      await convex.mutation(api.habits.upsertHabit, {
+        secret,
+        habitId: habitId as Id<"habits">,
+        minimumAction,
+        cue,
+        backupPlan,
+        status,
+      });
+      const changed = [
+        minimumAction && `minimum action to "${minimumAction}"`,
+        cue && `cue to "${cue}"`,
+        backupPlan && `backup plan to "${backupPlan}"`,
+        status && `status to ${status}`,
+      ].filter(Boolean);
+      return {
+        ok: true,
+        message:
+          changed.length > 0 ? `Updated: ${changed.join(", ")}.` : "Updated.",
+      };
+    }
+    case "log_friction": {
+      const habitId = strArg(body.habit_id, 64);
+      const text = strArg(body.text, 400);
+      if (!habitId || !text) {
+        return { ok: false, message: "Which habit, and what got in the way?" };
+      }
+      await convex.mutation(api.habits.logFriction, {
+        secret,
+        habitId: habitId as Id<"habits">,
+        text,
+      });
+      return {
+        ok: true,
+        message: "Noted. We'll change one thing at the weekly review.",
       };
     }
     default:
