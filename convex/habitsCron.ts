@@ -3,8 +3,8 @@ import { chicagoToday } from "./workflowLib.ts";
 
 /* Evening check-in (MOO-505). Composes a card that waits on the dashboard,
  * exactly as the morning brief does. There is no push channel yet, and that
- * is deliberate — this cannot nag, by construction. When MOO-497 lands, a
- * push channel can read the same card. */
+ * is deliberate — this cannot nag, by construction. When MOO-497 lands, an
+ * SMS nudge can read the same card. */
 export const eveningCheckIn = internalMutation({
   args: {},
   handler: async (ctx) => {

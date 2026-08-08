@@ -86,13 +86,15 @@ test("every habit tool exists in both the route and the provisioning script", ()
   }
 });
 
-test("the evening check-in cannot nag — it composes a card and stops", () => {
+test("the evening check-in cannot nag — it has no way to reach outside Convex", () => {
   const cron = readFileSync(
     new URL("../convex/habitsCron.ts", import.meta.url),
     "utf8",
   );
-  // No push channel exists yet (MOO-497); the check-in must wait like the
-  // morning brief rather than reaching out.
-  assert.ok(!/sms|twilio|telnyx|notify/i.test(cron));
+  // internalMutation can't fetch(). The only way to eventually push is to
+  // schedule or call another function — ban those call shapes, not words,
+  // so a comment describing the design doesn't trip the guard.
+  assert.ok(!/ctx\.scheduler|ctx\.runAction|ctx\.runMutation|fetch\(/.test(cron));
+  assert.match(cron, /internalMutation/);
   assert.match(cron, /insert\("briefingCards"/);
 });
