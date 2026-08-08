@@ -13,10 +13,11 @@ This is a single-user system built for one person's real life, published as a wo
 5. **Some things run on a clock.** Convex cron jobs run scheduled workflows: a nightly pass that consolidates the day's conversations into long-term memory, a 3am pass that mines journal entries for goal signals, a morning brief, and a Sunday weekly review.
 6. **She remembers.** Conversations are stored in Convex, embedded with [Voyage AI](https://www.voyageai.com), and recalled semantically — so "what did I say about that station project last week?" works.
 
-Two guardrails are structural, not polite requests:
+Three guardrails are structural, not polite requests:
 
-- **Zola can draft email; only a human can send it.** The send endpoint exists solely behind the browser UI's Send button. The agent's tool surface has no send path.
+- **Zola can draft email; only a human can send it.** The send endpoint exists solely behind the browser UI's Send button. The agent's tool surface has no send path — a test fails the suite if one ever appears.
 - **Calendar writes confirm before they commit.** Event creation and edits go through a confirm ritual in conversation.
+- **The browser agent never touches credentials.** Zola can drive a real browser (see Viewport below), but sessions are always bare — no stored logins exist — and login walls stop the agent and hand you the wheel. Also enforced by tests.
 
 ## Tech stack
 
@@ -30,6 +31,7 @@ Two guardrails are structural, not polite requests:
 | Google access | Composio (holds Gmail + Calendar OAuth, multi-account) |
 | Semantic memory | Voyage AI embeddings + Convex vector search |
 | Rich text | TipTap (mail compose) |
+| Browser automation | Browserbase (hosted sessions, interactive live view) + Stagehand (AI agent loop) |
 | Email safety | linkedom server-side sanitizer + sandboxed iframes |
 | 3D / HUD flourishes | three.js via react-three-fiber |
 | Hosting | Vercel (app) + Convex Cloud (backend) |
@@ -55,6 +57,7 @@ Two guardrails are structural, not polite requests:
               Calendar) │          │  vector memory)
                         ▼          ▼
                    Google APIs   Claude · Voyage
+                                 Browserbase + Stagehand (Viewport browser)
 ```
 
 The repeatable pattern, documented in [AGENTS.md](AGENTS.md): every new capability is (1) a `case` in `src/app/api/tools/[tool]/route.ts`, (2) a tool definition in `scripts/provision-agent.ts`, (3) nothing else — tools self-register in Convex on first use and appear in the dashboard control panel with health status and an enable/disable toggle.
@@ -79,7 +82,7 @@ You are standing up your own instance wired to your own accounts. Nothing here t
 ### Prerequisites
 
 - Node.js 22+ and npm
-- Accounts: [Convex](https://convex.dev), [Clerk](https://clerk.com), [ElevenLabs](https://elevenlabs.io) (Agents access), [Composio](https://composio.dev), [Anthropic](https://console.anthropic.com), [Voyage AI](https://voyageai.com) (optional, for semantic memory)
+- Accounts: [Convex](https://convex.dev), [Clerk](https://clerk.com), [ElevenLabs](https://elevenlabs.io) (Agents access), [Composio](https://composio.dev), [Anthropic](https://console.anthropic.com), [Voyage AI](https://voyageai.com) (optional, semantic memory), [Browserbase](https://browserbase.com) (optional, Viewport)
 
 ### Setup
 
@@ -119,6 +122,8 @@ Values live in `.env.local` (gitignored) and in Vercel/Convex env settings in pr
 | `NEXT_PUBLIC_CONVEX_URL` / `NEXT_PUBLIC_CONVEX_SITE_URL` / `CONVEX_DEPLOYMENT` | Convex deployment |
 | `VOYAGE_API_KEY` | Voyage embeddings for semantic memory (optional) |
 | `AGENTKEY_API_KEY` | Reserved for external agent access |
+| `BROWSERBASE_API_KEY` / `BROWSERBASE_PROJECT_ID` | Browserbase (Viewport browser sessions; optional) |
+| `TOOL_BASE_URL` | Your deployment's tool webhook base, e.g. `https://<your-app>/api/tools` |
 
 `MORPHEUS_TOOL_SECRET` must be set in both the Convex deployment (`npx convex env set`) and the app env, and is baked into the agent by the provision script.
 
@@ -134,7 +139,9 @@ vercel deploy --prod  # app
 ## Features
 
 - **Morning brief** — a GOALS-led daily brief assembled by workflow: calendar, mail highlights, feeds, telos progress. Regenerates on demand by voice ("run my brief").
-- **Mail center** (`/mail`) — read full Gmail threads in-app (server-sanitized, sandboxed), compose and reply with rich text, Gmail-native drafts, explicit send. Multi-account.
+- **Mail center** (`/mail`) — read full Gmail threads in-app (server-sanitized, sandboxed), compose and reply with rich text, Gmail-native drafts, explicit send. Multi-account. Say *"draft a reply to the X email saying…"* and Zola writes it with thread context — it lands as a badged draft you edit and send yourself.
+- **Viewport** — a slide-in panel showing a real hosted browser that Zola drives by voice ("go dig into X") while you watch; click into the frame to take over, or open a blank session and browse yourself. Findings become a brief with a session-replay link.
+- **Feed manager** — add news sources by voice ("add The Verge to tech headlines") or by pasting a URL in the Control Panel; feeds are autodiscovered and validated before saving, with per-feed health dots.
 - **Calendar by voice** — list, create, and move events with a confirm-before-write ritual.
 - **Telos** (`/telos`) — long-term goals as data: voice capture, semantic recall, goal-aware briefs, Sunday weekly review.
 - **Voice journaling** — journal entries by voice; a nightly pass mines them for goal signals.
