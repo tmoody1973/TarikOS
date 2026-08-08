@@ -1,6 +1,6 @@
 # Tarik OS
 
-A personal AI operating system you talk to. Zola — the voice assistant at its center — reads your mail, works your calendar, runs research, keeps a journal, tracks your long-term goals, and briefs you every morning. You speak; she acts; a live dashboard shows what happened.
+A personal AI operating system you talk to. Zola — the voice assistant at its center — reads your mail, works your calendar, runs research, keeps a journal, tracks your long-term goals and daily habits, and briefs you every morning. You speak; she acts; a live dashboard shows what happened.
 
 This is a single-user system built for one person's real life, published as a working reference. Fork it and make it yours — it is not a hosted product and has no multi-tenant support.
 
@@ -38,6 +38,7 @@ Three guardrails are structural, not polite requests:
 - **Zola can draft email; only a human can send it.** The send endpoint exists solely behind the browser UI's Send button. The agent's tool surface has no send path — a test fails the suite if one ever appears.
 - **Calendar writes confirm before they commit.** Event creation and edits go through a confirm ritual in conversation.
 - **The browser agent never types a password, and browsing is always attended.** Zola can drive a real browser (see Viewport below). Sessions are signed out by default; a login wall stops the agent and hands you the wheel. If you set up a persistent [Browserbase Context](#logged-in-browsing-optional) and sign in by hand, a session can carry those logins — but only when you ask for them in that request, never by the agent's own initiative. No scheduled job can start a browser session at all. All three parts are enforced by tests.
+- **Inferred evidence can only ever suggest, never record.** A calendar block can propose that a habit happened; only you accept it. The mutation that writes a vote requires a signed-in human and has no shared-secret path, so nothing automated can mark a day done on your behalf — and a test fails the suite if a secret branch is ever added to it.
 
 ## Tech stack
 
@@ -54,6 +55,7 @@ Three guardrails are structural, not polite requests:
 | Browser automation | Browserbase (hosted sessions, interactive live view) + Stagehand (AI agent loop) |
 | Email safety | linkedom server-side sanitizer + sandboxed iframes |
 | 3D / HUD flourishes | three.js via react-three-fiber |
+| Tracing | OpenTelemetry (`@vercel/otel`) → self-hosted [Arize Phoenix](https://phoenix.arize.com), with OpenInference semantic conventions |
 | Hosting | Vercel (app) + Convex Cloud (backend) |
 
 ## Architecture
@@ -80,16 +82,19 @@ Three guardrails are structural, not polite requests:
                                  Browserbase + Stagehand (Viewport browser)
 ```
 
+Every tool call is wrapped in an OpenTelemetry span, and after a call ends ElevenLabs POSTs the full transcript to `/api/elevenlabs/post-call`, which maps it into a conversation trace — the utterance, the tool she picked, and what came back, in one tree. Both paths ship to a self-hosted Phoenix. Tracing is never load-bearing: the webhook answers as soon as the signature verifies and ships afterwards, so a dead collector cannot break the thing it observes.
+
 The repeatable pattern, documented in [AGENTS.md](AGENTS.md): every new capability is (1) a `case` in `src/app/api/tools/[tool]/route.ts`, (2) a tool definition in `scripts/provision-agent.ts`, (3) nothing else — tools self-register in Convex on first use and appear in the dashboard control panel with health status and an enable/disable toggle.
 
 ## Project structure
 
 ```
-src/app/            Pages: home HUD, /briefs, /mail, /telos, /brain, /control
+src/app/            Pages: home HUD, /briefs, /mail, /telos, /habits, /brain, /control
 src/app/api/tools/  The agent's tool webhook (one case per capability)
 src/app/api/mail/   Browser-facing mail routes (Clerk-protected)
+src/app/api/elevenlabs/  Post-call webhook → conversation traces
 src/lib/            Server-side domain logic: google.ts, mail.ts, calendarLib.ts …
-convex/             Schema, workflows, crons, memory consolidation, telos
+convex/             Schema, workflows, crons, memory consolidation, telos, habits
 scripts/            provision-agent.ts · connect-google.ts · import-telos.ts
 tests/              node --test unit tests for the pure logic
 docs/superpowers/   Design specs for each build phase
@@ -146,6 +151,8 @@ Values live in `.env.local` (gitignored) and in Vercel/Convex env settings in pr
 | `BROWSERBASE_API_KEY` / `BROWSERBASE_PROJECT_ID` | Browserbase (Viewport browser sessions; optional) |
 | `FIRECRAWL_API_KEY` | Reader fallback for pages that block server-side fetches (optional). Unset simply means those pages show "open the original" instead. |
 | `TOOL_BASE_URL` | Your deployment's tool webhook base, e.g. `https://<your-app>/api/tools` |
+| `ELEVENLABS_WEBHOOK_SECRET` | HMAC signing secret for the post-call webhook (optional; without it the route rejects every delivery and you simply get no conversation traces) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` / `OTEL_EXPORTER_OTLP_HEADERS` | Where traces go, e.g. a self-hosted Phoenix. Headers take the form `Authorization=Bearer <key>`. Both optional — unset means no tracing, and nothing else changes. |
 
 `MORPHEUS_TOOL_SECRET` must be set in both the Convex deployment (`npx convex env set`) and the app env, and is baked into the agent by the provision script.
 
@@ -199,6 +206,8 @@ vercel deploy --prod  # app
 - **Feed manager** — add news sources by voice ("add The Verge to tech headlines") or by pasting a URL in the Control Panel; feeds are autodiscovered and validated before saving, with per-feed health dots.
 - **Calendar by voice** — list, create, and move events with a confirm-before-write ritual.
 - **Telos** (`/telos`) — the life-context layer that makes everything else goal-aware. Full write-up in [The telos layer](#the-telos-layer) below.
+- **Habits** (`/habits`) — identity-based pillars rather than a checklist. Each habit is a vote for the kind of person you're becoming, logged by voice or on the page, and completion is graded — minimum, standard, beyond, intentionally skipped — because "I did the two-minute version" and "I did the full thing" are different truths a checkbox can't tell apart. **There is no streak anywhere in the system.** The number on display is how often you came back after a gap, since coming back is the skill a streak counter punishes you for losing. An intentional skip is a decision, not a lapse, and carries no penalty. An evening cron composes a check-in card that waits on the dashboard — it has no push channel, so it cannot nag, by construction. The Sunday review names the pillar with the most friction and asks you to change exactly one variable, because changing several makes it impossible to tell which one helped.
+- **Observability** — every tool call emits a span with its real outcome (`success`, `no_match`, `ambiguous`, `disabled`, `error`), which is deliberately separate from the `ok` flag Zola speaks from: several tools answer *"no timed event matching that"* as a helpful sentence rather than an error, and counting those as successes would quietly corrupt any measurement built on the data. After each call the full conversation arrives as a trace with tool calls attached to the turn that produced them.
 - **Voice journaling** — journal entries by voice; a nightly pass mines them for goal signals.
 - **Semantic memory** — conversations consolidated nightly and recalled by meaning, not keywords.
 - **Research workflows** — scheduled or on-demand multi-step research (RSS + web search) rendered as briefing cards with an in-app reader.
@@ -222,7 +231,7 @@ The loop this closes: you tell your AI what matters once, it holds you to it eve
 
 ## Design specs
 
-Each phase shipped against a written spec in [`docs/superpowers/specs/`](docs/superpowers/specs/) — foundation, workflows and briefs, telos, mail center, viewport. They read as a build log of the decisions and their reasons.
+Each phase shipped against a written spec in [`docs/superpowers/specs/`](docs/superpowers/specs/) — foundation, workflows and briefs, telos, mail center, viewport, habits, observability and evals. They read as a build log of the decisions and their reasons.
 
 ## License
 
