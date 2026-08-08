@@ -33,13 +33,24 @@ import {
 } from "../../../../../convex/telosLib";
 import { buildHabitReview } from "../../../../../convex/habitsLib";
 import type { Id } from "../../../../../convex/_generated/dataModel";
+import { classifyOutcome, type ToolOutcome } from "@/lib/toolOutcome";
+import { getTracer, safeSetAttrs, safeEndSpan } from "@/lib/tracing";
 
 // Webhook endpoint for Zola's ElevenLabs server tools. Authenticated by
 // a shared secret header (configured on the agent), not a browser session —
 // proxy.ts exempts /api/tools from Clerk.
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
-type ToolResult = { ok: boolean; message: string; data?: unknown };
+// `outcome` is telemetry only — it records what actually happened, which `ok`
+// cannot, because several sites answer `ok: true` with a non-result so Zola
+// speaks a helpful sentence instead of an error. It is stripped before the
+// response is serialized; the agent never sees it. See src/lib/toolOutcome.ts.
+type ToolResult = {
+  ok: boolean;
+  message: string;
+  data?: unknown;
+  outcome?: ToolOutcome;
+};
 
 // Voice tools handle every telos kind except "dimension" (review-session
 // territory, MOO-490).
@@ -100,23 +111,39 @@ export async function POST(
     );
   }
 
+  // One span covers all 23 tools because every call routes through here —
+  // including Convex crons, which call these same HTTP routes, so scheduled
+  // workflows get traced without a conversation to hang off.
+  const span = getTracer().startSpan(`tool.${tool}`);
+  safeSetAttrs(span, {
+    "openinference.span.kind": "TOOL",
+    "tool.name": tool,
+    "tool.args": body,
+  });
+
   try {
     const gate = await convex.query(api.secondBrain.toolGate, {
       secret,
       name: tool,
     });
     if (!gate.allowed) {
-      return NextResponse.json(
-        {
-          ok: false,
-          message: `The ${tool.replace(/_/g, " ")} tool is disabled in the control panel, so it can't be used right now.`,
-        },
-        { status: 200 },
-      );
+      const message = `The ${tool.replace(/_/g, " ")} tool is disabled in the control panel, so it can't be used right now.`;
+      safeSetAttrs(span, { "tool.outcome": "disabled", "tool.message": message });
+      safeEndSpan(span);
+      return NextResponse.json({ ok: false, message }, { status: 200 });
     }
     const result = await runTool(tool, body, secret, req.nextUrl.origin);
-    return NextResponse.json(result, { status: result.ok ? 200 : 400 });
+    safeSetAttrs(span, {
+      "tool.outcome": classifyOutcome(result),
+      "tool.message": result.message,
+    });
+    safeEndSpan(span);
+    // The agent must never see `outcome` — it is telemetry, not an instruction.
+    const { outcome: _outcome, ...wire } = result;
+    return NextResponse.json(wire, { status: result.ok ? 200 : 400 });
   } catch (error) {
+    safeSetAttrs(span, { "tool.outcome": "error" });
+    safeEndSpan(span, error);
     if (error instanceof GoogleAuthError) {
       return NextResponse.json(
         { ok: false, message: error.message },
@@ -330,12 +357,14 @@ async function runTool(
       if (res.outcome === "not_found") {
         return {
           ok: true,
+          outcome: "no_match",
           message: `No timed event matching "${match}" on ${date}. Ask Tarik which event he means (all-day events can't be moved yet).`,
         };
       }
       if (res.outcome === "ambiguous") {
         return {
           ok: true,
+          outcome: "ambiguous",
           message: `Several events match — ask Tarik which one: ${res.candidates.join("; ")}.`,
         };
       }
@@ -489,12 +518,13 @@ async function runTool(
           match,
         });
         if (result.outcome === "none") {
-          return { ok: false, message: `No brief feed matches "${match}" — nothing removed.` };
+          return { outcome: "no_match", ok: false, message: `No brief feed matches "${match}" — nothing removed.` };
         }
         if (result.outcome === "ambiguous") {
           const names = (result.candidates ?? []).map((c) => c.url).join("; ");
           return {
             ok: false,
+            outcome: "ambiguous",
             message: `Several feeds match: ${names}. Which one? Nothing removed yet.`,
           };
         }
@@ -612,7 +642,7 @@ async function runTool(
         })
         .catch(() => {});
       if (candidates.length === 0) {
-        return { ok: false, message: "The archive is empty." };
+        return { outcome: "no_match", ok: false, message: "The archive is empty." };
       }
       return {
         ok: true,
@@ -709,6 +739,7 @@ async function runTool(
       if (reply?.outcome === "none") {
         return {
           ok: false,
+          outcome: "no_match",
           message: `I couldn't find a recent thread matching "${replyMatch}", so I haven't drafted anything.`,
         };
       }
@@ -718,6 +749,7 @@ async function runTool(
           .join("; ");
         return {
           ok: false,
+          outcome: "ambiguous",
           message: `A few threads match — ${names}. Which one do you mean? Nothing drafted yet.`,
         };
       }
@@ -838,12 +870,14 @@ async function runTool(
       if (res.outcome === "not_found") {
         return {
           ok: true,
+          outcome: "no_match",
           message: `No active telos item matches "${match}". Ask Tarik which item he means.`,
         };
       }
       if (res.outcome === "ambiguous") {
         return {
           ok: true,
+          outcome: "ambiguous",
           message: `Several items match — ask Tarik which one: ${res.candidates.join("; ")}.`,
         };
       }
