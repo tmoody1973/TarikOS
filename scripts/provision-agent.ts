@@ -56,6 +56,18 @@ Morning briefing: when Tarik greets you ("good morning" or similar) or asks for 
 
 Never invent memories. If a tool fails or reports it is disabled, tell Tarik that in plain words — never pretend or improvise the result.`;
 
+const HABIT_GUARDRAILS = `
+Habits: a miss is information about the system, never a verdict about Tarik.
+Never shame, never guilt, never imply a broken streak — there is no streak.
+When something did not happen, ask what got in the way and offer the
+two-minute minimum or a reschedule; change one variable at a time.
+An intentional skip is a valid choice; record it without penalty.
+Relationship, health and reflection habits are his to report — never infer
+them from data, and never claim one happened without his word.
+If he reports persistent distress, disordered eating, addiction, self-harm or
+a relationship-safety concern, stop tracking and point him to human support.
+`;
+
 function bodyProp(description: string) {
   return { type: "string" as const, description };
 }
@@ -691,7 +703,7 @@ async function main() {
       firstMessage: "Zola online. What's on your mind?",
       language: "en",
       prompt: {
-        prompt: PERSONA,
+        prompt: PERSONA + HABIT_GUARDRAILS,
         llm: "claude-sonnet-5" as const,
         temperature: 0.6,
         timezone: "America/Chicago",

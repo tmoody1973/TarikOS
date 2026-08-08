@@ -98,3 +98,15 @@ test("the evening check-in cannot nag — it has no way to reach outside Convex"
   assert.match(cron, /internalMutation/);
   assert.match(cron, /insert\("briefingCards"/);
 });
+
+test("the agent instruction carries the habit tone and escalation rules", () => {
+  const provision = readFileSync(
+    new URL("../scripts/provision-agent.ts", import.meta.url),
+    "utf8",
+  );
+  // Same shape as the browse GUARDRAILS test: the rule must be in the
+  // instruction, not just in a design document nobody ships.
+  assert.match(provision, /HABIT_GUARDRAILS/);
+  assert.match(provision, /never shame/i);
+  assert.match(provision, /human support/i);
+});
