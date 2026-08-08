@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { hostLabel } from "@/lib/hostLabel";
 
 // Slide-in reader pane: server-extracted article text (via /api/reader),
 // rendered in the LCARS theme. Iframe embedding was rejected — publishers
@@ -106,11 +107,29 @@ export function ReaderPane({
               EXTRACTING…
             </p>
           ) : state.phase === "error" ? (
-            <div className="mt-10 text-center">
+            <div className="mt-10 flex flex-col items-center gap-4 text-center">
               <p className="text-sm text-salmon">⚠️ {state.message}</p>
-              <p className="mt-2 text-xs text-steel">
-                Some pages resist extraction — the original still works.
+              <p className="text-xs text-steel">
+                Some pages block extraction from a server. The original opens
+                fine in your browser.
               </p>
+              {url && (
+                <>
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="lcars-cap-left lcars-cap-right flex h-10 items-center bg-lavender px-6 transition hover:opacity-80 focus-visible:outline-2 focus-visible:outline-cyan-hud"
+                  >
+                    <span className="font-[family-name:var(--font-display)] text-sm uppercase text-black">
+                      Open original ↗
+                    </span>
+                  </a>
+                  <span className="text-[10px] uppercase tracking-[0.2em] text-steel">
+                    {hostLabel(url)}
+                  </span>
+                </>
+              )}
             </div>
           ) : (
             <article>

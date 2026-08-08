@@ -72,7 +72,10 @@ export const latestSession = query({
   args: {},
   handler: async (ctx) => {
     await requireUser(ctx);
-    return await ctx.db.query("browserSessions").order("desc").first();
+    // Routes through liveSession so the panel inherits the same staleness rule
+    // as the busy guard. Returning the raw newest row meant a long-dead
+    // session still drove the Viewport, and its live view is a dead socket.
+    return await liveSession(ctx);
   },
 });
 

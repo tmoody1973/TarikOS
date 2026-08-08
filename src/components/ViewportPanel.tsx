@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { SlideOver } from "./SlideOver";
+import { shouldAutoOpen } from "@/lib/viewportOpen";
 
 // The Viewport (MOO-485): live query on the latest browserSessions row,
 // interactive Browserbase live view in the iframe (clicking it IS takeover).
@@ -12,14 +13,32 @@ import { SlideOver } from "./SlideOver";
 
 export function ViewportPanel() {
   const session = useQuery(api.browserSessions.latestSession);
-  // "Which session did the user dismiss?" is the only local fact — open is
-  // derived. New sessions auto-open because their id isn't the dismissed one.
+  // Two local facts: which session the user dismissed, and which one was
+  // already here when the page loaded. A pre-existing session never takes the
+  // screen — you asked for the dashboard, so you get the dashboard, and the
+  // reopen tab is the way in. See src/lib/viewportOpen.ts.
   const [dismissedId, setDismissedId] = useState<string | null>(null);
   const [ending, setEnding] = useState(false);
+  // What was already here when this page loaded. null = not established yet
+  // (the query is still loading), so nothing opens until it is.
+  const [baseline, setBaseline] = useState<{ id: string | null } | null>(null);
+
+  useEffect(() => {
+    if (baseline || session === undefined) return;
+    setBaseline({ id: session?.sessionId ?? null });
+  }, [session, baseline]);
 
   const isActive =
     !!session && session.status !== "done" && session.status !== "error";
-  const open = isActive && session.sessionId !== dismissedId;
+  const open =
+    isActive &&
+    session.sessionId !== dismissedId &&
+    baseline !== null &&
+    shouldAutoOpen({
+      status: session.status,
+      sessionId: session.sessionId,
+      preexistingId: baseline.id,
+    });
 
   async function endSession() {
     if (!session) return;
