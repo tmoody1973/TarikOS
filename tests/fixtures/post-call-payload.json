@@ -1,0 +1,54 @@
+{
+  "type": "post_call_transcription",
+  "event_timestamp": 1739537297,
+  "data": {
+    "agent_id": "agent_abc",
+    "conversation_id": "conv_xyz",
+    "status": "done",
+    "transcript": [
+      {
+        "role": "user",
+        "message": "what did I say about the station project last week?",
+        "tool_calls": null,
+        "tool_results": null,
+        "time_in_call_secs": 2,
+        "conversation_turn_metrics": null
+      },
+      {
+        "role": "agent",
+        "message": "Let me check your second brain.",
+        "tool_calls": [
+          {
+            "type": "webhook",
+            "tool_name": "recall",
+            "params_as_json": "{\"query\":\"station project\"}"
+          }
+        ],
+        "tool_results": [
+          {
+            "tool_name": "recall",
+            "result_value": "2 memories found",
+            "is_error": false
+          }
+        ],
+        "time_in_call_secs": 5,
+        "conversation_turn_metrics": {
+          "convai_llm_service_ttfb": {
+            "elapsed_time": 0.37
+          }
+        }
+      }
+    ],
+    "metadata": {
+      "start_time_unix_secs": 1739537297,
+      "call_duration_secs": 22,
+      "cost": 296,
+      "termination_reason": ""
+    },
+    "analysis": {
+      "call_successful": "success",
+      "transcript_summary": "Tarik asked about the station project.",
+      "evaluation_criteria_results": {}
+    }
+  }
+}
