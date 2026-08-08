@@ -567,6 +567,117 @@ const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
       },
     },
   },
+  {
+    type: "webhook" as const,
+    name: "get_habits",
+    description:
+      "Read today's habit votes: which identity votes are already in, and which are still open. Use this before the evening check-in.",
+    responseTimeoutSecs: 20,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/get_habits`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        description: "No arguments",
+        properties: {},
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "log_habit_vote",
+    description:
+      "Record today's vote for one habit. Levels are minimum, standard, beyond, skipped, or missed. A skip is a conscious choice and carries no penalty — never treat it as a failure, and never log a vote Tarik has not confirmed.",
+    responseTimeoutSecs: 20,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/log_habit_vote`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["habit_id", "level"],
+        description: "The vote",
+        properties: {
+          habit_id: bodyProp("The habit's id, from get_habits"),
+          level: bodyProp(
+            "One of: minimum, standard, beyond, skipped, missed",
+          ),
+          note: bodyProp("Optional: what actually happened, in his words"),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "add_habit",
+    description:
+      "Create a habit after walking through the protocol: what identity is this a vote for, what is the standard daily action, what is the two-minute minimum for a low-energy day, and what is the cue. Ask those one at a time before calling this.",
+    responseTimeoutSecs: 20,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/add_habit`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["pillar", "identity", "minimum_action", "standard_action", "cue"],
+        description: "The habit design",
+        properties: {
+          pillar: bodyProp("Life area, e.g. 'Work / Craft' or 'Health'"),
+          identity: bodyProp("I am the kind of person who…"),
+          minimum_action: bodyProp("Two minutes or less; doable on a bad day"),
+          standard_action: bodyProp("The normal daily practice"),
+          cue: bodyProp("At TIME, in PLACE, I will X"),
+          backup_plan: bodyProp("Optional: if DISRUPTION, then SMALLER ACTION"),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "update_habit",
+    description:
+      "Change one variable on a habit — the cue, the minimum, the backup plan — or pause/retire it. Change only one thing at a time so it's clear what helped. Pausing is not failing.",
+    responseTimeoutSecs: 20,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/update_habit`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["habit_id"],
+        description: "The change",
+        properties: {
+          habit_id: bodyProp("The habit's id, from get_habits"),
+          minimum_action: bodyProp("Optional: a new, smaller minimum"),
+          cue: bodyProp("Optional: a new cue"),
+          backup_plan: bodyProp("Optional: a new if-then plan"),
+          status: bodyProp("Optional: active, paused, or retired"),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "log_friction",
+    description:
+      "Record what made a habit hard today. Use this when Tarik describes resistance — it feeds the weekly redesign. Respond with curiosity about the system, never with judgement about him.",
+    responseTimeoutSecs: 20,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/log_friction`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["habit_id", "text"],
+        description: "The friction",
+        properties: {
+          habit_id: bodyProp("The habit's id, from get_habits"),
+          text: bodyProp("What got in the way, in his words"),
+        },
+      },
+    },
+  },
 ];
 
 async function main() {

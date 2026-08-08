@@ -60,3 +60,28 @@ test("votes are unique per habit per day — lookup before insert", () => {
   assert.match(fn, /by_habit_date/);
   assert.match(fn, /ctx\.db\.patch\(/);
 });
+
+test("every habit tool exists in both the route and the provisioning script", () => {
+  const route = readFileSync(
+    new URL("../src/app/api/tools/[tool]/route.ts", import.meta.url),
+    "utf8",
+  );
+  const provision = readFileSync(
+    new URL("../scripts/provision-agent.ts", import.meta.url),
+    "utf8",
+  );
+  for (const tool of [
+    "get_habits",
+    "log_habit_vote",
+    "add_habit",
+    "update_habit",
+    "log_friction",
+  ]) {
+    assert.match(route, new RegExp(`case "${tool}"`), `route missing ${tool}`);
+    assert.match(
+      provision,
+      new RegExp(`name: "${tool}"`),
+      `provisioning missing ${tool}`,
+    );
+  }
+});
