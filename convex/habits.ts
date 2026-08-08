@@ -42,9 +42,10 @@ async function activeHabits(ctx: QueryCtx) {
 
 /** Today's habits with their vote and any pending suggestion. */
 export const today = query({
-  args: {},
-  handler: async (ctx) => {
-    await requireUser(ctx);
+  args: { secret: v.optional(v.string()) },
+  handler: async (ctx, { secret }) => {
+    if (secret) checkToolSecret(secret);
+    else await requireUser(ctx);
     const date = chicagoToday();
     const habits = await activeHabits(ctx);
     return await Promise.all(

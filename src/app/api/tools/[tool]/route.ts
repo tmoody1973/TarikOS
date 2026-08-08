@@ -853,7 +853,13 @@ async function runTool(
       };
     }
     case "get_habits": {
-      const rows = await convex.query(api.habits.today, {});
+      const [rows] = await Promise.all([
+        convex.query(api.habits.today, { secret }),
+        convex.mutation(api.secondBrain.markToolHealthyFromTool, {
+          secret,
+          name: "get_habits",
+        }),
+      ]);
       if (rows.length === 0) {
         return {
           ok: true,
@@ -878,14 +884,14 @@ async function runTool(
       if (!habitId || !level) {
         return { ok: false, message: "Which habit, and at what level?" };
       }
-      await convex.mutation(api.habits.logVote, {
+      const voted = await convex.mutation(api.habits.logVote, {
         secret,
         habitId: habitId as Id<"habits">,
         level: level as "minimum" | "standard" | "beyond" | "skipped" | "missed",
         note: strArg(body.note, 400) || undefined,
         source: "voice",
       });
-      return { ok: true, message: "Logged." };
+      return { ok: true, message: `Logged as ${voted.level}.` };
     }
     case "add_habit": {
       const pillar = strArg(body.pillar, 80);
@@ -918,17 +924,31 @@ async function runTool(
     case "update_habit": {
       const habitId = strArg(body.habit_id, 64);
       if (!habitId) return { ok: false, message: "Which habit?" };
+      const minimumAction = strArg(body.minimum_action, 200) || undefined;
+      const cue = strArg(body.cue, 200) || undefined;
+      const backupPlan = strArg(body.backup_plan, 200) || undefined;
+      const status =
+        (strArg(body.status, 20) as "active" | "paused" | "retired") ||
+        undefined;
       await convex.mutation(api.habits.upsertHabit, {
         secret,
         habitId: habitId as Id<"habits">,
-        minimumAction: strArg(body.minimum_action, 200) || undefined,
-        cue: strArg(body.cue, 200) || undefined,
-        backupPlan: strArg(body.backup_plan, 200) || undefined,
-        status:
-          (strArg(body.status, 20) as "active" | "paused" | "retired") ||
-          undefined,
+        minimumAction,
+        cue,
+        backupPlan,
+        status,
       });
-      return { ok: true, message: "Updated." };
+      const changed = [
+        minimumAction && `minimum action to "${minimumAction}"`,
+        cue && `cue to "${cue}"`,
+        backupPlan && `backup plan to "${backupPlan}"`,
+        status && `status to ${status}`,
+      ].filter(Boolean);
+      return {
+        ok: true,
+        message:
+          changed.length > 0 ? `Updated: ${changed.join(", ")}.` : "Updated.",
+      };
     }
     case "log_friction": {
       const habitId = strArg(body.habit_id, 64);

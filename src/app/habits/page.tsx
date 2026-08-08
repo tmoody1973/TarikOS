@@ -30,7 +30,7 @@ export default function HabitsPage() {
 }
 
 function HabitsInner() {
-  const habits = useQuery(api.habits.today);
+  const habits = useQuery(api.habits.today, {});
   const [selected, setSelected] = useState<string | null>(null);
   const habitId = selected ?? habits?.[0]?.id ?? null;
   const traj = useQuery(

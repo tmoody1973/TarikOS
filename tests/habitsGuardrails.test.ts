@@ -99,6 +99,14 @@ test("the evening check-in cannot nag — it has no way to reach outside Convex"
   assert.match(cron, /insert\("briefingCards"/);
 });
 
+test("only a signed-in human can turn a suggestion into a vote", () => {
+  const fn = habits.slice(habits.indexOf("export const resolveSuggestion"));
+  assert.match(fn, /await requireUser\(ctx\)/);
+  // A tool-secret branch here would let inferred evidence vote without a human.
+  assert.ok(!/checkToolSecret/.test(fn), "resolveSuggestion must stay human-only");
+  assert.ok(!/secret/.test(fn), "resolveSuggestion must not accept a secret");
+});
+
 test("the agent instruction carries the habit tone and escalation rules", () => {
   const provision = readFileSync(
     new URL("../scripts/provision-agent.ts", import.meta.url),
