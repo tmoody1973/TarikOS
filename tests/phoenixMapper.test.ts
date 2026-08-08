@@ -29,7 +29,7 @@ test("root span spans the whole call", () => {
 
 test("creates one child span per turn", () => {
   const root = mapPostCall(payload)!;
-  assert.equal(root.children.length, 2);
+  assert.equal(root.children.length, 3);
   assert.equal(root.children[0].attributes["turn.role"], "user");
   assert.equal(
     root.children[0].attributes["turn.message"],
@@ -42,7 +42,7 @@ test("nests tool calls under the turn that made them", () => {
   const root = mapPostCall(payload)!;
   assert.equal(root.children[0].children.length, 0, "user turn made no tool calls");
   const agentTurn = root.children[1];
-  assert.equal(agentTurn.children.length, 1);
+  assert.equal(agentTurn.children.length, 2);
   assert.equal(agentTurn.children[0].name, "tool.recall");
   assert.equal(agentTurn.children[0].attributes["tool.name"], "recall");
   assert.equal(agentTurn.children[0].attributes["tool.args"], '{"query":"station project"}');
@@ -99,4 +99,65 @@ test("shouldProcess requires both a signature and a secret", () => {
   assert.equal(shouldProcess("t=1,v0=abc", undefined), false);
   assert.equal(shouldProcess("t=1,v0=abc", ""), false);
   assert.equal(shouldProcess("t=1,v0=abc", "secret"), true);
+});
+
+// Verified against a real conversation (conv_0601kzheqverfjavgd203js1cy85,
+// 2026-08-08): ElevenLabs puts tool_results on a LATER turn than the
+// tool_calls that produced them, joined by request_id. Pairing them by index
+// within one turn — which the hand-written fixture wrongly implied — finds
+// nothing, so `tool.is_error` could only ever evaluate to false.
+
+test("joins a result on a later turn to its call by request_id", () => {
+  const root = mapPostCall(payload)!;
+  const tools = root.children.flatMap((t) => t.children);
+  const recall = tools.find((s) => s.name === "tool.recall")!;
+  assert.ok(recall, "the recall tool span must exist");
+  assert.equal(recall.attributes["tool.result"], "2 memories found");
+  assert.equal(recall.attributes["tool.is_error"], false);
+});
+
+test("a failed tool actually reports is_error true", () => {
+  const root = mapPostCall(payload)!;
+  const tools = root.children.flatMap((t) => t.children);
+  const calendar = tools.find((s) => s.name === "tool.get_calendar")!;
+  assert.equal(calendar.attributes["tool.is_error"], true);
+  assert.equal(calendar.attributes["tool.error_type"], "timeout");
+  assert.equal(calendar.attributes["tool.error_message"], "upstream timed out");
+});
+
+test("tool spans carry real duration from tool_latency_secs", () => {
+  const root = mapPostCall(payload)!;
+  const tools = root.children.flatMap((t) => t.children);
+  const recall = tools.find((s) => s.name === "tool.recall")!;
+  assert.equal(recall.endMs - recall.startMs, 2500);
+});
+
+test("spans carry an OpenInference kind so Phoenix can classify them", () => {
+  // Without this, every span renders as "unknown" and any eval filtering on
+  // span_kind returns nothing while appearing correctly configured.
+  const root = mapPostCall(payload)!;
+  assert.equal(root.attributes["openinference.span.kind"], "AGENT");
+  assert.equal(root.children[0].attributes["openinference.span.kind"], "CHAIN");
+  const tool = root.children.flatMap((t) => t.children)[0];
+  assert.equal(tool.attributes["openinference.span.kind"], "TOOL");
+});
+
+test("a call with no matching result is not silently marked successful", () => {
+  const orphan = {
+    type: "post_call_transcription",
+    data: {
+      transcript: [
+        {
+          role: "agent",
+          tool_calls: [{ request_id: "never_answered", tool_name: "browse" }],
+          tool_results: [],
+          time_in_call_secs: 1,
+        },
+      ],
+      metadata: { start_time_unix_secs: 1739537297, call_duration_secs: 5 },
+    },
+  };
+  const tool = mapPostCall(orphan)!.children[0].children[0];
+  assert.equal(tool.attributes["tool.is_error"], undefined);
+  assert.equal(tool.attributes["tool.no_result"], true);
 });

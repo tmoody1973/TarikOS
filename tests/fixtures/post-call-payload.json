@@ -20,23 +20,59 @@
         "tool_calls": [
           {
             "type": "webhook",
+            "request_id": "toolu_recall_1",
             "tool_name": "recall",
-            "params_as_json": "{\"query\":\"station project\"}"
-          }
-        ],
-        "tool_results": [
+            "params_as_json": "{\"query\":\"station project\"}",
+            "tool_has_been_called": true
+          },
           {
-            "tool_name": "recall",
-            "result_value": "2 memories found",
-            "is_error": false
+            "type": "webhook",
+            "request_id": "toolu_calendar_1",
+            "tool_name": "get_calendar",
+            "params_as_json": "{\"date\":\"2026-08-09\"}",
+            "tool_has_been_called": true
           }
         ],
+        "tool_results": [],
         "time_in_call_secs": 5,
         "conversation_turn_metrics": {
           "convai_llm_service_ttfb": {
             "elapsed_time": 0.37
           }
         }
+      },
+      {
+        "role": "agent",
+        "message": "",
+        "tool_calls": [],
+        "tool_results": [
+          {
+            "type": "webhook",
+            "request_id": "toolu_recall_1",
+            "tool_name": "recall",
+            "result_value": "2 memories found",
+            "is_error": false,
+            "is_blocked": false,
+            "tool_has_been_called": true,
+            "tool_latency_secs": 2.5,
+            "error_type": "",
+            "raw_error_message": ""
+          },
+          {
+            "type": "webhook",
+            "request_id": "toolu_calendar_1",
+            "tool_name": "get_calendar",
+            "result_value": "",
+            "is_error": true,
+            "is_blocked": false,
+            "tool_has_been_called": true,
+            "tool_latency_secs": 0.5,
+            "error_type": "timeout",
+            "raw_error_message": "upstream timed out"
+          }
+        ],
+        "time_in_call_secs": 9,
+        "conversation_turn_metrics": null
       }
     ],
     "metadata": {
