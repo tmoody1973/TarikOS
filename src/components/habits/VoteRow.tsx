@@ -13,6 +13,13 @@ const LEVELS = [
   { key: "skipped", label: "SKIP" },
 ] as const;
 
+const LEVEL_NAMES: Record<(typeof LEVELS)[number]["key"], string> = {
+  minimum: "Minimum",
+  standard: "Standard",
+  beyond: "Beyond",
+  skipped: "Skipped",
+};
+
 export function VoteRow({
   habit,
 }: {
@@ -72,10 +79,15 @@ export function VoteRow({
         </div>
       )}
 
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div
+        role="group"
+        aria-label="Log today's level"
+        className="mt-3 flex flex-wrap gap-2"
+      >
         {LEVELS.map((l) => (
           <button
             key={l.key}
+            aria-label={LEVEL_NAMES[l.key]}
             onClick={() =>
               logVote({
                 habitId: habit.id as Id<"habits">,

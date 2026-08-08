@@ -31,7 +31,7 @@ export function TrajectoryStrip({
         ))}
       </div>
       <p className="text-[10px] uppercase tracking-[0.2em] text-steel">
-        {summary.logged} logged · came back {summary.returns}×· longest gap{" "}
+        {summary.logged} logged · came back {summary.returns}× · longest gap{" "}
         {summary.longestGap}d
       </p>
     </div>

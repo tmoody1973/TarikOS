@@ -101,7 +101,9 @@ function HabitsInner() {
       </Zone>
 
       <Zone title="Trajectory" accent="bg-sage">
-        {traj === undefined ? (
+        {habits?.length === 0 ? (
+          <ZoneEmpty>No active pillars yet.</ZoneEmpty>
+        ) : traj === undefined ? (
           <ZoneEmpty>syncing…</ZoneEmpty>
         ) : (
           <div className="flex flex-col gap-4">
