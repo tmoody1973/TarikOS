@@ -85,3 +85,14 @@ test("every habit tool exists in both the route and the provisioning script", ()
     );
   }
 });
+
+test("the evening check-in cannot nag — it composes a card and stops", () => {
+  const cron = readFileSync(
+    new URL("../convex/habitsCron.ts", import.meta.url),
+    "utf8",
+  );
+  // No push channel exists yet (MOO-497); the check-in must wait like the
+  // morning brief rather than reaching out.
+  assert.ok(!/sms|twilio|telnyx|notify/i.test(cron));
+  assert.match(cron, /insert\("briefingCards"/);
+});

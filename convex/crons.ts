@@ -29,4 +29,13 @@ crons.cron(
   { name: "memory-consolidation" },
 );
 
+// Evening habit check-in. 23:00 UTC = 6:00 PM CDT (5:00 PM CST). It composes
+// a card and waits — see convex/habitsCron.ts.
+crons.cron(
+  "habit evening check-in",
+  "0 23 * * *",
+  internal.habitsCron.eveningCheckIn,
+  {},
+);
+
 export default crons;
