@@ -73,9 +73,26 @@ def main() -> None:
                     if name and name not in called:
                         called.append(name)
 
+            # The turn before yours is what makes "Sounds good." and "Yes,
+            # please." answerable at all. Without it the replay is judging a
+            # sentence with no referent and will say `none` every time, which
+            # looks like a tool-description problem and isn't.
+            prev_user, prev_agent = "", ""
+            for earlier in reversed(transcript[:i]):
+                message = (earlier.get("message") or "").strip()
+                if not message:
+                    continue
+                if earlier.get("role") == "user":
+                    prev_user = message
+                    break
+                if not prev_agent:
+                    prev_agent = message
+
             rows.append(
                 {
                     "utterance": said,
+                    "prev_user": prev_user,
+                    "prev_agent": prev_agent,
                     "actually_called": ";".join(called) or "none",
                     # Pre-filled from what she actually did, which is a fast
                     # starting point and a terrible answer key — she is
@@ -94,6 +111,8 @@ def main() -> None:
             f,
             fieldnames=[
                 "utterance",
+                "prev_user",
+                "prev_agent",
                 "actually_called",
                 "expected_tool",
                 "acceptable_alternatives",

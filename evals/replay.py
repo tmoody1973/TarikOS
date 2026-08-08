@@ -18,10 +18,11 @@ prompt — so hand the same 25 descriptions and the same persona to a direct
 Claude call, show it one of your real utterances, and watch which tool it
 reaches for. Change a description, run this again, see the number move.
 
-This is not the ElevenLabs agent loop. Different serving, no audio, no
-conversation history. Absolute numbers will not match production. What
-transfers is the *delta* when you rewrite a description, and the delta is the
-thing you iterate on. Use Phoenix traces for the true baseline.
+This is not the ElevenLabs agent loop. Different serving, no audio, and only
+one prior exchange of history rather than the whole conversation. Absolute
+numbers will not match production. What transfers is the *delta* when you
+rewrite a description, and the delta is the thing you iterate on. Use Phoenix
+traces for the true baseline.
 """
 
 import argparse
@@ -154,7 +155,14 @@ def upload_dataset(name: str, rows: list[dict]) -> str:
                 "Tool selection ground truth from real ElevenLabs conversations. "
                 "Check the `reviewed` metadata before trusting a score."
             ),
-            "inputs": [{"utterance": r["utterance"]} for r in rows],
+            "inputs": [
+                {
+                    "utterance": r["utterance"],
+                    "prev_user": (r.get("prev_user") or "").strip(),
+                    "prev_agent": (r.get("prev_agent") or "").strip(),
+                }
+                for r in rows
+            ],
             "outputs": [
                 {
                     "expected_tool": r["expected_tool"].strip(),
@@ -186,9 +194,12 @@ def find_dataset(name: str) -> str:
 def example_to_row(example: dict) -> dict:
     """A Phoenix example in the same shape score() already expects from the CSV."""
     output = example.get("output") or {}
+    given = example.get("input") or {}
     return {
         "example_id": example["id"],
-        "utterance": (example.get("input") or {}).get("utterance", ""),
+        "utterance": given.get("utterance", ""),
+        "prev_user": given.get("prev_user", ""),
+        "prev_agent": given.get("prev_agent", ""),
         "expected_tool": output.get("expected_tool", ""),
         "acceptable_alternatives": output.get("acceptable_alternatives", ""),
         "reviewed": (example.get("metadata") or {}).get("reviewed", "no"),
@@ -271,14 +282,32 @@ def push_experiment(
         print(f"  tagged unreviewed_labels={unreviewed} in the experiment metadata")
 
 
-def predict(client, persona: str, tools: list[dict], utterance: str) -> str:
+def conversation(row: dict) -> list[dict]:
+    """The turns to send: the previous exchange, then what you said.
+
+    "Sounds good." and "Yes, please." are unanswerable alone — the replay says
+    `none` every time and it reads as a tool-description problem when it is
+    really a missing referent. Only include the prior exchange when BOTH halves
+    are present: the Messages API wants strict user/assistant alternation
+    starting with user, and half a turn is worse context than none.
+    """
+    previous, answer = (row.get("prev_user") or "").strip(), (row.get("prev_agent") or "").strip()
+    turns = []
+    if previous and answer:
+        turns.append({"role": "user", "content": previous})
+        turns.append({"role": "assistant", "content": answer})
+    turns.append({"role": "user", "content": row["utterance"]})
+    return turns
+
+
+def predict(client, persona: str, tools: list[dict], row: dict) -> str:
     """Return the tool the model reaches for, or 'none' if it just answers."""
     message = client.messages.create(
         model=MODEL,
         max_tokens=512,
         system=persona,
         tools=tools,
-        messages=[{"role": "user", "content": utterance}],
+        messages=conversation(row),
     )
     for block in message.content:
         if block.type == "tool_use":
@@ -377,6 +406,36 @@ def selftest() -> None:
     assert miss["experiment_run_id"] == "run1"
     assert miss["annotator_kind"] == "CODE"
 
+    # Context turns. The API wants strict user/assistant alternation starting
+    # with user, so a half-present prior exchange is dropped rather than sent.
+    bare = {"utterance": "Sounds good."}
+    assert conversation(bare) == [{"role": "user", "content": "Sounds good."}]
+
+    full = conversation(
+        {
+            "utterance": "Sounds good.",
+            "prev_user": "Can you set up a habit for reading?",
+            "prev_agent": "I can. Want the minimum to be one page?",
+        }
+    )
+    assert [t["role"] for t in full] == ["user", "assistant", "user"]
+    assert full[0]["content"] == "Can you set up a habit for reading?"
+    assert full[2]["content"] == "Sounds good."
+
+    half = {"utterance": "Sounds good.", "prev_user": "Set up a habit.", "prev_agent": ""}
+    assert conversation(half) == [{"role": "user", "content": "Sounds good."}]
+    other = {"utterance": "Sounds good.", "prev_user": "  ", "prev_agent": "Want one page?"}
+    assert conversation(other) == [{"role": "user", "content": "Sounds good."}]
+
+    # A Phoenix row must carry context too, or --phoenix scores blind.
+    from_phoenix = example_to_row(
+        {
+            "id": "ex5",
+            "input": {"utterance": "Yes, please.", "prev_user": "Add it?", "prev_agent": "Shall I?"},
+        }
+    )
+    assert [t["role"] for t in conversation(from_phoenix)] == ["user", "assistant", "user"]
+
     print("selftest ok")
 
 
@@ -433,7 +492,7 @@ def main() -> None:
     timings: list[tuple[str, str]] = []
     for i, row in enumerate(rows, 1):
         started = dt.datetime.now(dt.timezone.utc)
-        predictions.append(predict(client, persona, tools, row["utterance"]))
+        predictions.append(predict(client, persona, tools, row))
         timings.append((started.isoformat(), dt.datetime.now(dt.timezone.utc).isoformat()))
         print(f"\r  {i}/{len(rows)}", end="", flush=True)
     print()

@@ -272,6 +272,24 @@ What this means in practice:
 
 That's not a flaw in the harness — it's the honest resolution of a single-shot LLM eval on 108 examples, and knowing it stops you from shipping a description rewrite on the strength of noise.
 
+### Why the harness now sends the previous turn
+
+A quarter of your utterances are things like "Sounds good.", "Yes, please." and "Both." Sent alone they are unanswerable — there's no referent — so the harness said `none` every time and it looked like a tool-description problem. It wasn't. `pull_utterances.py` now captures the prior exchange (`prev_user`, `prev_agent`) and `replay.py` sends it as a real conversation turn. 89 of the 108 rows have one.
+
+Measured on `tool-selection-v2`, against the two no-context runs:
+
+| | `tool→none` | `none→tool` | wrong tool | accuracy |
+|---|---|---|---|---|
+| no context, run 1 | 11 | 8 | 15 | 68.5% |
+| no context, run 2 | 14 | 8 | 11 | 69.4% |
+| **with context** | **9** | **16** | **9** | 68.5% |
+
+It did what it was built to do — four rows that were unanswerable became correct, including "Sounds good." → `add_habit`. And wrong-tool picks dropped.
+
+But `none→tool` doubled, and **overall accuracy did not move at all**, because those gains cancelled exactly against that regression.
+
+Here's the part that matters: we cannot tell whether that regression is real. `expected_tool = none` on 63 of 108 rows, none of them reviewed. The model getting more eager to call a tool with context, and the `none` label simply being wrong, look identical from here. That question is unanswerable until those rows are read — which is the same conclusion the `reviewed` flag has been pointing at all along.
+
 ### Keep the runs worth keeping
 
 `--save`/`--compare` is the inner loop: offline, instant, no network. Use it while you're actually editing a sentence.
