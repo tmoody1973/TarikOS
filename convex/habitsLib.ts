@@ -88,16 +88,23 @@ export type HabitWeek = {
   friction: string[];
 };
 
-/* The weekly review section. It reports trajectory and friction, then asks
- * for exactly one change — changing several at once makes it impossible to
- * tell which one helped. */
+/* The weekly review section. It reports trajectory and friction, most
+ * frictional pillar first, then asks for exactly one change on that pillar —
+ * changing several at once makes it impossible to tell which one helped. */
 export function buildHabitReview(weeks: HabitWeek[]): string {
   if (weeks.length === 0) {
     return "No active habits this week. Set a pillar up when you're ready.";
   }
 
+  // Rank by friction count, descending. Ties keep input order via an
+  // explicit index key — not a reliance on sort() being stable.
+  const ranked = weeks
+    .map((week, index) => ({ week, index }))
+    .sort((a, b) => b.week.friction.length - a.week.friction.length || a.index - b.index)
+    .map(({ week }) => week);
+
   const lines: string[] = [];
-  for (const week of weeks) {
+  for (const week of ranked) {
     const t = summarizeTrajectory(week.days);
     const parts = [`${t.logged} logged`];
     if (t.returns > 0) parts.push(`came back ${t.returns}×`);
@@ -109,8 +116,11 @@ export function buildHabitReview(weeks: HabitWeek[]): string {
   }
 
   lines.push("");
+  const leader = ranked[0];
   lines.push(
-    "Adjust one variable only: the cue, the size, the location, the backup plan, or pause it.",
+    leader.friction.length > 0
+      ? `Adjust one variable for **${leader.pillar}**: the cue, the size, the location, the backup plan, or pause it.`
+      : "Adjust one variable only: the cue, the size, the location, the backup plan, or pause it.",
   );
   return lines.join("\n");
 }

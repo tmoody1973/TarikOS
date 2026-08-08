@@ -106,28 +106,34 @@ test("every vote level has a counter", () => {
   }
 });
 
-test("the review names the most frictional habit and asks for one change", () => {
-  const body = buildHabitReview(
-    [
-      {
-        pillar: "Work / Craft",
-        days: [
-          { date: "2026-08-01", level: "standard" },
-          { date: "2026-08-02", level: null },
-          { date: "2026-08-03", level: "minimum" },
-        ],
-        friction: ["back-to-back meetings"],
-      },
-      {
-        pillar: "Health",
-        days: [{ date: "2026-08-01", level: "missed" }],
-        friction: [],
-      },
-    ],
-  );
-  assert.match(body, /Work \/ Craft/);
+test("the review leads with the most frictional pillar and names it in the callout", () => {
+  const body = buildHabitReview([
+    // Listed first in the input, but the *less* frictional pillar — the
+    // report must reorder past this, not just echo caller order.
+    {
+      pillar: "Health",
+      days: [{ date: "2026-08-01", level: "missed" }],
+      friction: ["skipped the gym"],
+    },
+    {
+      pillar: "Work / Craft",
+      days: [
+        { date: "2026-08-01", level: "standard" },
+        { date: "2026-08-02", level: null },
+        { date: "2026-08-03", level: "minimum" },
+      ],
+      friction: ["back-to-back meetings", "no evening slot", "laptop died"],
+    },
+  ]);
+  const workIndex = body.indexOf("Work / Craft");
+  const healthIndex = body.indexOf("Health");
+  assert.ok(workIndex >= 0 && healthIndex >= 0);
+  // Work / Craft has 3 friction items to Health's 1 — it must lead the report.
+  assert.ok(workIndex < healthIndex, "the more frictional pillar must lead");
   assert.match(body, /back-to-back meetings/);
-  assert.match(body, /one variable/i);
+  // The closing callout must name the most frictional pillar specifically,
+  // not merely mention its name somewhere else in the body.
+  assert.match(body, /Adjust one variable for \*\*Work \/ Craft\*\*/);
   // The review must never present a streak.
   assert.ok(!/streak/i.test(body));
 });
