@@ -8,6 +8,7 @@
   --lcars-lavender: #cc99cc;
   --lcars-blue: #99ccff;
   --lcars-steel: #6688aa;
+  --lcars-sage: #99cc99;
   --hud-cyan: #35e0ff;
   --panel: #0b0e14;
   --panel-edge: #1a2233;
@@ -21,6 +22,7 @@
   --color-lavender: var(--lcars-lavender);
   --color-hudblue: var(--lcars-blue);
   --color-steel: var(--lcars-steel);
+  --color-sage: var(--lcars-sage);
   --color-cyan-hud: var(--hud-cyan);
   --color-panel: var(--panel);
   --color-panel-edge: var(--panel-edge);
