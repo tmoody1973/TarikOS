@@ -107,28 +107,16 @@ export function ReaderPane({
               EXTRACTING…
             </p>
           ) : state.phase === "error" ? (
-            <div className="mt-10 flex flex-col items-center gap-4 text-center">
+            <div className="mt-10 flex flex-col items-center gap-3 text-center">
               <p className="text-sm text-salmon">⚠️ {state.message}</p>
-              <p className="text-xs text-steel">
-                Some pages block extraction from a server. The original opens
-                fine in your browser.
+              <p className="max-w-xs text-xs leading-6 text-steel">
+                Some pages block extraction from a server. Open the original
+                below — it loads fine in your browser.
               </p>
               {url && (
-                <>
-                  <a
-                    href={url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="lcars-cap-left lcars-cap-right flex h-10 items-center bg-lavender px-6 transition hover:opacity-80 focus-visible:outline-2 focus-visible:outline-cyan-hud"
-                  >
-                    <span className="font-[family-name:var(--font-display)] text-sm uppercase text-black">
-                      Open original ↗
-                    </span>
-                  </a>
-                  <span className="text-[10px] uppercase tracking-[0.2em] text-steel">
-                    {hostLabel(url)}
-                  </span>
-                </>
+                <span className="text-[10px] uppercase tracking-[0.2em] text-steel">
+                  {hostLabel(url)}
+                </span>
               )}
             </div>
           ) : (

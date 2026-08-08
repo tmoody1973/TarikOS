@@ -4,6 +4,26 @@ A personal AI operating system you talk to. Zola — the voice assistant at its 
 
 This is a single-user system built for one person's real life, published as a working reference. Fork it and make it yours — it is not a hosted product and has no multi-tenant support.
 
+## See it working
+
+Asking Zola about the inbox, out loud. The status line tracks the turn — `LISTENING` while you talk, `ZOLA SPEAKING` while she answers — and the orb reacts to her voice.
+
+![Zola mid-answer in the voice console: the header reads ZOLA SPEAKING beside a live waveform, with an animated orb below it and a DISENGAGE button top right](docs/assets/voice-console.gif)
+
+**▶︎ [Watch the full 70-second exchange, with sound](docs/assets/voice-console.mp4)** — "any new emails for me?", and she reads back six, summarized by what actually matters: two AAA music promos, a submission someone already replied to, a press release. The transcript fills in on the left while the cards she pushed appear on the right.
+
+<a href="docs/assets/voice-console.mp4"><img src="docs/assets/voice-console-poster.jpg" alt="The conversation page: a live transcript of Tarik and Zola on the left, an animated voice orb, and a Command Center column of email cards on the right" width="100%"></a>
+
+### The morning brief
+
+Built while you sleep by a Convex cron. Calendar, inbox, and each feed group in its own column; the pills above are earlier editions of the same day.
+
+![The morning brief for 2026-08-07 in three columns — Calendar, Milwaukee News, and AI and Developer Tooling News — with a row of edition pills above and a REFRESH control](docs/assets/morning-brief.png)
+
+Clicking any headline slides in the reader: the article extracted server-side and re-set in the dashboard's own type, with `OPEN ORIGINAL ↗` always available for pages that resist extraction.
+
+![The same brief with a reader panel slid over the right half, showing an Urban Milwaukee article with its byline, photo and body text re-rendered in the LCARS theme](docs/assets/brief-reader.png)
+
 ## How it works, in plain English
 
 1. **You talk.** The browser opens a realtime voice session with an [ElevenLabs Agent](https://elevenlabs.io/agents). Zola listens, responds with a voice, and decides when a request needs a real action.
