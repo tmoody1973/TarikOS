@@ -100,16 +100,18 @@ async function runLoop(sessionId: string, task: string, secret: string) {
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     console.error("browser run failed:", error);
-    // One recovery block: failure brief (written "ready" so Zola can speak
-    // it) + terminal status + session release. If Convex itself is down,
-    // console.error above is the record and the stale-row TTL unwedges the
-    // busy guard.
+    // One recovery block: failure brief (status "error" — an operational
+    // log for the archive's SYSTEM group, never spoken as an edition,
+    // MOO-495) + terminal status + session release. If Convex itself is
+    // down, console.error above is the record and the stale-row TTL
+    // unwedges the busy guard.
     try {
       const briefId = await convexServer().mutation(
         api.browserSessions.writeBrowseBrief,
         {
           secret,
           title: `Browse: ${task.slice(0, 80)}`,
+          status: "error",
           sections: browseSections({
             task,
             resultMessage: "",

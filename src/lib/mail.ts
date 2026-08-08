@@ -6,6 +6,7 @@ import {
 } from "./google.ts";
 import { sanitizeEmailHtml } from "./mailSanitizer.ts";
 import { extractEmailAddress } from "./emailAddress.ts";
+import { tokenize } from "./briefArchive.ts";
 
 // Mail center data layer (MOO-492): thread list + full-thread read across
 // the connected Gmail accounts. Server-side only — sibling of google.ts.
@@ -121,11 +122,7 @@ export function matchThread(
   rows: MailThreadRow[],
   query: string,
 ): ThreadMatch {
-  const tokens = query
-    .toLowerCase()
-    .replace(/'s\b/g, "")
-    .split(/[^a-z0-9]+/)
-    .filter((t) => t.length > 1 && !MATCH_STOPWORDS.has(t));
+  const tokens = tokenize(query, MATCH_STOPWORDS);
   if (tokens.length === 0) return { outcome: "none" };
   const hits = rows.filter((r) => {
     const hay = `${r.subject} ${r.from}`.toLowerCase();

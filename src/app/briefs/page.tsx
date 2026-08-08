@@ -6,6 +6,14 @@ import { Authenticated, AuthLoading, useAction, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { ReaderPane } from "@/components/ReaderPane";
+import { SlideOver } from "@/components/SlideOver";
+import { ArchiveRail } from "./ArchiveRail";
+import {
+  isSystemBrief,
+  chicagoDateTime,
+  BRIEF_STATUS_DOT,
+  type BriefSummary,
+} from "@/lib/briefArchive";
 
 export default function BriefsPage() {
   return (
@@ -26,21 +34,6 @@ export default function BriefsPage() {
   );
 }
 
-const STATUS_COLOR: Record<string, string> = {
-  ready: "bg-cyan-hud",
-  building: "bg-amber pulse-soft",
-  error: "bg-salmon",
-};
-
-function briefDate(creationTime: number): string {
-  return new Date(creationTime).toLocaleString("en-US", {
-    timeZone: "America/Chicago",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
 
 // Brief bodies are markdown our own runner emits: "- " list lines with
 // **bold** spans and [headline](url) links. Render just that; no markdown
@@ -128,6 +121,7 @@ function Bold({ text }: { text: string }) {
 function BriefsInner() {
   const briefs = useQuery(api.workflows.listBriefs);
   const [selectedId, setSelectedId] = useState<Id<"briefs"> | null>(null);
+  const [archiveOpen, setArchiveOpen] = useState(false); // mobile drawer
   // navigate_ui "open a specific brief": /briefs?open=<title fragment>
   const openParam = useSearchParams().get("open");
   useEffect(() => {
@@ -137,7 +131,15 @@ function BriefsInner() {
     );
     if (match) setSelectedId(match._id);
   }, [openParam, briefs]);
-  const activeId = selectedId ?? briefs?.[0]?._id ?? null;
+  // Default to the newest EDITORIAL brief — a 3am consolidation log should
+  // never be the page's opening state (MOO-495).
+  const defaultId = briefs?.find((b) => !isSystemBrief(b))?._id;
+  const activeId = selectedId ?? defaultId ?? briefs?.[0]?._id ?? null;
+
+  function selectBrief(id: string) {
+    setSelectedId(id as Id<"briefs">);
+    setArchiveOpen(false);
+  }
   const brief = useQuery(
     api.workflows.getBrief,
     activeId ? { briefId: activeId } : "skip",
@@ -158,6 +160,21 @@ function BriefsInner() {
 
   return (
     <div className="flex flex-1 gap-3">
+      {/* Archive Rail (MOO-495) — desktop */}
+      <aside className="hidden w-80 shrink-0 flex-col rounded-lg border border-panel-edge bg-panel px-3 py-4 lg:flex">
+        {briefs === undefined ? (
+          <p className="pulse-soft mt-6 text-center text-xs tracking-[0.3em] text-steel">
+            SYNCING…
+          </p>
+        ) : (
+          <ArchiveRail
+            briefs={briefs as BriefSummary[]}
+            activeId={activeId}
+            onSelect={selectBrief}
+          />
+        )}
+      </aside>
+
       <main className="flex min-w-0 flex-1 flex-col overflow-y-auto rounded-lg border border-panel-edge bg-panel px-4 py-5 sm:px-8">
         {briefs === undefined ? (
           <p className="pulse-soft mt-8 text-center text-xs tracking-[0.3em] text-steel">
@@ -177,11 +194,11 @@ function BriefsInner() {
               {/* Folio line */}
               {brief && (
                 <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 border-t border-panel-edge pt-2 text-[10px] uppercase tracking-[0.25em] text-steel">
-                  <span>{briefDate(brief._creationTime)}</span>
+                  <span>{chicagoDateTime(brief._creationTime)}</span>
                   <span aria-hidden>·</span>
                   <span className="inline-flex items-center gap-1.5">
                     <span
-                      className={`h-1.5 w-1.5 rounded-full ${STATUS_COLOR[brief.status] ?? "bg-steel"}`}
+                      className={`h-1.5 w-1.5 rounded-full ${BRIEF_STATUS_DOT[brief.status] ?? "bg-steel"}`}
                     />
                     {brief.status === "building"
                       ? "building — sections arriving live"
@@ -195,32 +212,18 @@ function BriefsInner() {
                   >
                     {refreshing ? "QUEUED…" : "↻ REFRESH"}
                   </button>
+                  <span aria-hidden className="lg:hidden">
+                    ·
+                  </span>
+                  <button
+                    onClick={() => setArchiveOpen(true)}
+                    className="tracking-[0.25em] text-hudblue transition hover:text-cyan-hud focus-visible:outline-2 focus-visible:outline-cyan-hud lg:hidden"
+                  >
+                    ☰ ARCHIVE
+                  </button>
                 </div>
               )}
             </header>
-
-            {/* Editions strip */}
-            <nav
-              aria-label="Editions"
-              className="mt-3 flex gap-2 overflow-x-auto border-b border-panel-edge pb-3"
-            >
-              {briefs.map((b) => (
-                <button
-                  key={b._id}
-                  onClick={() => setSelectedId(b._id)}
-                  className={`flex shrink-0 items-center gap-2 rounded-full border px-3 py-1 text-[11px] uppercase tracking-wider transition focus-visible:outline-2 focus-visible:outline-cyan-hud ${
-                    b._id === activeId
-                      ? "border-lavender/70 bg-lavender/15 text-foreground"
-                      : "border-panel-edge text-steel hover:border-lavender/40 hover:text-foreground/80"
-                  }`}
-                >
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${STATUS_COLOR[b.status] ?? "bg-steel"}`}
-                  />
-                  {briefDate(b._creationTime)}
-                </button>
-              ))}
-            </nav>
 
             {/* Column flow */}
             {!brief ? (
@@ -273,6 +276,28 @@ function BriefsInner() {
       </main>
 
       <ReaderPane url={readerUrl} onClose={() => setReaderUrl(null)} />
+
+      {/* Archive drawer — mobile */}
+      <div className="lg:hidden">
+        <SlideOver
+          open={archiveOpen}
+          onClose={() => setArchiveOpen(false)}
+          label="Archive"
+          accent="bg-lavender"
+        >
+          {briefs === undefined ? (
+            <p className="pulse-soft mt-6 text-center text-xs tracking-[0.3em] text-steel">
+              SYNCING…
+            </p>
+          ) : (
+            <ArchiveRail
+              briefs={briefs as BriefSummary[]}
+              activeId={activeId}
+              onSelect={selectBrief}
+            />
+          )}
+        </SlideOver>
+      </div>
     </div>
   );
 }

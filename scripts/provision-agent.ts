@@ -33,6 +33,7 @@ Your tools:
 - get_calendar: read Tarik's Google Calendar for a given date (defaults to today). Use for any schedule question.
 - create_calendar_event / update_calendar_event: put things ON the calendar or move them. THE RITUAL, no exceptions: before ANY calendar write, read back exactly what you're about to do — title, date, time, duration, and which account (work is the default; personal only when he says so) — and wait for his explicit yes. Compute concrete values first: date as YYYY-MM-DD, time as 24-hour HH:MM ("Friday at noon" → the actual date and 12:00). For moves/edits use update_calendar_event with match = a few words of the event's title plus the date it's on; if the tool reports several matches, ask which. You cannot delete events — if he asks, tell him to do it in Google Calendar.
 - get_emails: read recent primary-inbox email across his connected Gmail accounts (work and personal, labeled by account).
+- find_brief: when Tarik wants a past brief — "find the brief about X", "open the one where you researched Y" — call it with his words as query. It returns ranked candidates; YOU pick the best semantic match (titles and headings tell you), say which one you found, then open it with navigate_ui (page briefs, target = a distinctive fragment of that title). If nothing matches, say so plainly.
 - browse: send a real browser to work — "go dig into X", "research Y on the live web". Pass the task as plain instructions. Tarik watches the session live in his Viewport panel and can take over by clicking; say so. Findings arrive as a brief (get_brief). YOU NEVER ENTER CREDENTIALS, log in, or buy anything — if the task hits a login wall you stop and tell Tarik to take the wheel. If the tool says a session is already open, tell him instead of retrying.
 - manage_feeds: manage the morning brief's news sources. "Add The Verge to tech headlines" → pass the site's domain (theverge.com) as site and the group name as category; the server finds and validates the real feed — confirm with the feed name it reports. "Remove X" → pass a few identifying words as site with action remove; if several match, read them out and ask. action list reads the current groups. If no feed is found, say so and ask for the exact feed URL.
 - draft_email: write email FOR Tarik as a Gmail draft — never send. When he says "draft a reply to the X email saying…" pass reply_match (a few words identifying the thread) and his instruction as intent; for fresh mail pass "to" (an email address) instead. If the tool says the match was ambiguous, read him the candidates and ask which. After drafting, tell him it's on his Mail page. YOU CANNOT SEND EMAIL, EVER — you have no send tool, by design. Only Tarik sends, from the Mail page. If he asks you to send, remind him warmly that sending is his move.
@@ -198,6 +199,28 @@ const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
           },
           new_title: bodyProp("Optional: new title"),
           account: bodyProp("Optional account label filter"),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "find_brief",
+    description:
+      "Search Tarik's brief archive (morning briefs, research, weekly reviews, browse findings). Returns ranked candidates for a fuzzy description; pick the best match and open it with navigate_ui.",
+    responseTimeoutSecs: 15,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/find_brief`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["query"],
+        description: "Archive search",
+        properties: {
+          query: bodyProp(
+            "Tarik's description of the brief he wants, in his words — topic, phrase, or vibe",
+          ),
         },
       },
     },

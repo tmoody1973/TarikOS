@@ -76,22 +76,23 @@ export const latestSession = query({
   },
 });
 
-// Brief writing for the runner — same briefs table the workflow engine uses;
-// get_brief picks the result up (latestReadyBrief has no workflowName
-// filter). Failed runs are written "ready" too, with the failure explained
-// in the section body, so Zola can speak them instead of going silent.
+// Brief writing for the runner — same briefs table the workflow engine
+// uses; get_brief picks successes up. Failed runs are written status
+// "error": they're operational logs (MOO-495) — inspectable in the archive's
+// SYSTEM group, never spoken as the latest edition.
 export const writeBrowseBrief = mutation({
   args: {
     secret: v.string(),
     title: v.string(),
     sections: v.array(sectionValidator),
+    status: v.optional(v.union(v.literal("ready"), v.literal("error"))),
   },
-  handler: async (ctx, { secret, title, sections }) => {
+  handler: async (ctx, { secret, title, sections, status }) => {
     checkToolSecret(secret);
     return await ctx.db.insert("briefs", {
       title,
       workflowName: "browse",
-      status: "ready",
+      status: status ?? "ready",
       runStartedAt: Date.now(),
       sections,
     });

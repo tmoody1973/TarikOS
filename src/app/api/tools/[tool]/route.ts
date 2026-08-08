@@ -21,6 +21,7 @@ import { createDraft, resolveReplyTarget } from "@/lib/mail";
 import { draftEmailBody } from "@/lib/zolaDraft";
 import { discoverFeed } from "@/lib/feedDiscovery";
 import { createBrowserSession, endBrowserSession } from "@/lib/browserSession";
+import { briefKind, rankBriefs, chicagoDateTime } from "@/lib/briefArchive";
 import { safeSlice } from "../../../../../convex/workflowLib";
 import {
   TELOS_KINDS,
@@ -574,6 +575,42 @@ async function runTool(
       return {
         ok: true,
         message: `On it — the ${name.replace(/-/g, " ")} is building on the Briefs page now.`,
+      };
+    }
+    // Archive search (MOO-495): server scores candidates; Zola — an LLM —
+    // does the actual semantic resolution from the ranked list, then opens
+    // the winner with navigate_ui. No embedding infra needed.
+    case "find_brief": {
+      const query = strArg(body.query, 200);
+      if (!query) {
+        return { ok: false, message: "What brief should I look for?" };
+      }
+      const briefs = await convex.query(api.workflows.briefSummariesFromTool, {
+        secret,
+      });
+      const ranked = rankBriefs(briefs, query, 5);
+      // Zero keyword overlap ≠ no match — hand Zola the recent archive and
+      // let her judge semantically (that's the whole contract).
+      const pool = ranked.length > 0 ? ranked : briefs.slice(0, 5);
+      const candidates = pool.map((b) => ({
+        title: b.title,
+        kind: briefKind(b.workflowName).label,
+        date: chicagoDateTime(b._creationTime),
+        headings: b.headings.slice(0, 6),
+      }));
+      void convex
+        .mutation(api.secondBrain.markToolHealthyFromTool, {
+          secret,
+          name: "find_brief",
+        })
+        .catch(() => {});
+      if (candidates.length === 0) {
+        return { ok: false, message: "The archive is empty." };
+      }
+      return {
+        ok: true,
+        message: `${candidates.length} candidate brief(s)${ranked.length === 0 ? " (no keyword overlap — these are the most recent; judge for yourself)" : ""}. Pick the best match yourself, tell Tarik which, then open it with navigate_ui (page briefs, target = a distinctive fragment of its title). If none fit, say so.`,
+        data: { candidates },
       };
     }
     case "get_brief": {

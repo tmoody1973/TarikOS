@@ -11,6 +11,8 @@ import type { MutationCtx } from "./_generated/server";
 import { requireUser } from "./dashboard";
 import { checkToolSecret, markToolHealthy } from "./secondBrain";
 import { seedSettingIfAbsent, upsertSetting } from "./settingsLib";
+import { safeSlice } from "./workflowLib";
+import type { Doc } from "./_generated/dataModel";
 
 // Workflow-engine data layer: the runner action (workflowRunner.ts) drives
 // these internal functions; the public ones serve the Briefs page and the
@@ -126,18 +128,54 @@ export const watchdog = internalMutation({
 
 // ---- Briefs page (browser, identity-gated) ----
 
+// Archive summary shape (MOO-495): headings + a capped excerpt power the
+// rail's content search and find_brief scoring without shipping full bodies.
+// ponytail: 100-brief window; paginate if the archive ever outgrows it.
+const EXCERPT_CAP = 800;
+const ARCHIVE_WINDOW = 100;
+
+// Early-exit accumulation — never materialize a brief's full body just to
+// throw away everything past the cap.
+function excerptOf(sections: { body: string }[]): string {
+  let out = "";
+  for (const s of sections) {
+    if (out.length >= EXCERPT_CAP) break;
+    out += (out ? " " : "") + s.body;
+  }
+  return safeSlice(out, EXCERPT_CAP);
+}
+
+function toBriefSummary(b: Doc<"briefs">) {
+  return {
+    _id: b._id,
+    _creationTime: b._creationTime,
+    title: b.title,
+    workflowName: b.workflowName,
+    status: b.status,
+    headings: b.sections.map((s) => s.heading),
+    // Empty while building: keeps the live-query result byte-stable across
+    // section-by-section patches, so clients aren't pushed ~100 summaries
+    // per patch for a change the rail shows as one pulsing dot.
+    excerpt: b.status === "ready" ? excerptOf(b.sections) : "",
+  };
+}
+
 export const listBriefs = query({
   args: {},
   handler: async (ctx) => {
     await requireUser(ctx);
-    const briefs = await ctx.db.query("briefs").order("desc").take(30);
-    return briefs.map(({ _id, _creationTime, title, workflowName, status }) => ({
-      _id,
-      _creationTime,
-      title,
-      workflowName,
-      status,
-    }));
+    const briefs = await ctx.db.query("briefs").order("desc").take(ARCHIVE_WINDOW);
+    return briefs.map(toBriefSummary);
+  },
+});
+
+// find_brief voice tool reads the same summaries, secret-gated.
+export const briefSummariesFromTool = query({
+  args: { secret: v.string() },
+  handler: async (ctx, { secret }) => {
+    checkToolSecret(secret);
+    const briefs = await ctx.db.query("briefs").order("desc").take(ARCHIVE_WINDOW);
+    return briefs.map(toBriefSummary);
   },
 });
 
@@ -155,10 +193,17 @@ export const latestReadyBrief = query({
   args: { secret: v.string() },
   handler: async (ctx, { secret }) => {
     checkToolSecret(secret);
+    // Operational logs are not editions: the 3am consolidation run must
+    // never be what "good morning" speaks (MOO-495).
     return await ctx.db
       .query("briefs")
       .order("desc")
-      .filter((q) => q.eq(q.field("status"), "ready"))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("status"), "ready"),
+          q.neq(q.field("workflowName"), "memory-consolidation"),
+        ),
+      )
       .first();
   },
 });
