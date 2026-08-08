@@ -16,6 +16,7 @@ test("maps a verbose draft row to a DraftRow", () => {
           sender: "Tarik Moody <tarik@radiomilwaukee.org>",
           messageTimestamp: "2026-08-04T14:01:42Z",
           threadId: "19fcd1489b8a8c18",
+          messageId: "19fcd1489b8a8c18",
           messageText: "body text here",
         },
       },
@@ -31,6 +32,7 @@ test("maps a verbose draft row to a DraftRow", () => {
     snippet: "body text here",
     date: "2026-08-04T14:01:42Z",
     threadId: "19fcd1489b8a8c18",
+    messageId: "19fcd1489b8a8c18",
   });
 });
 

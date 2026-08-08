@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Authenticated, AuthLoading } from "convex/react";
 import { Zone, ZoneEmpty } from "@/components/hud/Zone";
 import { Compose, type ComposePrefill } from "./Compose";
+import { extractEmailAddress } from "@/lib/emailAddress";
 
 // Mail page (MOO-492): thread list + sanitized reading pane. Compose lands
 // in MOO-493; Zola drafts in MOO-494. Layout is the shadcn Mail three-pane
@@ -25,6 +26,10 @@ type DraftRow = {
   subject: string;
   snippet: string;
   date: string;
+  threadId?: string;
+  messageId?: string;
+  bodyHtml?: string;
+  zola?: boolean;
 };
 
 type Message = {
@@ -147,9 +152,35 @@ function MailInner() {
     else loadThreads(accountFilter);
   }, [view, accountFilter, loadThreads, loadDrafts]);
 
+  // Open an existing Gmail draft in the editor (MOO-494). Our own drafts
+  // carry bodyHtml in the list response; Gmail-authored ones fetch it.
+  async function openDraft(d: DraftRow) {
+    let bodyHtml = d.bodyHtml ?? "";
+    if (!bodyHtml && d.messageId) {
+      try {
+        const res = await fetch(
+          `/api/mail/messages/${encodeURIComponent(d.messageId)}?account=${encodeURIComponent(d.account)}`,
+        );
+        const json = await res.json();
+        if (json.ok) bodyHtml = json.html;
+      } catch {
+        // Empty editor beats a blocked one — the draft stays intact in Gmail.
+      }
+    }
+    setPrefill({
+      to: d.to,
+      subject: d.subject === "(no subject)" ? "" : d.subject,
+      threadId: d.threadId,
+      draftId: d.draftId,
+      account: d.account,
+      bodyHtml,
+    });
+    setComposeOpen(true);
+  }
+
   function replyTo(row: ThreadRow, msgs: Message[]) {
     const lastFrom = msgs[msgs.length - 1]?.from ?? "";
-    const email = lastFrom.match(/<([^>]+)>/)?.[1] ?? lastFrom.trim();
+    const email = extractEmailAddress(lastFrom) ?? "";
     setPrefill({
       to: email,
       subject: row.subject.startsWith("Re:") ? row.subject : `Re: ${row.subject}`,
@@ -220,17 +251,19 @@ function MailInner() {
             ) : (
               <ul className="flex-1 space-y-1 overflow-y-auto">
                 {drafts.map((d) => (
-                  <li
-                    key={d.draftId}
-                    className="rounded-md border border-panel-edge/60 px-2.5 py-2"
-                  >
-                    <RowBody
-                      top={`To: ${d.to || "(no recipient)"}`}
-                      date={d.date}
-                      subject={d.subject}
-                      snippet={d.snippet}
-                      tag={`${d.account} · draft`}
-                    />
+                  <li key={d.draftId}>
+                    <button
+                      onClick={() => openDraft(d)}
+                      className="w-full rounded-md border border-panel-edge/60 px-2.5 py-2 text-left transition hover:border-lavender/40 hover:bg-black/30"
+                    >
+                      <RowBody
+                        top={`To: ${d.to || "(no recipient)"}`}
+                        date={d.date}
+                        subject={d.subject}
+                        snippet={d.snippet}
+                        tag={d.zola ? `${d.account} · Zola drafted` : `${d.account} · draft`}
+                      />
+                    </button>
                   </li>
                 ))}
               </ul>

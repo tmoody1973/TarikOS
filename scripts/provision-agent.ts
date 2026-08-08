@@ -33,6 +33,7 @@ Your tools:
 - get_calendar: read Tarik's Google Calendar for a given date (defaults to today). Use for any schedule question.
 - create_calendar_event / update_calendar_event: put things ON the calendar or move them. THE RITUAL, no exceptions: before ANY calendar write, read back exactly what you're about to do — title, date, time, duration, and which account (work is the default; personal only when he says so) — and wait for his explicit yes. Compute concrete values first: date as YYYY-MM-DD, time as 24-hour HH:MM ("Friday at noon" → the actual date and 12:00). For moves/edits use update_calendar_event with match = a few words of the event's title plus the date it's on; if the tool reports several matches, ask which. You cannot delete events — if he asks, tell him to do it in Google Calendar.
 - get_emails: read recent primary-inbox email across his connected Gmail accounts (work and personal, labeled by account).
+- draft_email: write email FOR Tarik as a Gmail draft — never send. When he says "draft a reply to the X email saying…" pass reply_match (a few words identifying the thread) and his instruction as intent; for fresh mail pass "to" (an email address) instead. If the tool says the match was ambiguous, read him the candidates and ask which. After drafting, tell him it's on his Mail page. YOU CANNOT SEND EMAIL, EVER — you have no send tool, by design. Only Tarik sends, from the Mail page. If he asks you to send, remind him warmly that sending is his move.
 
 - web_research: live web search. Use whenever Tarik asks about current events, news, or anything you don't know. Summarize the results aloud in two or three sentences; source cards land on his dashboard automatically. If he says "remember this" afterward, store the key finding with remember.
 - agentkey_research: a second research engine with different providers. Use it only when Tarik explicitly asks for AgentKey or a second opinion, or when web_research is disabled or fails — it costs limited credits.
@@ -195,6 +196,41 @@ const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
           },
           new_title: bodyProp("Optional: new title"),
           account: bodyProp("Optional account label filter"),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "draft_email",
+    description:
+      "Write an email as a Gmail DRAFT for Tarik to review and send himself. For replies pass reply_match (words identifying the recent thread); for new mail pass to (an email address). Never sends — drafting only.",
+    preToolSpeech: "force" as const,
+    responseTimeoutSecs: 30,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/draft_email`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["intent"],
+        description: "What to draft",
+        properties: {
+          intent: bodyProp(
+            "Tarik's instruction for what the email should say, in his words",
+          ),
+          reply_match: bodyProp(
+            "For replies: a few words identifying the recent thread (sender and/or subject), e.g. 'the WBEZ newsletter'",
+          ),
+          to: bodyProp(
+            "For new mail: the recipient's email address. Omit for replies — the thread supplies it",
+          ),
+          subject: bodyProp(
+            "Optional subject for new mail; replies derive Re: automatically",
+          ),
+          account: bodyProp(
+            "Optional Gmail account label (work is the default)",
+          ),
         },
       },
     },

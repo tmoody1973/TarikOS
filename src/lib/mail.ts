@@ -5,6 +5,7 @@ import {
   type Account,
 } from "./google.ts";
 import { sanitizeEmailHtml } from "./mailSanitizer.ts";
+import { extractEmailAddress } from "./emailAddress.ts";
 
 // Mail center data layer (MOO-492): thread list + full-thread read across
 // the connected Gmail accounts. Server-side only — sibling of google.ts.
@@ -37,6 +38,10 @@ export type DraftRow = {
   snippet: string;
   date: string;
   threadId?: string;
+  messageId?: string;
+  // Carried when the list response already contains the body (our single-part
+  // HTML drafts) so the editor can open without a second fetch.
+  bodyHtml?: string;
 };
 
 type RawMsg = Record<string, unknown>;
@@ -98,6 +103,79 @@ export async function listMailThreads(
   return { threads, accounts: accounts.map((a) => a.label) };
 }
 
+// ---- Reply matching (MOO-494). Deliberately strict: every meaningful token
+// must land in a thread's subject+sender. A wrong match drafts into the wrong
+// conversation, so none/ambiguous always beats a guess. ----
+
+const MATCH_STOPWORDS = new Set([
+  "the", "a", "an", "email", "mail", "message", "thread", "from", "about",
+  "to", "re", "reply", "that", "one", "my", "his", "her", "their", "this",
+]);
+
+export type ThreadMatch =
+  | { outcome: "matched"; thread: MailThreadRow }
+  | { outcome: "ambiguous"; candidates: MailThreadRow[] }
+  | { outcome: "none" };
+
+export function matchThread(
+  rows: MailThreadRow[],
+  query: string,
+): ThreadMatch {
+  const tokens = query
+    .toLowerCase()
+    .replace(/'s\b/g, "")
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length > 1 && !MATCH_STOPWORDS.has(t));
+  if (tokens.length === 0) return { outcome: "none" };
+  const hits = rows.filter((r) => {
+    const hay = `${r.subject} ${r.from}`.toLowerCase();
+    return tokens.every((t) => hay.includes(t));
+  });
+  if (hits.length === 1) return { outcome: "matched", thread: hits[0] };
+  if (hits.length > 1)
+    return { outcome: "ambiguous", candidates: hits.slice(0, 3) };
+  return { outcome: "none" };
+}
+
+// ---- Message HTML extraction (MOO-494). Shapes probed live 2026-08-07:
+// our single-part HTML drafts return the HTML in messageText; Gmail-authored
+// drafts may carry base64url bodies in payload (single or multipart). ----
+
+type RawPart = {
+  mimeType?: string;
+  body?: { data?: string };
+  parts?: RawPart[];
+};
+
+function decodeB64Html(part: RawPart | undefined): string {
+  const data = part?.body?.data;
+  if (!data) return "";
+  try {
+    return Buffer.from(data, "base64url").toString("utf8");
+  } catch {
+    return "";
+  }
+}
+
+function looksLikeHtml(s: string): boolean {
+  return /<[a-z][\s\S]*>/i.test(s);
+}
+
+export function extractMessageHtml(msg: Record<string, unknown>): string {
+  // pickBody knows the string-field shapes (messageHtml/htmlBody/…); this
+  // adds the base64url payload shapes the message-fetch API returns.
+  const body = pickBody(msg as RawMsg);
+  if (body.isHtml || looksLikeHtml(body.html)) return body.html;
+  const payload = (msg.payload ?? {}) as RawPart;
+  const htmlPart = [payload, ...(payload.parts ?? [])].find(
+    (p) => p.mimeType === "text/html",
+  );
+  const partHtml = decodeB64Html(htmlPart);
+  if (partHtml) return partHtml;
+  const plain = body.html || decodeB64Html(payload);
+  return `<p>${plain.replaceAll("&", "&amp;").replaceAll("<", "&lt;")}</p>`;
+}
+
 // ---- Drafts + send (MOO-493). Gmail-native drafts; no update action exists,
 // so replace = delete + create. Send is explicit and atomic (SEND_DRAFT). ----
 
@@ -109,14 +187,18 @@ export function mapDraftRows(rows: RawMsg[], account: string): DraftRow[] {
     .map((d) => {
       const m = (d.message ?? {}) as RawMsg;
       const threadId = str(m.threadId) || str(m.thread_id);
+      const messageId = str(m.messageId) || str(m.id);
+      const text = str(m.messageText ?? m.snippet);
       return {
         draftId: str(d.id),
         account,
         to: str(m.to ?? m.recipient),
         subject: str(m.subject) || "(no subject)",
-        snippet: str(m.messageText ?? m.snippet).slice(0, 140),
+        snippet: text.slice(0, 140),
         date: timestamp(m),
         ...(threadId ? { threadId } : {}),
+        ...(messageId ? { messageId } : {}),
+        ...(looksLikeHtml(text) ? { bodyHtml: text } : {}),
       };
     });
 }
@@ -184,6 +266,55 @@ export async function listDrafts(accountLabel?: string): Promise<DraftRow[]> {
     }),
   );
   return perAccount.flat().sort((a, b) => b.date.localeCompare(a.date));
+}
+
+// Body HTML of any message (MOO-494; used to open drafts in the editor) —
+// Gmail serves it via the message fetch, shapes handled by extractMessageHtml.
+export async function getMessageHtml(
+  messageId: string,
+  accountLabel: string,
+): Promise<string> {
+  const acct = await pickAccount("gmail", accountLabel);
+  const msg = await execute("GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID", acct.id, {
+    message_id: messageId,
+    format: "full",
+  });
+  return extractMessageHtml(msg);
+}
+
+// Reply resolution for draft-first replies (MOO-494) — calendar-write
+// precedent: the lib returns an outcome union, the tool route only maps
+// outcomes to spoken messages.
+export type ReplyTarget =
+  | {
+      outcome: "resolved";
+      to: string;
+      subject: string;
+      threadId: string;
+      account: string;
+      thread: MailMessage[];
+    }
+  | { outcome: "ambiguous"; candidates: MailThreadRow[] }
+  | { outcome: "none" };
+
+export async function resolveReplyTarget(
+  replyMatch: string,
+  accountLabel?: string,
+): Promise<ReplyTarget> {
+  const { threads } = await listMailThreads(accountLabel);
+  const match = matchThread(threads, replyMatch);
+  if (match.outcome !== "matched") return match;
+  const t = match.thread;
+  const thread = await getMailThread(t.threadId, t.account);
+  const lastFrom = thread[thread.length - 1]?.from ?? "";
+  return {
+    outcome: "resolved",
+    to: extractEmailAddress(lastFrom) ?? "",
+    subject: t.subject.startsWith("Re:") ? t.subject : `Re: ${t.subject}`,
+    threadId: t.threadId,
+    account: t.account,
+    thread,
+  };
 }
 
 // The ONLY send path in the app — always from an existing draft, always

@@ -14,6 +14,10 @@ export type ComposePrefill = {
   to?: string;
   subject?: string;
   threadId?: string;
+  // Editing an existing Gmail draft (MOO-494): saves replace it in place.
+  draftId?: string;
+  account?: string;
+  bodyHtml?: string;
 };
 
 type Status =
@@ -151,10 +155,15 @@ export function Compose({
     if (!open) return;
     setTo(prefill?.to ?? "");
     setSubject(prefill?.subject ?? "");
-    setAccount(accounts.find((a) => a.toLowerCase().includes("work")) ?? accounts[0] ?? "");
-    setDraftId(null);
+    setAccount(
+      prefill?.account ??
+        accounts.find((a) => a.toLowerCase().includes("work")) ??
+        accounts[0] ??
+        "",
+    );
+    setDraftId(prefill?.draftId ?? null);
     setStatus({ kind: "idle" });
-    editor?.commands.setContent("");
+    editor?.commands.setContent(prefill?.bodyHtml ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, prefill]);
 

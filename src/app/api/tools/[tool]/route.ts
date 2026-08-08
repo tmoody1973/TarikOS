@@ -17,6 +17,8 @@ import {
 } from "@/lib/research";
 import { fetchFeedGroup } from "@/lib/rss";
 import { runConsolidation } from "@/lib/consolidate";
+import { createDraft, resolveReplyTarget } from "@/lib/mail";
+import { draftEmailBody } from "@/lib/zolaDraft";
 import { safeSlice } from "../../../../../convex/workflowLib";
 import {
   TELOS_KINDS,
@@ -481,6 +483,63 @@ async function runTool(
         entries.map((j) => ({ text: j.text, mode: j.mode, at: j._creationTime })),
       );
       return { ok: true, message: "Journal digest built.", data: { body } };
+    }
+    // Zola drafts, Tarik sends (MOO-494). This case creates Gmail drafts and
+    // NOTHING else — no send action exists anywhere in the tool surface.
+    case "draft_email": {
+      const intent = strArg(body.intent, 1200);
+      if (!intent) {
+        return { ok: false, message: "Tell me what the email should say first." };
+      }
+      const account = strArg(body.account, 60);
+      const replyMatch = strArg(body.reply_match, 200);
+      const reply = replyMatch
+        ? await resolveReplyTarget(replyMatch, account)
+        : null;
+      if (reply?.outcome === "none") {
+        return {
+          ok: false,
+          message: `I couldn't find a recent thread matching "${replyMatch}", so I haven't drafted anything.`,
+        };
+      }
+      if (reply?.outcome === "ambiguous") {
+        const names = reply.candidates
+          .map((c) => `"${c.subject}" from ${c.from}`)
+          .join("; ");
+        return {
+          ok: false,
+          message: `A few threads match — ${names}. Which one do you mean? Nothing drafted yet.`,
+        };
+      }
+      const resolved = reply?.outcome === "resolved" ? reply : null;
+      const to = strArg(body.to, 200) ?? (resolved?.to || undefined);
+      if (!to) {
+        return { ok: false, message: "Who should this email go to?" };
+      }
+      const subject = strArg(body.subject, 200) ?? resolved?.subject ?? "";
+      const bodyHtml = await draftEmailBody({
+        intent,
+        to,
+        subject,
+        thread: resolved?.thread,
+      });
+      const draft = await createDraft({
+        to,
+        subject,
+        bodyHtml,
+        account: resolved?.account ?? account,
+        threadId: resolved?.threadId,
+      });
+      await convex.mutation(api.zolaDrafts.markZolaDraft, {
+        secret,
+        draftId: draft.draftId,
+        account: draft.account,
+      });
+      return {
+        ok: true,
+        message: `Draft's ready on your Mail page — to ${to}${resolved ? ", threaded on that conversation" : ""}. It won't go anywhere until you send it.`,
+        data: { draftId: draft.draftId, account: draft.account },
+      };
     }
     case "journal_entry": {
       const text = strArg(body.text, 2000);

@@ -159,4 +159,11 @@ export default defineSchema({
     key: v.string(),
     value: v.any(),
   }).index("by_key", ["key"]),
+
+  // Provenance only (MOO-494): which Gmail draft ids Zola created, so /mail
+  // can badge them. Draft content lives in Gmail, never here.
+  zolaDrafts: defineTable({
+    draftId: v.string(),
+    account: v.string(),
+  }).index("by_draftId", ["draftId"]),
 });

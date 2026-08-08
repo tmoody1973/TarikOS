@@ -20,6 +20,7 @@ import type * as transcripts from "../transcripts.js";
 import type * as workflowLib from "../workflowLib.js";
 import type * as workflowRunner from "../workflowRunner.js";
 import type * as workflows from "../workflows.js";
+import type * as zolaDrafts from "../zolaDrafts.js";
 
 import type {
   ApiFromModules,
@@ -40,6 +41,7 @@ declare const fullApi: ApiFromModules<{
   workflowLib: typeof workflowLib;
   workflowRunner: typeof workflowRunner;
   workflows: typeof workflows;
+  zolaDrafts: typeof zolaDrafts;
 }>;
 
 /**
