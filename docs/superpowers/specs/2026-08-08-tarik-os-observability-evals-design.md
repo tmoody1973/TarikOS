@@ -270,10 +270,11 @@ exactly the failure this architecture would otherwise permit.
 
 ## Open questions
 
-1. **ElevenLabs webhook signature scheme** — the exact HMAC construction must be confirmed against
-   ElevenLabs documentation during implementation. The design assumes signature verification is
-   available; if it is not, the route falls back to a shared secret in a header, matching the
-   existing `x-morpheus-secret` pattern.
+1. ~~**ElevenLabs webhook signature scheme**~~ — **RESOLVED 2026-08-08.** ElevenLabs signs post-call
+   webhooks with an `elevenlabs-signature` header, verified by
+   `elevenlabs.webhooks.constructEvent(rawBody, signature, secret)` from `@elevenlabs/elevenlabs-js`,
+   which is already a dependency. The raw body string is required, so the route must use
+   `req.text()` and never `req.json()`. No fallback needed.
 2. **`analysis.evaluation_criteria_results`** — ElevenLabs supports native evaluation criteria
    defined on the agent, and results ride along in every webhook payload. The field is mapped
    through now; whether to define criteria and use it as a complementary eval layer is deferred.
