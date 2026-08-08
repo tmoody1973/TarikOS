@@ -19,6 +19,7 @@ import { fetchFeedGroup } from "@/lib/rss";
 import { runConsolidation } from "@/lib/consolidate";
 import { createDraft, resolveReplyTarget } from "@/lib/mail";
 import { draftEmailBody } from "@/lib/zolaDraft";
+import { discoverFeed } from "@/lib/feedDiscovery";
 import { safeSlice } from "../../../../../convex/workflowLib";
 import {
   TELOS_KINDS,
@@ -391,6 +392,75 @@ async function runTool(
         data: { results },
       };
     }
+    // Feed manager by voice (MOO-486): mutates the briefFeeds setting the
+    // morning brief reads — no engine changes.
+    case "manage_feeds": {
+      const action = strArg(body.action, 10);
+      if (action === "list") {
+        const groups = await convex.query(api.feeds.listFeedsFromTool, { secret });
+        if (groups.length === 0) {
+          return { ok: true, message: "No feed groups configured yet." };
+        }
+        const summary = groups
+          .map((g) => `${g.label}: ${g.feeds.length} feed${g.feeds.length === 1 ? "" : "s"}`)
+          .join("; ");
+        return { ok: true, message: `Brief feeds — ${summary}.`, data: { groups } };
+      }
+      if (action === "remove") {
+        const match = strArg(body.site, 200);
+        if (!match) {
+          return { ok: false, message: "Which feed should I remove?" };
+        }
+        const result = await convex.mutation(api.feeds.manageFeedsFromTool, {
+          secret,
+          action: "remove",
+          match,
+        });
+        if (result.outcome === "none") {
+          return { ok: false, message: `No brief feed matches "${match}" — nothing removed.` };
+        }
+        if (result.outcome === "ambiguous") {
+          const names = (result.candidates ?? []).map((c) => c.url).join("; ");
+          return {
+            ok: false,
+            message: `Several feeds match: ${names}. Which one? Nothing removed yet.`,
+          };
+        }
+        return {
+          ok: true,
+          message: `Removed ${result.url} from ${result.group}. Gone from the next brief.`,
+        };
+      }
+      if (action === "add") {
+        const site = strArg(body.site, 300);
+        const category = strArg(body.category, 80);
+        if (!site || !category) {
+          return { ok: false, message: "I need a site and a category to add a feed." };
+        }
+        const feed = await discoverFeed(site);
+        if (!feed) {
+          return {
+            ok: false,
+            message: `I couldn't find a working RSS feed for "${site}" — nothing saved. If you know the exact feed URL, give me that.`,
+          };
+        }
+        const result = await convex.mutation(api.feeds.manageFeedsFromTool, {
+          secret,
+          action: "add",
+          feedUrl: feed.feedUrl,
+          group: category,
+        });
+        return {
+          ok: true,
+          message:
+            result.outcome === "existing"
+              ? `${feed.title} is already in ${result.group}.`
+              : `Added ${feed.title} to ${result.group}. It'll be in the next brief.`,
+          data: { feedUrl: feed.feedUrl, group: result.group },
+        };
+      }
+      return { ok: false, message: "manage_feeds needs action add, remove, or list." };
+    }
     case "get_rss": {
       const feeds =
         typeof body.feeds === "string"
@@ -399,16 +469,22 @@ async function runTool(
       if (feeds.length === 0) {
         return { ok: false, message: "get_rss needs a feeds list." };
       }
-      const results = await fetchFeedGroup(feeds);
-      await convex.mutation(api.secondBrain.pushBriefingCards, {
-        secret,
-        tool: "get_rss",
-        cards: results.slice(0, 4).map((r) => ({
-          kind: "research" as const,
-          title: r.title,
-          body: `${r.snippet}${r.url ? ` — ${r.url}` : ""}`,
-        })),
-      });
+      const { results, statuses } = await fetchFeedGroup(feeds);
+      await Promise.all([
+        // Health badge data for the Control Panel — never load-bearing.
+        convex
+          .mutation(api.feeds.reportFeedHealth, { secret, entries: statuses })
+          .catch(() => {}),
+        convex.mutation(api.secondBrain.pushBriefingCards, {
+          secret,
+          tool: "get_rss",
+          cards: results.slice(0, 4).map((r) => ({
+            kind: "research" as const,
+            title: r.title,
+            body: `${r.snippet}${r.url ? ` — ${r.url}` : ""}`,
+          })),
+        }),
+      ]);
       return {
         ok: true,
         message:

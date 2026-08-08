@@ -38,12 +38,19 @@ export function itemsToResults(
     }));
 }
 
+export type FeedStatus = { url: string; ok: boolean; error?: string };
+
 export async function fetchFeedGroup(
   feedUrls: string[],
-): Promise<ResearchResult[]> {
+): Promise<{ results: ResearchResult[]; statuses: FeedStatus[] }> {
   const parser = new Parser({ timeout: 10_000 });
   const settled = await Promise.allSettled(
     feedUrls.map((u) => parser.parseURL(u)),
+  );
+  const statuses = settled.map((s, i) =>
+    s.status === "fulfilled"
+      ? { url: feedUrls[i], ok: true }
+      : { url: feedUrls[i], ok: false, error: safeSlice(String(s.reason), 140) },
   );
   const items = settled
     .filter(
@@ -51,9 +58,8 @@ export async function fetchFeedGroup(
         s.status === "fulfilled",
     )
     .flatMap((s) => s.value.items ?? []);
-  const failed = settled.filter((s) => s.status === "rejected").length;
-  if (failed === feedUrls.length && feedUrls.length > 0) {
+  if (statuses.length > 0 && statuses.every((s) => !s.ok)) {
     throw new Error("All feeds in this group failed to load.");
   }
-  return itemsToResults(items);
+  return { results: itemsToResults(items), statuses };
 }

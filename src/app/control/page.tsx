@@ -10,6 +10,7 @@ import {
 } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Zone, ZoneEmpty } from "@/components/hud/Zone";
+import { FeedsPanel } from "./FeedsPanel";
 
 // Control Panel page (MOO-483): tool registry toggles + workflows section
 // (enabled toggle, last run, last error, Run now).
@@ -194,6 +195,8 @@ function ControlInner() {
           </ul>
         )}
       </Zone>
+
+      <FeedsPanel />
     </div>
   );
 }

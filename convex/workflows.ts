@@ -10,6 +10,7 @@ import { v } from "convex/values";
 import type { MutationCtx } from "./_generated/server";
 import { requireUser } from "./dashboard";
 import { checkToolSecret, markToolHealthy } from "./secondBrain";
+import { seedSettingIfAbsent, upsertSetting } from "./settingsLib";
 
 // Workflow-engine data layer: the runner action (workflowRunner.ts) drives
 // these internal functions; the public ones serve the Briefs page and the
@@ -258,21 +259,6 @@ const WEEKLY_REVIEW_STEPS: { tool: string; args: Record<string, string> }[] = [
   { tool: "journal_digest", args: {} },
 ];
 
-async function upsertSetting(
-  ctx: MutationCtx,
-  key: string,
-  value: unknown,
-): Promise<void> {
-  const row = await ctx.db
-    .query("settings")
-    .withIndex("by_key", (q) => q.eq("key", key))
-    .unique();
-  if (row) {
-    await ctx.db.patch(row._id, { value });
-  } else {
-    await ctx.db.insert("settings", { key, value });
-  }
-}
 
 // Idempotent upsert: safe to re-run after changing steps/topics/feeds.
 // Preserves the workflow's enabled toggle; overwrites steps and settings.
@@ -318,7 +304,9 @@ export const seedPhase2 = internalMutation({
       ]),
     ];
     await upsertSetting(ctx, "briefTopics", STANDING_TOPICS);
-    await upsertSetting(ctx, "briefFeeds", FEED_GROUPS);
+    // briefFeeds is user-edited at runtime (MOO-486 feed manager) — the seed
+    // must never clobber live data, only fill an empty deployment.
+    await seedSettingIfAbsent(ctx, "briefFeeds", FEED_GROUPS);
     return `${results.join("; ")}; ${STANDING_TOPICS.length} search topics; ${FEED_GROUPS.length} feed groups`;
   },
 });

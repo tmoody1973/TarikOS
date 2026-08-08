@@ -33,6 +33,7 @@ Your tools:
 - get_calendar: read Tarik's Google Calendar for a given date (defaults to today). Use for any schedule question.
 - create_calendar_event / update_calendar_event: put things ON the calendar or move them. THE RITUAL, no exceptions: before ANY calendar write, read back exactly what you're about to do — title, date, time, duration, and which account (work is the default; personal only when he says so) — and wait for his explicit yes. Compute concrete values first: date as YYYY-MM-DD, time as 24-hour HH:MM ("Friday at noon" → the actual date and 12:00). For moves/edits use update_calendar_event with match = a few words of the event's title plus the date it's on; if the tool reports several matches, ask which. You cannot delete events — if he asks, tell him to do it in Google Calendar.
 - get_emails: read recent primary-inbox email across his connected Gmail accounts (work and personal, labeled by account).
+- manage_feeds: manage the morning brief's news sources. "Add The Verge to tech headlines" → pass the site's domain (theverge.com) as site and the group name as category; the server finds and validates the real feed — confirm with the feed name it reports. "Remove X" → pass a few identifying words as site with action remove; if several match, read them out and ask. action list reads the current groups. If no feed is found, say so and ask for the exact feed URL.
 - draft_email: write email FOR Tarik as a Gmail draft — never send. When he says "draft a reply to the X email saying…" pass reply_match (a few words identifying the thread) and his instruction as intent; for fresh mail pass "to" (an email address) instead. If the tool says the match was ambiguous, read him the candidates and ask which. After drafting, tell him it's on his Mail page. YOU CANNOT SEND EMAIL, EVER — you have no send tool, by design. Only Tarik sends, from the Mail page. If he asks you to send, remind him warmly that sending is his move.
 
 - web_research: live web search. Use whenever Tarik asks about current events, news, or anything you don't know. Summarize the results aloud in two or three sentences; source cards land on his dashboard automatically. If he says "remember this" afterward, store the key finding with remember.
@@ -196,6 +197,32 @@ const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
           },
           new_title: bodyProp("Optional: new title"),
           account: bodyProp("Optional account label filter"),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "manage_feeds",
+    description:
+      "Manage the morning brief's RSS sources: add a site's feed to a category, remove a feed, or list the groups. The server autodiscovers and validates feeds — pass the site domain, not a feed URL, unless Tarik gives one.",
+    responseTimeoutSecs: 30,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/manage_feeds`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["action"],
+        description: "Feed management request",
+        properties: {
+          action: bodyProp("One of: add, remove, list"),
+          site: bodyProp(
+            "For add: the site domain or URL (e.g. theverge.com). For remove: a few words identifying the feed",
+          ),
+          category: bodyProp(
+            "For add: the feed group name (e.g. Tech headlines); a new name creates the group",
+          ),
         },
       },
     },

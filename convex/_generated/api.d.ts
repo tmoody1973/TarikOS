@@ -11,9 +11,11 @@
 import type * as crons from "../crons.js";
 import type * as dashboard from "../dashboard.js";
 import type * as embeddingsLib from "../embeddingsLib.js";
+import type * as feeds from "../feeds.js";
 import type * as journal from "../journal.js";
 import type * as memoryOps from "../memoryOps.js";
 import type * as secondBrain from "../secondBrain.js";
+import type * as settingsLib from "../settingsLib.js";
 import type * as telos from "../telos.js";
 import type * as telosLib from "../telosLib.js";
 import type * as transcripts from "../transcripts.js";
@@ -32,9 +34,11 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   dashboard: typeof dashboard;
   embeddingsLib: typeof embeddingsLib;
+  feeds: typeof feeds;
   journal: typeof journal;
   memoryOps: typeof memoryOps;
   secondBrain: typeof secondBrain;
+  settingsLib: typeof settingsLib;
   telos: typeof telos;
   telosLib: typeof telosLib;
   transcripts: typeof transcripts;
