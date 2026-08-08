@@ -4,6 +4,8 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { auth } from "@clerk/nextjs/server";
 import { ConvexClientProvider } from "@/components/ConvexClientProvider";
 import { AppShell } from "@/components/AppShell";
+import { NotOwner } from "@/components/NotOwner";
+import { isOwner } from "@/lib/owner";
 import "./globals.css";
 
 const antonio = Antonio({
@@ -24,6 +26,10 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const { isAuthenticated } = await auth();
+  // Single-user by design: a valid session that isn't the owner's gets the
+  // wall, not the dashboard. Clerk's own restrictions stop new sign-ups;
+  // this stops accounts that already exist. See src/lib/owner.ts.
+  const owner = isAuthenticated ? await isOwner() : false;
   return (
     <ClerkProvider>
       <html
@@ -32,7 +38,11 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       >
         <body className="min-h-full flex flex-col">
           <ConvexClientProvider>
-            <AppShell signedIn={isAuthenticated}>{children}</AppShell>
+            {isAuthenticated && !owner ? (
+              <NotOwner />
+            ) : (
+              <AppShell signedIn={isAuthenticated}>{children}</AppShell>
+            )}
           </ConvexClientProvider>
         </body>
       </html>

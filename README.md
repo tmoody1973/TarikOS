@@ -119,6 +119,7 @@ Values live in `.env.local` (gitignored) and in Vercel/Convex env settings in pr
 | `COMPOSIO_API_KEY` | Composio key holding your Google OAuth connections |
 | `MORPHEUS_TOOL_SECRET` | Shared secret the agent sends with every tool webhook |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` | Clerk auth |
+| `OWNER_EMAIL` | Your verified Clerk email. One instance serves one person: any other signed-in account gets a wall instead of the dashboard. Leave unset and that second lock is off. |
 | `NEXT_PUBLIC_CONVEX_URL` / `NEXT_PUBLIC_CONVEX_SITE_URL` / `CONVEX_DEPLOYMENT` | Convex deployment |
 | `VOYAGE_API_KEY` | Voyage embeddings for semantic memory (optional) |
 | `AGENTKEY_API_KEY` | Reserved for external agent access |
@@ -126,6 +127,19 @@ Values live in `.env.local` (gitignored) and in Vercel/Convex env settings in pr
 | `TOOL_BASE_URL` | Your deployment's tool webhook base, e.g. `https://<your-app>/api/tools` |
 
 `MORPHEUS_TOOL_SECRET` must be set in both the Convex deployment (`npx convex env set`) and the app env, and is baked into the agent by the provision script.
+
+### Locking your instance to you
+
+The landing page at `/` is public, so `/sign-in` is reachable by anyone. Two
+locks, and you want both:
+
+1. **Stop new sign-ups at Clerk.** Dashboard → **Restrictions**: turn on
+   *Restricted* mode (invitation-only, free), or on a paid plan use the
+   *Allowlist* with just your address. Do this per instance — a development
+   instance and a production instance have separate settings.
+2. **Set `OWNER_EMAIL`.** Anyone holding a valid session that isn't yours gets
+   a "this instance serves one person" wall pointing at the repo. This is what
+   catches an account that already existed before you locked sign-ups.
 
 ### Tests and deploys
 
