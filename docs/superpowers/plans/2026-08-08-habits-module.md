@@ -13,7 +13,8 @@
 
 ## Global Constraints
 
-- Cross-module imports inside `convex/` and from `tests/` **must** carry the `.ts` extension (e.g. `import { chicagoToday } from "./workflowLib.ts"`). Node's ESM loader fails without it.
+- Imports **from `tests/`** must carry the `.ts` extension (`import { … } from "../convex/habitsLib.ts"`). `node --test` uses Node's ESM loader, which fails without it. This is the hard rule.
+- Inside `convex/`, follow the neighbouring file: pure `*Lib.ts` modules are imported with the extension (`convex/telosLib.ts:3` imports `"./workflowLib.ts"`), while Convex server modules are imported without one (`convex/telos.ts:13` imports `"./telosLib"`, and `"./secondBrain"`, `"./dashboard"` likewise). Both resolve under Convex's bundler; consistency with the neighbours is what matters.
 - Pure helper modules (`convex/*Lib.ts`) **must not** import from `convex/_generated` or `convex/server` — they are imported by tests directly.
 - Dates are Chicago civil dates in `YYYY-MM-DD` form, produced by `chicagoToday()` from `convex/workflowLib.ts`. Never use `new Date().toISOString().slice(0,10)`.
 - Every new webhook tool must be added to **both** `src/app/api/tools/[tool]/route.ts` and the `TOOLS` array in `scripts/provision-agent.ts`.
