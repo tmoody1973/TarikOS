@@ -3,7 +3,7 @@ import type { QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { checkToolSecret, markToolHealthy } from "./secondBrain";
 import { requireUser } from "./dashboard";
-import { chicagoToday } from "./workflowLib.ts";
+import { chicagoToday, daysEndingOn } from "./workflowLib.ts";
 import {
   canSuggest,
   summarizeTrajectory,
@@ -106,12 +106,10 @@ export const trajectory = query({
       .withIndex("by_habit_date", (q) => q.eq("habitId", habitId))
       .collect();
     const byDate = new Map(votes.map((v_) => [v_.date, v_.level as VoteLevel]));
-    const series: DayVote[] = [];
-    const now = Date.now();
-    for (let i = days - 1; i >= 0; i--) {
-      const date = chicagoToday(new Date(now - i * 24 * 60 * 60 * 1000));
-      series.push({ date, level: byDate.get(date) ?? null });
-    }
+    const series: DayVote[] = daysEndingOn(chicagoToday(), days).map((date) => ({
+      date,
+      level: byDate.get(date) ?? null,
+    }));
     return { series, summary: summarizeTrajectory(series) };
   },
 });

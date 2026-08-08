@@ -1,7 +1,7 @@
 // Briefs archive helpers (MOO-495): pure, shared by the /briefs rail and
 // the find_brief voice tool. Client-safe — no server imports.
 
-import { chicagoToday } from "../../convex/workflowLib.ts";
+import { chicagoToday, daysEndingOn } from "../../convex/workflowLib.ts";
 
 export type BriefSummary = {
   _id: string;
@@ -96,7 +96,10 @@ export function groupBriefsByDay<T extends Pick<BriefSummary, "_creationTime">>(
   nowMs: number,
 ): DayGroup<T>[] {
   const todayKey = chicagoDayKey(nowMs);
-  const yesterdayKey = chicagoDayKey(nowMs - 24 * 60 * 60 * 1000);
+  // Civil-date arithmetic, same reason as the trajectory strip (MOO-518):
+  // subtracting 24h from a timestamp lands on the wrong local day for the two
+  // hours after a DST transition, which mislabels YESTERDAY.
+  const yesterdayKey = daysEndingOn(todayKey, 2)[0];
   const groups = new Map<string, T[]>();
   for (const b of [...briefs].sort((a, z) => z._creationTime - a._creationTime)) {
     const key = chicagoDayKey(b._creationTime);

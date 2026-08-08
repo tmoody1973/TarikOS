@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   cleanText,
+  daysEndingOn,
   expandSteps,
   formatSection,
   safeSlice,
@@ -202,4 +203,58 @@ test("workflowTitle humanizes the workflow name", () => {
     workflowTitle("morning-brief", "2026-08-07"),
     "Morning Brief — 2026-08-07",
   );
+});
+
+/* MOO-518. The strip used to step back in 24h chunks from `now` and format each
+ * result in Chicago. Chicago's offset moves twice a year, so a fixed 24h step
+ * shifts local wall-clock by 23h or 25h across a transition: spring drops a day
+ * (2026-03-08 vanished between 03-07 and 03-09) and fall repeats one. Both were
+ * reproduced against the shipped code before this was written. */
+
+test("a day window is contiguous, ascending and the right length", () => {
+  const dates = daysEndingOn("2026-08-08", 30);
+  assert.equal(dates.length, 30);
+  assert.equal(dates[29], "2026-08-08", "the window ends on the given day");
+  assert.equal(dates[0], "2026-07-10", "and starts 29 days earlier");
+  assert.equal(new Set(dates).size, 30, "no repeats");
+  for (let i = 1; i < dates.length; i++) {
+    assert.ok(dates[i] > dates[i - 1], "strictly ascending");
+  }
+});
+
+test("spring forward does not drop a day from the window", () => {
+  const dates = daysEndingOn("2026-03-09", 5);
+  assert.deepEqual(dates, [
+    "2026-03-05",
+    "2026-03-06",
+    "2026-03-07",
+    "2026-03-08", // the day the 24h-stepping version skipped
+    "2026-03-09",
+  ]);
+});
+
+test("fall back does not repeat a day in the window", () => {
+  const dates = daysEndingOn("2026-11-02", 5);
+  assert.deepEqual(dates, [
+    "2026-10-29",
+    "2026-10-30",
+    "2026-10-31",
+    "2026-11-01", // the day the 24h-stepping version emitted twice
+    "2026-11-02",
+  ]);
+  assert.equal(new Set(dates).size, 5);
+});
+
+test("a day window crosses month and year boundaries", () => {
+  assert.deepEqual(daysEndingOn("2026-03-02", 3), [
+    "2026-02-28",
+    "2026-03-01",
+    "2026-03-02",
+  ]);
+  assert.deepEqual(daysEndingOn("2027-01-01", 2), ["2026-12-31", "2027-01-01"]);
+  assert.deepEqual(daysEndingOn("2028-03-01", 2), ["2028-02-29", "2028-03-01"]);
+});
+
+test("a single-day window is just that day", () => {
+  assert.deepEqual(daysEndingOn("2026-08-08", 1), ["2026-08-08"]);
 });

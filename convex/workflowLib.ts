@@ -104,6 +104,24 @@ export function chicagoToday(now: Date = new Date()): string {
   }).format(now);
 }
 
+/* The `count` civil dates ending on `today` (YYYY-MM-DD), ascending.
+ *
+ * Do the subtraction on the calendar date, where no timezone exists. Stepping
+ * back in 24h chunks from a timestamp and formatting each result with
+ * chicagoToday looks equivalent and isn't: Chicago's offset moves twice a year,
+ * so one of those steps lands 23 or 25 local hours earlier. Spring drops a day
+ * and fall repeats one, for the ~2 hours after local midnight following each
+ * transition. Date.UTC normalises out-of-range day numbers, so month, year and
+ * leap-day boundaries need no special case. (MOO-518) */
+export function daysEndingOn(today: string, count: number): string[] {
+  const [year, month, day] = today.split("-").map(Number);
+  const dates: string[] = [];
+  for (let i = count - 1; i >= 0; i--) {
+    dates.push(new Date(Date.UTC(year, month - 1, day - i)).toISOString().slice(0, 10));
+  }
+  return dates;
+}
+
 function chicagoTime(iso: string): string {
   const d = new Date(iso);
   return isNaN(d.getTime())
