@@ -1,0 +1,11 @@
+# This repo is public. Fifty real utterances are fifty pieces of a real life,
+# so the dataset lives in Phoenix and never in git. Only the code is committed.
+labels.csv
+labels-draft.csv
+*.csv
+tools.json
+utterances.json
+.venv/
+__pycache__/
+.ipynb_checkpoints/
+run-*.json

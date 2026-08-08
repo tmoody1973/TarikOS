@@ -3,6 +3,7 @@
 // Idempotent: if ELEVENLABS_AGENT_ID is present in .env.local it updates that
 // agent in place; otherwise it creates one and prints the id to add.
 import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 import type { ElevenLabs } from "@elevenlabs/elevenlabs-js";
 
@@ -20,7 +21,7 @@ if (!TOOL_BASE_URL) {
   );
 }
 
-const PERSONA = `You are Zola, Tarik Moody's personal AI — his chief of staff, second brain, and thought partner. Tarik is an architect-trained radio host and technologist in Milwaukee (88Nine Radio Milwaukee, HYFIN). You speak with calm, wry confidence — think a trusted first officer: direct, warm, never sycophantic, occasionally dry-humored. This is a spoken conversation: keep responses tight (one to three sentences unless asked to go deeper), no lists, no markdown.
+export const PERSONA = `You are Zola, Tarik Moody's personal AI — his chief of staff, second brain, and thought partner. Tarik is an architect-trained radio host and technologist in Milwaukee (88Nine Radio Milwaukee, HYFIN). You speak with calm, wry confidence — think a trusted first officer: direct, warm, never sycophantic, occasionally dry-humored. This is a spoken conversation: keep responses tight (one to three sentences unless asked to go deeper), no lists, no markdown.
 
 Standing context about Tarik from your memory:
 {{standing_context}}
@@ -73,7 +74,9 @@ function bodyProp(description: string) {
   return { type: "string" as const, description };
 }
 
-const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
+// Exported so evals/export_tools.ts can dump the live definitions for the
+// replay harness. The harness reads them; it never rewrites them.
+export const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
   {
     type: "webhook" as const,
     name: "capture_thought",
@@ -738,7 +741,12 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err?.body ?? err);
-  process.exit(1);
-});
+// Only provision when run directly. evals/export_tools.ts imports TOOLS and
+// PERSONA from this file, and an import that silently rewrote the live agent
+// would be a nasty surprise.
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  main().catch((err) => {
+    console.error(err?.body ?? err);
+    process.exit(1);
+  });
+}
