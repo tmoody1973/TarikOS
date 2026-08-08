@@ -7,6 +7,7 @@ import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { ReaderPane } from "@/components/ReaderPane";
 import { SlideOver } from "@/components/SlideOver";
+import { MailThreadPanel } from "@/components/MailThread";
 import { ArchiveRail } from "./ArchiveRail";
 import {
   isSystemBrief,
@@ -147,6 +148,28 @@ function BriefsInner() {
   const runNow = useAction(api.workflowRunner.runNow);
   const [refreshing, setRefreshing] = useState(false);
   const [readerUrl, setReaderUrl] = useState<string | null>(null);
+  const [mailThread, setMailThread] = useState<{
+    threadId: string;
+    account: string;
+  } | null>(null);
+
+  // Brief links route by kind (MOO-496): the formatter's sentinel host
+  // (tarikos.internal) means "open the mail thread slide-over"; everything
+  // else is an article for the reader pane.
+  function handleLink(url: string) {
+    try {
+      const u = new URL(url);
+      if (u.hostname === "tarikos.internal") {
+        const threadId = u.searchParams.get("thread");
+        const account = u.searchParams.get("account");
+        if (threadId && account) setMailThread({ threadId, account });
+        return;
+      }
+    } catch {
+      // fall through to the reader
+    }
+    setReaderUrl(url);
+  }
 
   async function refresh() {
     if (!brief) return;
@@ -264,7 +287,7 @@ function BriefsInner() {
                         {s.heading}
                       </h3>
                       <div className="mt-2 text-[13px] leading-relaxed">
-                        <Body text={s.body} onLink={setReaderUrl} />
+                        <Body text={s.body} onLink={handleLink} />
                       </div>
                     </section>
                   );
@@ -276,6 +299,7 @@ function BriefsInner() {
       </main>
 
       <ReaderPane url={readerUrl} onClose={() => setReaderUrl(null)} />
+      <MailThreadPanel thread={mailThread} onClose={() => setMailThread(null)} />
 
       {/* Archive drawer — mobile */}
       <div className="lg:hidden">

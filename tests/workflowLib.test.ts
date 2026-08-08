@@ -77,6 +77,35 @@ test("{{topic}} resolves from run params (on-demand brief shape)", () => {
   assert.equal(out[0].args.query, "latest on Bandcamp");
 });
 
+test("brief email rows link the subject to the thread when threadId exists", () => {
+  const { section } = formatSection(
+    { tool: "get_emails", args: {}, label: "Inbox" },
+    {
+      ok: true,
+      message: "2 recent email(s).",
+      data: {
+        emails: [
+          {
+            subject: "Studio schedule",
+            from: "Sarah",
+            account: "work-gmail",
+            snippet: "quick question",
+            threadId: "19fabc",
+          },
+          { subject: "No thread", from: "X", snippet: "plain" },
+        ],
+      },
+    },
+  );
+  assert.ok(
+    section.body.includes(
+      "[Studio schedule](https://tarikos.internal/mail?thread=19fabc&account=work-gmail)",
+    ),
+  );
+  // Rows without a threadId stay bold, never a dead link.
+  assert.ok(section.body.includes("**No thread**"));
+});
+
 test("failed tool result becomes an error section, run continues", () => {
   const { section, isError } = formatSection(
     { tool: "get_emails", args: {}, label: "Inbox" },

@@ -157,7 +157,12 @@ type Email = {
   from?: string;
   account?: string;
   snippet?: string;
+  threadId?: string;
 };
+
+// Sentinel host for in-app mail links (MOO-496): the briefs page intercepts
+// this hostname and opens the thread slide-over instead of the reader.
+export const MAIL_LINK_HOST = "tarikos.internal";
 type ResearchHit = { title?: string; snippet?: string; url?: string };
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -206,10 +211,18 @@ export function formatSection(
       emails.length === 0
         ? result.message
         : emails
-            .map(
-              (e) =>
-                `- **${cleanText(e.subject ?? "") || "(no subject)"}** — ${e.from ?? "unknown"}${e.account ? ` (${e.account})` : ""}: ${safeSlice(cleanText(e.snippet ?? ""), 140)}`,
-            )
+            .map((e) => {
+              const subject =
+                cleanText(e.subject ?? "").replace(/[[\]]/g, "") ||
+                "(no subject)";
+              // Subject links into the in-app thread slide-over when we know
+              // the thread; otherwise plain bold, never a dead link.
+              const head =
+                e.threadId && e.account
+                  ? `[${subject}](https://${MAIL_LINK_HOST}/mail?thread=${encodeURIComponent(e.threadId)}&account=${encodeURIComponent(e.account)})`
+                  : `**${subject}**`;
+              return `- ${head} — ${e.from ?? "unknown"}${e.account ? ` (${e.account})` : ""}: ${safeSlice(cleanText(e.snippet ?? ""), 140)}`;
+            })
             .join("\n");
     return { section: { ...base, body, sources: [] }, isError: false };
   }

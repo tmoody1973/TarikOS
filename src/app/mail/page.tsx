@@ -5,6 +5,11 @@ import { Authenticated, AuthLoading } from "convex/react";
 import { Zone, ZoneEmpty } from "@/components/hud/Zone";
 import { Compose, type ComposePrefill } from "./Compose";
 import { extractEmailAddress } from "@/lib/emailAddress";
+import {
+  MailMessages,
+  useMailThread,
+  type ThreadMessage,
+} from "@/components/MailThread";
 
 // Mail page (MOO-492): thread list + sanitized reading pane. Compose lands
 // in MOO-493; Zola drafts in MOO-494. Layout is the shadcn Mail three-pane
@@ -32,14 +37,6 @@ type DraftRow = {
   zola?: boolean;
 };
 
-type Message = {
-  from: string;
-  to: string;
-  date: string;
-  subject: string;
-  html: string;
-  sanitizerFallback: boolean;
-};
 
 function when(raw: string): string {
   const ms = /^\d+$/.test(raw) ? Number(raw) : Date.parse(raw);
@@ -112,7 +109,7 @@ function MailInner() {
   const [accountFilter, setAccountFilter] = useState<string>("all");
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<ThreadRow | null>(null);
-  const [messages, setMessages] = useState<Message[] | null>(null);
+  const messages = useMailThread(open?.threadId, open?.account);
   const [drafts, setDrafts] = useState<DraftRow[] | null>(null);
   const [view, setView] = useState<"inbox" | "drafts">("inbox");
   const [composeOpen, setComposeOpen] = useState(false);
@@ -178,7 +175,7 @@ function MailInner() {
     setComposeOpen(true);
   }
 
-  function replyTo(row: ThreadRow, msgs: Message[]) {
+  function replyTo(row: ThreadRow, msgs: ThreadMessage[]) {
     const lastFrom = msgs[msgs.length - 1]?.from ?? "";
     const email = extractEmailAddress(lastFrom) ?? "";
     setPrefill({
@@ -189,20 +186,6 @@ function MailInner() {
     setComposeOpen(true);
   }
 
-  async function openThread(row: ThreadRow) {
-    setOpen(row);
-    setMessages(null);
-    try {
-      const res = await fetch(
-        `/api/mail/threads/${encodeURIComponent(row.threadId)}?account=${encodeURIComponent(row.account)}`,
-      );
-      const json = await res.json();
-      if (!json.ok) throw new Error(json.error);
-      setMessages(json.messages);
-    } catch {
-      setMessages([]);
-    }
-  }
 
   return (
     <div className="flex flex-1 gap-3">
@@ -279,7 +262,7 @@ function MailInner() {
               {threads.map((t) => (
                 <li key={`${t.account}:${t.threadId}`}>
                   <button
-                    onClick={() => openThread(t)}
+                    onClick={() => setOpen(t)}
                     className={`w-full rounded-md border px-2.5 py-2 text-left transition ${
                       open?.threadId === t.threadId
                         ? "border-lavender/60 bg-lavender/10"
@@ -311,7 +294,7 @@ function MailInner() {
           ) : messages.length === 0 ? (
             <ZoneEmpty>Couldn't load that thread.</ZoneEmpty>
           ) : (
-            <div className="flex-1 space-y-4 overflow-y-auto pr-1">
+            <div className="flex min-h-0 flex-1 flex-col gap-2">
               <div className="flex justify-end">
                 <button
                   onClick={() => replyTo(open, messages)}
@@ -320,29 +303,7 @@ function MailInner() {
                   ↩ Reply
                 </button>
               </div>
-              {messages.map((m, i) => (
-                <article
-                  key={i}
-                  className="rounded-md border border-panel-edge bg-black/20"
-                >
-                  <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-panel-edge px-3 py-2">
-                    <span className="text-sm font-semibold text-foreground/90">
-                      {m.from}
-                    </span>
-                    <span className="text-[10px] tracking-wider text-steel">
-                      {when(m.date)}
-                      {m.sanitizerFallback && " · shown as plain text"}
-                    </span>
-                  </header>
-                  {/* Sanitized server-side; sandbox blocks scripts/navigation. */}
-                  <iframe
-                    sandbox=""
-                    srcDoc={`<base target="_blank"><style>body{font-family:system-ui,sans-serif;font-size:14px;color:#111;background:#fff;margin:12px}</style>${m.html}`}
-                    className="h-[60vh] w-full rounded-b-md bg-white"
-                    title={`Message from ${m.from}`}
-                  />
-                </article>
-              ))}
+              <MailMessages messages={messages} />
             </div>
           )}
         </Zone>
