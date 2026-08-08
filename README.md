@@ -144,6 +144,7 @@ Values live in `.env.local` (gitignored) and in Vercel/Convex env settings in pr
 | `VOYAGE_API_KEY` | Voyage embeddings for semantic memory (optional) |
 | `AGENTKEY_API_KEY` | Reserved for external agent access |
 | `BROWSERBASE_API_KEY` / `BROWSERBASE_PROJECT_ID` | Browserbase (Viewport browser sessions; optional) |
+| `FIRECRAWL_API_KEY` | Reader fallback for pages that block server-side fetches (optional). Unset simply means those pages show "open the original" instead. |
 | `TOOL_BASE_URL` | Your deployment's tool webhook base, e.g. `https://<your-app>/api/tools` |
 
 `MORPHEUS_TOOL_SECRET` must be set in both the Convex deployment (`npx convex env set`) and the app env, and is baked into the agent by the provision script.
