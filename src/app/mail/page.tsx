@@ -189,8 +189,14 @@ function MailInner() {
 
   return (
     <div className="flex flex-1 gap-3">
-      {/* Thread list */}
-      <div className="flex w-full flex-col lg:w-96 lg:shrink-0">
+      {/* Thread list. Below lg it yields to the reader while a thread is open
+          — one column at a time, the way a phone mail client works. At lg both
+          panes sit side by side exactly as before. */}
+      <div
+        className={`w-full flex-col lg:flex lg:w-96 lg:shrink-0 ${
+          open ? "hidden lg:flex" : "flex"
+        }`}
+      >
         <Zone title="Mail" accent="bg-lavender">
           <div className="mb-3 flex flex-wrap items-center gap-1.5">
             {["all", ...accounts].map((a) => (
@@ -284,21 +290,35 @@ function MailInner() {
         </Zone>
       </div>
 
-      {/* Reading pane */}
-      <main className="hidden min-w-0 flex-1 flex-col lg:flex">
+      {/* Reading pane. Was hidden below lg, which meant a phone could list
+          mail but never read it. */}
+      <main
+        className={`min-w-0 flex-1 flex-col lg:flex ${
+          open ? "flex" : "hidden"
+        }`}
+      >
         <Zone title={open ? open.subject : "Reader"} accent="bg-lavender">
           {!open ? (
             <ZoneEmpty>Select a thread to read it here.</ZoneEmpty>
           ) : messages === null ? (
             <ZoneEmpty>syncing…</ZoneEmpty>
           ) : messages.length === 0 ? (
-            <ZoneEmpty>Couldn't load that thread.</ZoneEmpty>
+            <ZoneEmpty>Couldn&apos;t load that thread.</ZoneEmpty>
           ) : (
             <div className="flex min-h-0 flex-1 flex-col gap-2">
-              <div className="flex justify-end">
+              <div className="flex items-center justify-between gap-2">
+                {/* Below lg the list is gone while this is open, so the way
+                    back has to be on screen — a reader you can't leave is a
+                    trap. At lg the list is still there and this is noise. */}
+                <button
+                  onClick={() => setOpen(null)}
+                  className="rounded-md border border-panel-edge px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-steel transition hover:border-lavender/40 hover:text-foreground motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-cyan-hud lg:hidden"
+                >
+                  ← Inbox
+                </button>
                 <button
                   onClick={() => replyTo(open, messages)}
-                  className="rounded-md border border-lavender/60 bg-lavender/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-foreground transition hover:bg-lavender/20"
+                  className="ml-auto rounded-md border border-lavender/60 bg-lavender/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-foreground transition hover:bg-lavender/20 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-cyan-hud"
                 >
                   ↩ Reply
                 </button>
