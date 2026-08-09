@@ -114,7 +114,7 @@ function BrainInner() {
                   <li key={m._id}>
                     <button
                       onClick={() => setOpenMemory(m._id)}
-                      className="w-full rounded-md border border-transparent px-2 py-1 text-left text-sm text-foreground/80 transition hover:border-panel-edge hover:bg-black/30"
+                      className="w-full rounded-md border border-transparent px-2 py-1 text-left text-sm text-foreground/80 [overflow-wrap:anywhere] transition hover:border-panel-edge hover:bg-black/30"
                     >
                       <span className="text-lavender/70">[{m.type}]</span>{" "}
                       {m.content}
@@ -164,7 +164,7 @@ function BrainInner() {
             ) : (
               <ul className="mt-2 space-y-2">
                 {shownJournal.map((j) => (
-                  <li key={j._id} className="text-sm text-foreground/80">
+                  <li key={j._id} className="text-sm text-foreground/80 [overflow-wrap:anywhere]">
                     {j.text}
                     <span className="ml-2 text-[10px] uppercase tracking-wider text-lavender/60">
                       {j.mode}

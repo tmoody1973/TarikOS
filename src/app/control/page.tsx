@@ -124,7 +124,7 @@ function ControlInner() {
                   </div>
                 </div>
                 {tool.health === "error" && tool.lastError && (
-                  <p className="mt-1 pl-5 text-[11px] text-salmon/80">
+                  <p className="mt-1 pl-5 text-[11px] text-salmon/80 [overflow-wrap:anywhere]">
                     {tool.lastError}
                   </p>
                 )}
@@ -186,7 +186,7 @@ function ControlInner() {
                   />
                 </div>
                 {wf.lastError && (
-                  <p className="mt-1 pl-5 text-[11px] text-salmon/80">
+                  <p className="mt-1 pl-5 text-[11px] text-salmon/80 [overflow-wrap:anywhere]">
                     {wf.lastError}
                   </p>
                 )}
