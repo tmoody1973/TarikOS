@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { Authenticated } from "convex/react";
 import { ConversationProvider } from "@elevenlabs/react";
 import { NavRail } from "./NavRail";
+import { Spine } from "./Spine";
 import { VoiceDock } from "./VoiceDock";
 import { ViewportPanel } from "./ViewportPanel";
 
@@ -28,7 +29,12 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen flex-col">
       <div className="flex flex-1 gap-3 p-3 pb-28">
         <NavRail />
-        <main className="flex min-w-0 flex-1 flex-col">{children}</main>
+        <Spine />
+        {/* pl-4 below lg clears the fixed 12px spine; the rail already
+            occupies its own column above lg. */}
+        <main className="flex min-w-0 flex-1 flex-col pl-4 lg:pl-0">
+          {children}
+        </main>
       </div>
       <Authenticated>
         <ViewportPanel />
