@@ -1,6 +1,6 @@
 # Tarik OS
 
-A personal AI operating system you talk to. Zola — the voice assistant at its center — reads your mail, works your calendar, runs research, keeps a journal, tracks your long-term goals and daily habits, and briefs you every morning. You speak; she acts; a live dashboard shows what happened.
+A personal AI operating system you talk to. Zola — the voice assistant at its center — reads your mail, works your calendar, runs research, keeps a journal, tracks your long-term goals and daily habits, and briefs you every morning. You speak; she acts; a live dashboard shows what happened. Talk to her in the browser, or **call her on a real phone number** — same brain, same tools, no app.
 
 This is a single-user system built for one person's real life, published as a working reference. Fork it and make it yours — it is not a hosted product and has no multi-tenant support.
 
@@ -26,19 +26,20 @@ Clicking any headline slides in the reader: the article extracted server-side an
 
 ## How it works, in plain English
 
-1. **You talk.** The browser opens a realtime voice session with an [ElevenLabs Agent](https://elevenlabs.io/agents). Zola listens, responds with a voice, and decides when a request needs a real action.
+1. **You talk.** The browser opens a realtime voice session with an [ElevenLabs Agent](https://elevenlabs.io/agents) — or you dial a Telnyx number that routes to the same agent over a SIP trunk. Either way Zola listens, responds with a voice, and decides when a request needs a real action.
 2. **She calls a tool.** Every capability — "what's on my calendar", "draft a reply to that email", "run my research workflow" — is a webhook the agent calls: `POST /api/tools/<tool_name>` on this app, authenticated with a shared secret. The route does the actual work and returns a sentence for Zola to speak.
 3. **The work happens server-side.** Tool routes talk to Gmail and Google Calendar through [Composio](https://composio.dev) (which holds the OAuth tokens), to Claude for writing and reasoning, and to [Convex](https://convex.dev) for state.
 4. **The dashboard reacts live.** Convex is a realtime database: when a tool writes a briefing card, a journal entry, or a workflow result, every open page updates instantly — no refresh. The UI is a set of LCARS-styled panels: morning brief, mail center, calendar, telos (goals), journal, memory.
 5. **Some things run on a clock.** Convex cron jobs run scheduled workflows: a nightly pass that consolidates the day's conversations into long-term memory, a 3am pass that mines journal entries for goal signals, a morning brief, and a Sunday weekly review.
 6. **She remembers.** Conversations are stored in Convex, embedded with [Voyage AI](https://www.voyageai.com), and recalled semantically — so "what did I say about that station project last week?" works.
 
-Three guardrails are structural, not polite requests:
+Five guardrails are structural, not polite requests:
 
 - **Zola can draft email; only a human can send it.** The send endpoint exists solely behind the browser UI's Send button. The agent's tool surface has no send path — a test fails the suite if one ever appears.
 - **Calendar writes confirm before they commit.** Event creation and edits go through a confirm ritual in conversation.
 - **The browser agent never types a password, and browsing is always attended.** Zola can drive a real browser (see Viewport below). Sessions are signed out by default; a login wall stops the agent and hands you the wheel. If you set up a persistent [Browserbase Context](#logged-in-browsing-optional) and sign in by hand, a session can carry those logins — but only when you ask for them in that request, never by the agent's own initiative. No scheduled job can start a browser session at all. All three parts are enforced by tests.
 - **Inferred evidence can only ever suggest, never record.** A calendar block can propose that a habit happened; only you accept it. The mutation that writes a vote requires a signed-in human and has no shared-secret path, so nothing automated can mark a day done on your behalf — and a test fails the suite if a secret branch is ever added to it.
+- **Zola can phone exactly one number, and it isn't a parameter.** The `call_tarik` tool takes no destination at all — the number comes from `OWNER_PHONE` on the server, so there is no argument to pass and nothing to talk her into. A test scans the route, the published tool schema, and the count of dialling sites; all three were watched to fail before being trusted.
 
 ## Tech stack
 
@@ -46,6 +47,7 @@ Three guardrails are structural, not polite requests:
 |---|---|
 | Web app | Next.js 16 (App Router, Turbopack), React 19, Tailwind CSS 4 |
 | Voice | ElevenLabs Agents (realtime speech-to-speech), `@elevenlabs/react` |
+| Telephony | Telnyx (number + SIP trunk) → ElevenLabs, so the same agent answers a real phone |
 | Reasoning / writing | Claude (Anthropic SDK, server-side) |
 | State + realtime + crons | Convex |
 | Auth | Clerk (protects every page and API route except the secret-gated tool webhooks) |
@@ -65,7 +67,10 @@ Three guardrails are structural, not polite requests:
    voice        │  ElevenLabs Agent (Zola)    │
   ┌────────┐    │  listens · speaks · decides │
   │ Tarik  │◄──►└──────────────┬──────────────┘
-  └───┬────┘                   │ webhook + shared secret
+  └───┬────┘         ▲         │ webhook + shared secret
+      │ phone   SIP  │         │
+      │  └───────────┘         │
+      │   Telnyx number        │
       │ browser                ▼
       │         ┌─────────────────────────────┐
       └────────►│  Next.js app (Vercel)       │
@@ -97,6 +102,7 @@ src/lib/            Server-side domain logic: google.ts, mail.ts, calendarLib.ts
 convex/             Schema, workflows, crons, memory consolidation, telos, habits
 scripts/            provision-agent.ts · connect-google.ts · import-telos.ts
 tests/              node --test unit tests for the pure logic
+evals/              Tool-selection replay harness + Phoenix dataset/experiment push
 docs/superpowers/   Design specs for each build phase
 ```
 
@@ -151,6 +157,8 @@ Values live in `.env.local` (gitignored) and in Vercel/Convex env settings in pr
 | `BROWSERBASE_API_KEY` / `BROWSERBASE_PROJECT_ID` | Browserbase (Viewport browser sessions; optional) |
 | `FIRECRAWL_API_KEY` | Reader fallback for pages that block server-side fetches (optional). Unset simply means those pages show "open the original" instead. |
 | `TOOL_BASE_URL` | Your deployment's tool webhook base, e.g. `https://<your-app>/api/tools` |
+| `OWNER_PHONE` | The only number `call_tarik` can dial, in E.164. Unset means the tool answers that calling isn't configured. |
+| `ELEVENLABS_PHONE_NUMBER_ID` | The imported SIP-trunk number in ElevenLabs (`phnum_…`), used to place outbound calls |
 | `ELEVENLABS_WEBHOOK_SECRET` | HMAC signing secret for the post-call webhook (optional; without it the route rejects every delivery and you simply get no conversation traces) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` / `OTEL_EXPORTER_OTLP_HEADERS` | Where traces go, e.g. a self-hosted Phoenix. Headers take the form `Authorization=Bearer <key>`. Both optional — unset means no tracing, and nothing else changes. |
 
@@ -212,7 +220,9 @@ vercel deploy --prod  # app
 - **Semantic memory** — conversations consolidated nightly and recalled by meaning, not keywords.
 - **Research workflows** — scheduled or on-demand multi-step research (RSS + web search) rendered as briefing cards with an in-app reader.
 - **Control panel** (`/control`) — every tool's health, last error, and an enable/disable toggle; disabled tools are blocked at the route.
+- **Phone** — call a real number and Zola answers with the same brain and the same tools; no app, no browser, no session to start. She can call you too, for the things a dashboard card can't reach you for. Telnyx owns the number and the SIP trunk, ElevenLabs stays the runtime, and the whole inbound path took no application code — the only code is the outbound tool and its guardrails.
 - **Voice console** — mic waveform, live transcripts, and a tool-activity matrix so you can see Zola working.
+- **Tool-selection evals** (`evals/`) — the loop that turns "I think that description is better" into a number. Real past utterances become a labelled dataset; the harness replays them against the live tool definitions and scores which tool the model reaches for. Runs locally in seconds, or as a Phoenix experiment when a run is worth keeping. Two identical runs disagree on ~9% of utterances, so the harness reports that noise floor rather than letting you read meaning into a two-point move.
 
 ## The telos layer
 
@@ -231,7 +241,7 @@ The loop this closes: you tell your AI what matters once, it holds you to it eve
 
 ## Design specs
 
-Each phase shipped against a written spec in [`docs/superpowers/specs/`](docs/superpowers/specs/) — foundation, workflows and briefs, telos, mail center, viewport, habits, observability and evals. They read as a build log of the decisions and their reasons.
+Each phase shipped against a written spec in [`docs/superpowers/specs/`](docs/superpowers/specs/) — foundation, workflows and briefs, telos, mail center, viewport, habits, observability and evals, restaurant booking. They read as a build log of the decisions and their reasons.
 
 ## License
 
