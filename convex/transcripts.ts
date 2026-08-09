@@ -54,6 +54,20 @@ export const logToolCall = mutation({
   },
 });
 
+// The most recent transcript, which during a live session is the one being
+// written to right now (MOO-527). /talk subscribes to this rather than
+// holding its own copy of the turns: Convex is realtime, so the page streams
+// as VoiceDock appends — and unlike component state, it survives a refresh.
+// The caller decides what to call it; when no session is connected this is
+// the LAST conversation, not a live one.
+export const latest = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireUser(ctx);
+    return await ctx.db.query("transcripts").order("desc").first();
+  },
+});
+
 export const get = query({
   args: { transcriptId: v.id("transcripts") },
   handler: async (ctx, { transcriptId }) => {

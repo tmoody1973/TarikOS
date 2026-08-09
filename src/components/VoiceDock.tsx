@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useConversation } from "@elevenlabs/react";
 import { useConvex, useMutation } from "convex/react";
@@ -33,6 +34,7 @@ const PAGES: Record<string, string> = {
   mail: "/mail",
   conversations: "/conversations",
   control: "/control",
+  talk: "/talk",
 };
 
 function scaleVolume(get: (() => number) | undefined): number {
@@ -83,7 +85,7 @@ export function VoiceDock() {
       navigate_ui: async (params: { page?: string; target?: string }) => {
         const path = PAGES[params.page ?? ""];
         if (!path) {
-          return `Unknown page "${params.page}". Valid pages: home, briefs, brain, telos, mail, conversations, control.`;
+          return `Unknown page "${params.page}". Valid pages: ${Object.keys(PAGES).join(", ")}.`;
         }
         if (params.page === "briefs" && params.target) {
           router.push(`/briefs?open=${encodeURIComponent(params.target)}`);
@@ -212,19 +214,27 @@ export function VoiceDock() {
           connected ? "flex" : "hidden lg:flex"
         }`}
       >
-        {/* Orb: presence */}
-        <div className="h-16 w-16 shrink-0">
-          {connected ? (
+        {/* Orb: presence. While live it is also the way into /talk — the
+            spec's "tap for the full screen". Idle it is not a link, because
+            there is nothing on the full screen to go to yet. */}
+        {connected ? (
+          <Link
+            href="/talk"
+            aria-label="Open the full talk screen"
+            className="h-16 w-16 shrink-0 rounded-full transition hover:opacity-80 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-cyan-hud"
+          >
             <Orb
               colors={ORB_COLORS}
               volumeMode="manual"
               getInputVolume={scaledInput}
               getOutputVolume={scaledOutput}
             />
-          ) : (
+          </Link>
+        ) : (
+          <div className="h-16 w-16 shrink-0">
             <Orb colors={ORB_COLORS} volumeMode="auto" agentState={null} />
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Status + mic waveform + tool matrix */}
         <div className="flex shrink-0 flex-col gap-1.5 md:w-44">
