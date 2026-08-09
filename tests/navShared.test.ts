@@ -53,6 +53,25 @@ test("the spine distinguishes active by width AND saturation", () => {
   assert.match(spine, /saturate-\[\.\d+\]/, "inactive segments are desaturated");
 });
 
+/* The strip started at 12px. Measured at 375px against the compiled CSS, that
+ * gave a 12px tap target on a phone's primary navigation — under WCAG 2.5.8's
+ * 24px minimum — and left 2.16px between the active and inactive widths, so
+ * colour was carrying the state alone. 24px is the floor; w-3 must not creep
+ * back for looking tidier. */
+test("the strip is at least 24px wide, per WCAG 2.5.8", () => {
+  const strip = spine.slice(spine.indexOf("<button"), spine.indexOf("</button>"));
+  const width = strip.match(/\bw-(\d+)\b/)?.[1];
+  assert.ok(width, "the strip declares a width");
+  // Tailwind spacing: w-6 = 1.5rem = 24px.
+  assert.ok(Number(width) * 4 >= 24, `strip is ${Number(width) * 4}px, needs >= 24px`);
+});
+
+test("main clears the strip below lg", () => {
+  const pad = shell.match(/\bpl-(\d+) lg:pl-0/)?.[1];
+  assert.ok(pad, "main declares mobile-only left padding");
+  assert.ok(Number(pad) * 4 >= 24, `main pads ${Number(pad) * 4}px, must clear the 24px spine`);
+});
+
 test("the spine uses the one-sided cap silhouette", () => {
   assert.match(spine, /lcars-cap-/, "segments and caps are LCARS end-caps");
 });

@@ -7,12 +7,19 @@ import { NAV_LINKS, isActiveRoute } from "@/lib/navLinks";
 
 /* Mobile navigation (MOO-525). The desktop rail is hidden below lg, which left
  * phones with no navigation at all — eight destinations, none reachable. This
- * is the same rail collapsed to a 12px edge strip: tap it and the same caps
+ * is the same rail collapsed to a 24px edge strip: tap it and the same caps
  * slide out, in the same order, in the same channel colors.
  *
  * Active state follows DESIGN.md § Rail active state — full width AND full
  * saturation, because opacity alone is not a visible difference at AA-legible
- * contrast. */
+ * contrast.
+ *
+ * The strip is 24px, not the 12px first drawn: measured at 375px, a 12px strip
+ * gave a 12px tap target (under WCAG 2.5.8's 24px minimum, on a phone's
+ * primary navigation) and left only 2.16px between the active and inactive
+ * widths — so colour was carrying the state alone, which is the exact failure
+ * the two-channel rule exists to prevent. tests/navShared.test.ts holds the
+ * floor. */
 export function Spine() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -24,7 +31,7 @@ export function Spine() {
         aria-label="Open navigation"
         aria-expanded={open}
         onClick={() => setOpen(true)}
-        className="fixed inset-y-0 left-0 z-30 flex w-3 flex-col gap-[3px] py-2 focus-visible:outline-2 focus-visible:outline-cyan-hud"
+        className="fixed inset-y-0 left-0 z-30 flex w-6 flex-col gap-[3px] py-2 focus-visible:outline-2 focus-visible:outline-cyan-hud"
       >
         {NAV_LINKS.map((l) => {
           const active = isActiveRoute(pathname, l.href);

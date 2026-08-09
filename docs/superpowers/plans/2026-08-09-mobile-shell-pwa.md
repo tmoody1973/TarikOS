@@ -4,7 +4,7 @@
 
 **Goal:** Give TarikOS a usable phone shell — navigation that exists below `lg`, a voice dock that is quiet when idle, a full talk screen, and an installable PWA.
 
-**Architecture:** The desktop rail's destination list is extracted to one shared module, then rendered two ways: the existing `NavRail` above `lg`, and a new 12px edge `Spine` below it. `VoiceDock` gains three states on mobile (idle cap / live bar / talk) instead of one fixed bar. PWA is Next 16's `app/manifest.ts` metadata route plus a shell-only service worker.
+**Architecture:** The desktop rail's destination list is extracted to one shared module, then rendered two ways: the existing `NavRail` above `lg`, and a new 24px edge `Spine` below it. `VoiceDock` gains three states on mobile (idle cap / live bar / talk) instead of one fixed bar. PWA is Next 16's `app/manifest.ts` metadata route plus a shell-only service worker.
 
 **Tech Stack:** Next.js 16.3.0 (App Router), React 19, Tailwind CSS 4, `node --test` for unit tests, `@elevenlabs/react` for the already-hoisted voice session.
 
@@ -221,7 +221,7 @@ import { usePathname } from "next/navigation";
 import { NAV_LINKS, isActiveRoute } from "@/lib/navLinks";
 
 /* Mobile navigation. The desktop rail is hidden below lg, which left phones
- * with no navigation at all. This is the same rail collapsed to a 12px edge
+ * with no navigation at all. This is the same rail collapsed to a 24px edge
  * strip: tap it and the same caps slide out, in the same order.
  *
  * Active state follows DESIGN.md § Rail active state — full width AND full
@@ -238,7 +238,7 @@ export function Spine() {
         aria-label="Open navigation"
         aria-expanded={open}
         onClick={() => setOpen(true)}
-        className="fixed inset-y-0 left-0 z-30 flex w-3 flex-col gap-[3px] py-2 focus-visible:outline-2 focus-visible:outline-cyan-hud"
+        className="fixed inset-y-0 left-0 z-30 flex w-6 flex-col gap-[3px] py-2 focus-visible:outline-2 focus-visible:outline-cyan-hud"
       >
         {NAV_LINKS.map((l) => {
           const active = isActiveRoute(pathname, l.href);
@@ -308,7 +308,7 @@ import { Spine } from "./Spine";
 Then give `main` room for the spine below `lg` by changing its className to:
 
 ```tsx
-<main className="flex min-w-0 flex-1 flex-col pl-4 lg:pl-0">{children}</main>
+<main className="flex min-w-0 flex-1 flex-col pl-7 lg:pl-0">{children}</main>
 ```
 
 - [ ] **Step 5: Run tests to verify they pass**
@@ -341,7 +341,7 @@ git add src/components/Spine.tsx src/components/AppShell.tsx tests/navShared.tes
 git commit -m "feat(nav): mobile edge spine — a phone can reach every page
 
 NavRail is hidden lg:flex, so below lg there was no navigation at all. The
-spine is the same rail collapsed to a 12px edge strip that expands to the same
+spine is the same rail collapsed to a 24px edge strip that expands to the same
 caps in the same order.
 
 Active state is full width AND full saturation per DESIGN.md § Rail active
@@ -944,7 +944,7 @@ Replace the first sentence of § Layout:
 with:
 
 > A fixed LCARS rail (10rem wide) anchors the left edge above `lg`; below it the same
-> destinations render as a 12px edge spine that expands to full caps on tap
+> destinations render as a 24px edge spine that expands to full caps on tap
 
 and delete the clause "Mobile collapses the rail." from the end of the section.
 
@@ -954,7 +954,7 @@ Under § Components, after "Navigation (LCARS Rail)":
 
 ```markdown
 ### Navigation (mobile spine)
-- **Style:** Below `lg`, the rail collapses to a 12px left-edge strip of stacked
+- **Style:** Below `lg`, the rail collapses to a 24px left-edge strip of stacked
   `lcars-cap-right` segments in channel order. Tapping expands a 10rem sheet of full
   caps over a `black/60` scrim.
 - **States:** Active segment runs full width at full saturation; inactive sit ~82% wide
@@ -998,7 +998,7 @@ that contradicts it is how the system stops being trusted."
 
 ## Self-review
 
-**Spec coverage.** Spine → Task 2. Three-state dock and the telemetry inversion → Task 3. `/talk` → Task 4. Installable → Task 5. Shell-only offline → Task 6. `DESIGN.md` amendment → Task 7. The shared destination list, which the spec names as mattering, → Task 1. **Gap found and accepted:** the spec's spine "peek animation" mitigation has no task — it is a refinement that should follow real-device feedback on whether the 12px strip reads as a control, and inventing the animation before that feedback would be guessing. Raised here rather than silently dropped.
+**Spec coverage.** Spine → Task 2. Three-state dock and the telemetry inversion → Task 3. `/talk` → Task 4. Installable → Task 5. Shell-only offline → Task 6. `DESIGN.md` amendment → Task 7. The shared destination list, which the spec names as mattering, → Task 1. **Gap found and accepted:** the spec's spine "peek animation" mitigation has no task — it is a refinement that should follow real-device feedback on whether the 24px strip reads as a control, and inventing the animation before that feedback would be guessing. Raised here rather than silently dropped.
 
 **Not in this plan, by design.** The seven-page responsive pass is Plan B. Push notifications are their own brainstorm.
 

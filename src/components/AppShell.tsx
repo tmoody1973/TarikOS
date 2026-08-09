@@ -30,9 +30,9 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       <div className="flex flex-1 gap-3 p-3 pb-28">
         <NavRail />
         <Spine />
-        {/* pl-4 below lg clears the fixed 12px spine; the rail already
-            occupies its own column above lg. */}
-        <main className="flex min-w-0 flex-1 flex-col pl-4 lg:pl-0">
+        {/* pl-7 below lg clears the fixed 24px spine plus a 4px gutter; the
+            rail already occupies its own column above lg. */}
+        <main className="flex min-w-0 flex-1 flex-col pl-7 lg:pl-0">
           {children}
         </main>
       </div>

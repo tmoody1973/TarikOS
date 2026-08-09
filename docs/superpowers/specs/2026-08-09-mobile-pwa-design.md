@@ -59,9 +59,21 @@ reviewed in the wrong typeface reads as a different product.
 
 ### 1. The spine replaces the hidden rail
 
-Below `lg`, the rail becomes a **12px colored spine** pinned to the left edge — seven
+Below `lg`, the rail becomes a **24px colored spine** pinned to the left edge — eight
 stacked channel colours in the desktop rail's order. Tap or swipe and it expands into
 full `lcars-cap-left` caps over a scrim. Above `lg`, nothing changes.
+
+> **Revised 2026-08-09, from measurement.** This said 12px, and 12px is what shipped
+> first. Measured at 375px against the compiled CSS, that gave a **12px tap target**
+> on a phone's primary navigation — under WCAG 2.5.8's 24px minimum — and left only
+> **2.16px** between active and inactive segment widths, so colour was carrying the
+> active state alone. That is exactly the failure the two-channel rule below exists
+> to prevent. At 24px the target passes and the delta is 4.32px, at a cost of 12px
+> of a 375px screen.
+>
+> It also said "seven" destinations throughout; `NAV_LINKS` has eight. The rejected
+> alternatives below still read "seven" — their arguments don't turn on the count,
+> but the number is wrong.
 
 Chosen over two alternatives, both mocked:
 
@@ -76,7 +88,7 @@ The spine wins because it needs no new visual vocabulary — it *is* the existin
 full saturation, inactive at ~82% width and ~45% saturation. Opacity alone is explicitly
 not a sufficient difference at AA-legible contrast.
 
-**Known weak point:** a 12px strip may read as decoration. Mitigation is a one-time peek
+**Known weak point:** a 24px strip may read as decoration. Mitigation is a one-time peek
 animation per session — the spine widens and settles, teaching the affordance without a
 tooltip. Under `prefers-reduced-motion` it renders at the expanded hint width instead.
 
@@ -146,7 +158,7 @@ the bar; it does not end the call.
 | Unit | Responsibility |
 |---|---|
 | `src/lib/navLinks.ts` | The single destination list consumed by both `NavRail` and `Spine` |
-| `Spine` | The 12px edge strip; active-state rendering; peek animation |
+| `Spine` | The 24px edge strip; active-state rendering; peek animation |
 | `SpineSheet` | Expanded cap list over a scrim; focus trap, Esc, backdrop close |
 | `VoiceDock` (modify) | Gains the three states below `lg`; desktop form unchanged |
 | `/talk` route | Full talk screen |
