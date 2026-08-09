@@ -45,6 +45,16 @@ MODEL = "claude-sonnet-5"  # the model the live agent runs on
 DATASET = "tool-selection-v1"
 PHOENIX_TIMEOUT = 30
 
+# Thinking and response share this budget. On claude-sonnet-5 an omitted
+# `thinking` field runs ADAPTIVE thinking — a silent default change from
+# Sonnet 4.6, where omitting it meant no thinking at all. This harness ran at
+# 512 for exactly that reason: it was written against the old default. Thinking
+# then consumed the budget and turns came back truncated and empty, which the
+# scorer read as "chose no tool" — inventing misses on rows whose right answer
+# was a tool call.
+MAX_TOKENS = 4096
+TRUNCATED = "__truncated__"
+
 
 @functools.lru_cache(maxsize=None)
 def env(name: str) -> str:
@@ -317,7 +327,7 @@ def predict(client, persona: str, tools: list[dict], row: dict) -> str:
     """
     message = client.messages.create(
         model=MODEL,
-        max_tokens=512,
+        max_tokens=MAX_TOKENS,
         system=persona,
         tools=tools,
         messages=conversation(row),
@@ -325,6 +335,12 @@ def predict(client, persona: str, tools: list[dict], row: dict) -> str:
     for block in message.content:
         if block.type == "tool_use":
             return block.name
+    # A truncated turn is NOT a decision to do nothing. Scoring it as "none"
+    # is how this harness manufactured misses: at max_tokens=512 the request
+    # came back with stop_reason=max_tokens and empty content, and every one
+    # was counted as Zola declining to act. Say so instead of guessing.
+    if message.stop_reason == "max_tokens":
+        return TRUNCATED
     return "none"
 
 
@@ -353,6 +369,15 @@ def score(rows: list[dict], predictions: list[str]) -> dict:
 
 def report(result: dict) -> None:
     print(f"\naccuracy  {result['accuracy']:.1%}  ({result['correct']}/{result['n']})\n")
+
+    truncated = sum(1 for p in result["predictions"] if p == TRUNCATED)
+    if truncated:
+        print(
+            f"  WARNING: {truncated} turns hit max_tokens and produced no tool call.\n"
+            f"  Those are truncations, not decisions — raise MAX_TOKENS (currently\n"
+            f"  {MAX_TOKENS}); thinking shares this budget. They are scored as wrong,\n"
+            "  but the model never got to answer.\n"
+        )
 
     # Per-tool recall: of the times this tool was the right answer, how often
     # was it picked. This is where an over-broad description shows up.
