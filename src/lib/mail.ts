@@ -51,15 +51,6 @@ function str(v: unknown): string {
   return typeof v === "string" ? v : "";
 }
 
-function pickBody(m: RawMsg): { html: string; isHtml: boolean } {
-  const payload = (m.payload ?? {}) as RawMsg;
-  const html =
-    str(m.messageHtml) || str(m.htmlBody) || str(payload.htmlBody) || "";
-  if (html) return { html, isHtml: true };
-  const text = str(m.messageText) || str(m.snippet) || "";
-  return { html: text, isHtml: false };
-}
-
 function timestamp(m: RawMsg): string {
   return str(m.messageTimestamp) || str(m.date) || str(m.internalDate) || "";
 }
@@ -85,7 +76,7 @@ export async function listMailThreads(
         account: label,
         from: str(m.sender ?? m.from).replace(/<.*>/, "").trim(),
         subject: str(m.subject) || "(no subject)",
-        snippet: str(m.snippet ?? m.messageText).slice(0, 140),
+        snippet: previewSnippet(m),
         date: timestamp(m),
       }));
     }),
@@ -134,15 +125,35 @@ export function matchThread(
   return { outcome: "none" };
 }
 
-// ---- Message HTML extraction (MOO-494). Shapes probed live 2026-08-07:
-// our single-part HTML drafts return the HTML in messageText; Gmail-authored
-// drafts may carry base64url bodies in payload (single or multipart). ----
+// ---- Message body extraction (MOO-494, rebuilt for MOO-538). Shapes probed
+// live 2026-08-09 across 25 real inbox messages: messageHtml, htmlBody,
+// payload.htmlBody and snippet are NEVER present; messageText is always
+// present and is sometimes the raw HTML source; and payload always carries a
+// text/html part at depth 0..3. So the honest answer is "read the payload's
+// text/html part" — that is the thing Gmail itself renders. ----
 
-type RawPart = {
+export type RawPart = {
   mimeType?: string;
   body?: { data?: string };
   parts?: RawPart[];
 };
+
+/** Depth-first search of the MIME tree. Real mail nests: multipart/mixed →
+ *  multipart/alternative → text/html, and a bounce goes a level deeper still.
+ *  A one-level scan drops those to the plain-text path with perfectly good
+ *  markup sitting right there — that was the wall-of-text bug. */
+export function findPart(
+  part: RawPart | undefined,
+  mimeType: string,
+): RawPart | undefined {
+  if (!part) return undefined;
+  if (part.mimeType === mimeType) return part;
+  for (const child of part.parts ?? []) {
+    const hit = findPart(child, mimeType);
+    if (hit) return hit;
+  }
+  return undefined;
+}
 
 function decodeB64Html(part: RawPart | undefined): string {
   const data = part?.body?.data;
@@ -158,19 +169,105 @@ function looksLikeHtml(s: string): boolean {
   return /<[a-z][\s\S]*>/i.test(s);
 }
 
+function escapeText(s: string): string {
+  return s
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+/** Plain text → real paragraphs. A blank line starts a paragraph, a single
+ *  newline is a break. One `<p>` around the whole body collapses every
+ *  boundary, which is what a wall of text is. */
+export function textToHtml(text: string): string {
+  return text
+    .replaceAll("\r\n", "\n")
+    .split(/\n{2,}/)
+    .map((para) => para.trim())
+    .filter(Boolean)
+    .map((para) => `<p>${escapeText(para).replaceAll("\n", "<br>")}</p>`)
+    .join("");
+}
+
+/** Render-ready body for one message. `isHtml` says whether it is real
+ *  markup (the caller must sanitize it) or text we already escaped. */
+export function messageBody(m: Record<string, unknown>): {
+  html: string;
+  isHtml: boolean;
+} {
+  const payload = (m.payload ?? {}) as RawPart;
+  const direct =
+    str(m.messageHtml) ||
+    str(m.htmlBody) ||
+    str((payload as RawMsg).htmlBody);
+  if (direct) return { html: direct, isHtml: true };
+
+  const html = decodeB64Html(findPart(payload, "text/html"));
+  if (html) return { html, isHtml: true };
+
+  // The MIME text/plain part before messageText: Composio's messageText is a
+  // flattened rendering that can arrive with every newline stripped (measured
+  // on the Great Lakes Distillery newsletter — 10,949 chars, zero newlines).
+  const plainPart = decodeB64Html(findPart(payload, "text/plain"));
+  if (plainPart) return { html: textToHtml(plainPart), isHtml: false };
+
+  const text = str(m.messageText);
+  if (text)
+    return looksLikeHtml(text)
+      ? { html: text, isHtml: true }
+      : { html: textToHtml(text), isHtml: false };
+
+  const bare = decodeB64Html(payload);
+  return bare ? { html: textToHtml(bare), isHtml: false } : { html: "", isHtml: false };
+}
+
 export function extractMessageHtml(msg: Record<string, unknown>): string {
-  // pickBody knows the string-field shapes (messageHtml/htmlBody/…); this
-  // adds the base64url payload shapes the message-fetch API returns.
-  const body = pickBody(msg as RawMsg);
-  if (body.isHtml || looksLikeHtml(body.html)) return body.html;
-  const payload = (msg.payload ?? {}) as RawPart;
-  const htmlPart = [payload, ...(payload.parts ?? [])].find(
-    (p) => p.mimeType === "text/html",
+  return messageBody(msg).html;
+}
+
+// ---- List-row snippet. Gmail's own preview text rides in preview.body
+// (present on 25/25 probed messages), entity-encoded and padded with the
+// zero-width characters senders use to cut the inbox preview short. ----
+
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+};
+
+// One pass, so a decoded "&" can never be re-read as the start of an entity.
+function decodeEntities(s: string): string {
+  return s.replace(/&(#\d+|#x[0-9a-f]+|[a-z]+);/gi, (match, entity: string) => {
+    const e = entity.toLowerCase();
+    if (e.startsWith("#x")) return String.fromCodePoint(parseInt(e.slice(2), 16));
+    if (e.startsWith("#")) return String.fromCodePoint(Number(e.slice(1)));
+    return NAMED_ENTITIES[e] ?? match;
+  });
+}
+
+// Soft hyphen, combining grapheme joiner, the ZWSP/ZWNJ/ZWJ/LRM/RLM block,
+// word joiner, BOM — the padding that makes a preheader stop where the sender
+// wants it to and reads as ragged whitespace anywhere else.
+const ZERO_WIDTH = /[­͏​-‏⁠﻿]/g;
+
+function htmlToText(html: string): string {
+  return decodeEntities(
+    html
+      .replace(/<(style|script)[\s\S]*?<\/\1>/gi, " ")
+      .replace(/<[^>]*>/g, " "),
   );
-  const partHtml = decodeB64Html(htmlPart);
-  if (partHtml) return partHtml;
-  const plain = body.html || decodeB64Html(payload);
-  return `<p>${plain.replaceAll("&", "&amp;").replaceAll("<", "&lt;")}</p>`;
+}
+
+/** The one-line preview under the subject. Never markup: the row previously
+ *  fell back to messageText, which for an HTML newsletter is the source. */
+export function previewSnippet(m: Record<string, unknown>): string {
+  const preview = (m.preview ?? {}) as RawMsg;
+  const offered = str(preview.body) || str(m.snippet);
+  const text = offered ? decodeEntities(offered) : htmlToText(messageBody(m).html);
+  return text.replace(ZERO_WIDTH, " ").replace(/\s+/g, " ").trim().slice(0, 140);
 }
 
 // ---- Drafts + send (MOO-493). Gmail-native drafts; no update action exists,
@@ -191,7 +288,7 @@ export function mapDraftRows(rows: RawMsg[], account: string): DraftRow[] {
         account,
         to: str(m.to ?? m.recipient),
         subject: str(m.subject) || "(no subject)",
-        snippet: text.slice(0, 140),
+        snippet: previewSnippet(m),
         date: timestamp(m),
         ...(threadId ? { threadId } : {}),
         ...(messageId ? { messageId } : {}),
@@ -334,10 +431,12 @@ export async function getMailThread(
   });
   const messages = ((data.messages ?? []) as RawMsg[]) ?? [];
   return messages.map((m) => {
-    const body = pickBody(m);
+    // messageBody already escaped the plain-text path into paragraphs; only
+    // real markup needs the sanitizer.
+    const body = messageBody(m);
     const sanitized = body.isHtml
       ? sanitizeEmailHtml(body.html)
-      : { html: `<pre style="white-space:pre-wrap;font-family:inherit">${body.html.replaceAll("&", "&amp;").replaceAll("<", "&lt;")}</pre>`, fallback: false };
+      : { html: body.html, fallback: false };
     return {
       from: str(m.sender ?? m.from).trim(),
       to: str(m.to ?? m.recipient).trim(),
