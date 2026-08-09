@@ -245,7 +245,7 @@ export const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
     type: "webhook" as const,
     name: "browse",
     description:
-      "Drive a real browser to research or investigate something on the live web while Tarik watches. Reading and research only — never enter a password, never purchase. Findings become a brief. Sessions are signed out unless Tarik explicitly asks you to use his saved logins.",
+      "Open a real browser and work through the live web step by step while Tarik watches and can take over. Use this when the answer needs digging rather than a search: comparing places or options, exploring a particular site, or following a trail across several pages. If one round of searching would settle it, use web_research instead. Reading and research only — never enter a password, never purchase. Findings become a brief. Sessions are signed out unless Tarik explicitly asks you to use his saved logins.",
     preToolSpeech: "force" as const,
     responseTimeoutSecs: 30,
     apiSchema: {
@@ -353,7 +353,7 @@ export const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
     type: "webhook" as const,
     name: "web_research",
     description:
-      "Live web search for current events, news, and anything outside your knowledge. Returns sources; summarize them aloud.",
+      "Fast web search for a question with a readable answer: current events, news, facts, or anything outside your knowledge. Returns sources; summarize them aloud. Use this when one round of searching settles it. If it needs visiting several pages, weighing options against each other, or poking around a specific site, use browse instead.",
     preToolSpeech: "force" as const,
     responseTimeoutSecs: 30,
     apiSchema: {

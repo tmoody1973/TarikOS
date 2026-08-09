@@ -301,7 +301,20 @@ def conversation(row: dict) -> list[dict]:
 
 
 def predict(client, persona: str, tools: list[dict], row: dict) -> str:
-    """Return the tool the model reaches for, or 'none' if it just answers."""
+    """Return the tool the model reaches for, or 'none' if it just answers.
+
+    There is deliberately no temperature here: it is REMOVED on claude-sonnet-5
+    and any non-default value returns 400 (verified 2026-08-09 —
+    "`temperature` is deprecated for this model"). So this harness cannot be
+    made deterministic, and a single run cannot attribute a delta to an edit.
+    Measured the same day: two runs of identical code scored 70.1% and 72.9% —
+    a 2.8-point swing from nothing at all, wider than the effect of the
+    description rewrite it was meant to measure.
+
+    --repeat is the answer to that. Run the suite N times, compare a change
+    against the SPREAD rather than against one number, and only believe a
+    delta that clears it.
+    """
     message = client.messages.create(
         model=MODEL,
         max_tokens=512,
@@ -364,6 +377,31 @@ def report(result: dict) -> None:
         for m in result["misses"][:15]:
             print(f'  "{m["utterance"][:60]}"')
             print(f"      wanted {m['expected']}, got {m['got']}")
+
+
+def spread(rows: list[dict], runs: list[dict]) -> None:
+    """Report the noise band, and how much of it is a handful of coin-flip rows.
+
+    Without this the harness reports a single number and invites you to read a
+    2-point move as an improvement. The band is what a change has to clear.
+    """
+    accs = [r["accuracy"] for r in runs]
+    band = max(accs) - min(accs)
+    print(f"\nacross {len(runs)} runs of identical code")
+    print(f"  best   {max(accs):.1%}")
+    print(f"  worst  {min(accs):.1%}")
+    print(f"  spread {band:.1%}  <- a change must beat this to mean anything")
+
+    unstable = [
+        (row, {r["predictions"][i] for r in runs})
+        for i, row in enumerate(rows)
+        if len({r["predictions"][i] for r in runs}) > 1
+    ]
+    print(f"\n{len(unstable)}/{len(rows)} utterances answered differently between runs")
+    for row, seen in unstable[:10]:
+        print(f'  "{" ".join(row["utterance"].split())[:52]}"  {" / ".join(sorted(seen))}')
+    if len(unstable) > 10:
+        print(f"  … and {len(unstable) - 10} more")
 
 
 def selftest() -> None:
@@ -461,6 +499,14 @@ def main() -> None:
         metavar="NAME",
         help=f"which Phoenix dataset to use (default {DATASET})",
     )
+    parser.add_argument(
+        "--repeat",
+        type=int,
+        default=1,
+        metavar="N",
+        help="score the set N times and report the spread — the only honest way to "
+        "read a delta on a model whose sampling cannot be pinned",
+    )
     parser.add_argument("--selftest", action="store_true", help="check the pure logic and exit")
     args = parser.parse_args()
 
@@ -488,17 +534,24 @@ def main() -> None:
     client = anthropic.Anthropic(api_key=env("ANTHROPIC_API_KEY"))
 
     print(f"scoring {len(rows)} utterances against {len(tools)} tools on {MODEL}")
-    predictions: list[str] = []
-    timings: list[tuple[str, str]] = []
-    for i, row in enumerate(rows, 1):
-        started = dt.datetime.now(dt.timezone.utc)
-        predictions.append(predict(client, persona, tools, row))
-        timings.append((started.isoformat(), dt.datetime.now(dt.timezone.utc).isoformat()))
-        print(f"\r  {i}/{len(rows)}", end="", flush=True)
-    print()
+    runs: list[dict] = []
+    for attempt in range(1, args.repeat + 1):
+        predictions = []
+        timings = []
+        for i, row in enumerate(rows, 1):
+            started = dt.datetime.now(dt.timezone.utc)
+            predictions.append(predict(client, persona, tools, row))
+            timings.append((started.isoformat(), dt.datetime.now(dt.timezone.utc).isoformat()))
+            label = f"run {attempt}/{args.repeat}  " if args.repeat > 1 else "  "
+            print(f"\r{label}{i}/{len(rows)}", end="", flush=True)
+        print()
+        runs.append(score(rows, predictions))
 
-    result = score(rows, predictions)
+    result = runs[-1]
     report(result)
+
+    if args.repeat > 1:
+        spread(rows, runs)
 
     if args.phoenix:
         push_experiment(
