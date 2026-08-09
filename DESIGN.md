@@ -120,7 +120,7 @@ A near-black stage where a small LCARS family does the talking; every hue has a 
 
 ## Layout
 
-A fixed LCARS rail (10rem wide, desktop only — hidden below `lg`) anchors the left edge with stacked end-caps; content flows in a flex column beside it with `gap-2` (8px) rhythm. Panels use 12px internal padding (`p-3`), denser headers use 20px/12px (`px-5 py-3`). The briefs reader breaks into broadsheet CSS columns (21rem columns, 2.5rem gap, panel-edge column rules). Density is deliberate: many small instruments beat one large hero. Mobile collapses the rail; slide-overs go full-width (max-w-xl from `sm` up).
+A fixed LCARS rail (10rem wide) anchors the left edge above `lg` with stacked end-caps; below it the same destinations render as a 24px edge spine that expands to full caps on tap. Content flows in a flex column beside it with `gap-2` (8px) rhythm. Panels use 12px internal padding (`p-3`), denser headers use 20px/12px (`px-5 py-3`). The briefs reader breaks into broadsheet CSS columns (21rem columns, 2.5rem gap, panel-edge column rules). Density is deliberate: many small instruments beat one large hero. Slide-overs go full-width (max-w-xl from `sm` up).
 
 ## Elevation & Depth
 
@@ -135,6 +135,18 @@ A fixed LCARS rail (10rem wide, desktop only — hidden below `lg`) anchors the 
 ### Navigation (LCARS Rail)
 - **Style:** Stacked `lcars-cap-left` bars, 48px tall, each in its channel color with black Antonio uppercase labels, right-aligned.
 - **States:** Active page at full opacity; inactive at 50%, hover to 80%. `aria-current="page"` set. The masthead cap (amber, 96px) crowns the rail; a panel-styled status block ("ZOLA / SYSTEMS ONLINE" in glowing cyan) roots it.
+
+### Navigation (mobile spine)
+- **Style:** Below `lg`, the rail collapses to a 24px left-edge strip of stacked `lcars-cap-right` segments in channel order. Tapping expands a 10rem sheet of full caps over a `black/60` scrim.
+- **States:** Active segment runs full width at full saturation; inactive sit ~82% wide and ~45% desaturated — the same two-channel treatment as the desktop rail, because opacity alone is not a visible difference at AA-legible contrast.
+- **Rule:** The spine and the rail render from one destination list (`src/lib/navLinks.ts`). Two lists would let a page exist on desktop and not on mobile.
+- **Why 24px and not 12:** the first version was 12px. Measured at 375px that gave a 12px tap target on the primary navigation — under WCAG 2.5.8's 24px minimum — and left 2.16px between the active and inactive widths, so colour was carrying the state alone. Width is a floor, not a taste call.
+
+### Voice dock (three states)
+- **Idle:** Below `lg`, a single steel `lcars-cap-left` (~28px). Flat, no glow, no waveform, no matrix — an instrument with no reading does not hold the bottom of the screen.
+- **Live:** A bordered panel bar: orb, status micro-label, and the last exchange. The status label glows because a session is live — Glow Means Live, as a state rather than a decoration. The orb is the way into `/talk`.
+- **Talk:** The `/talk` route — full orb, the running transcript, mute and disengage.
+- **Rule:** Mobile keeps the words, not the telemetry. Waveform and tool matrix are `md` and up; the last exchange is always visible, and below `md` it takes a row of its own rather than the ~12px the single-row layout leaves it.
 
 ### Chips
 - **Style:** Full-pill, 1px border, `px-2.5 py-0.5`, 10px uppercase wide-tracked mono. Selected state fills with the channel color at low alpha or brightens the border; unselected sits steel-on-transparent.

@@ -7,6 +7,7 @@ import { NavRail } from "./NavRail";
 import { Spine } from "./Spine";
 import { VoiceDock } from "./VoiceDock";
 import { ViewportPanel } from "./ViewportPanel";
+import { ServiceWorker } from "./ServiceWorker";
 
 // App chrome (MOO-483): nav rail + persistent voice dock around every page.
 // The dock lives here — not in a page — so the WebRTC session survives
@@ -47,6 +48,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           </main>
         </div>
         <Authenticated>
+          <ServiceWorker />
           <ViewportPanel />
           <VoiceDock />
         </Authenticated>
