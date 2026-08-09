@@ -39,7 +39,7 @@ Today `NavRail` owns the link list inline. The spine needs the same list; two co
   - `NAV_LINKS: readonly NavLink[]` — 8 entries, desktop rail order
   - `isActiveRoute(pathname: string, href: string): boolean`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // tests/navLinks.test.ts
@@ -73,12 +73,12 @@ test("destinations are unique — a duplicate href would light two caps", () => 
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npm test 2>&1 | grep -E "^ℹ (pass|fail)"`
 Expected: FAIL — `Cannot find module '../src/lib/navLinks.ts'`
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```ts
 // src/lib/navLinks.ts
@@ -106,12 +106,12 @@ export function isActiveRoute(pathname: string, href: string): boolean {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npm test 2>&1 | grep -E "^ℹ (pass|fail)"`
 Expected: PASS, `fail 0`
 
-- [ ] **Step 5: Rewire NavRail to the shared list**
+- [x] **Step 5: Rewire NavRail to the shared list**
 
 In `src/components/NavRail.tsx`, delete the inline `const LINKS = [...]` block (lines 6–15) and replace the imports and the active check:
 
@@ -134,12 +134,12 @@ const active = isActiveRoute(pathname, l.href);
 
 and change `{LINKS.map((l) => {` to `{NAV_LINKS.map((l) => {`.
 
-- [ ] **Step 6: Verify desktop is unchanged**
+- [x] **Step 6: Verify desktop is unchanged**
 
 Run: `npm test && npx tsc --noEmit && npm run build`
 Expected: tests pass, no type errors, build clean. Load the app at desktop width and confirm all eight caps render and the active one is full-opacity.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/lib/navLinks.ts src/components/NavRail.tsx tests/navLinks.test.ts
