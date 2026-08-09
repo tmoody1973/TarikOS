@@ -75,16 +75,48 @@ and makes commitments to real venues.
 Verified 2026-08-08 against the live site, not assumed:
 
 - **HTTP 200** through OpenTable's bot protection, no login
-- **19,705 characters, 33 restaurants** for one Milwaukee query
+- **49,324 characters, 30 restaurants** in real Milwaukee-metro neighborhoods —
+  Milwaukee, Wauwatosa, Mequon, Brookfield, Cedarburg, Greendale, Pewaukee
 - Per restaurant: name, rating, review count, price band, cuisine, neighborhood,
   "Booked N times today", **live time slots**, and the booking URL
 
+**The URL that works is the city page, not the search endpoint:**
+
 ```
-Blind Horse Restaurant and Winery
-4.6 (36) • $$$ • American • Sheboygan
-Booked 8 times today
-  6:30 PM   6:45 PM   7:00 PM   7:15 PM   7:30 PM
+https://www.opentable.com/milwaukee-restaurants?covers=4&dateTime=2026-08-13T19%3A00
 ```
+
+The `/s?...&metroId=26` search endpoint was tried first and is wrong: **`metroId=26` is
+Madison**, not Milwaukee. It returned 13 restaurants in Sheboygan, Green Lake, Oshkosh
+and Sun Prairie and **not one in Milwaukee**. `?term=Milwaukee` and explicit
+`latitude`/`longitude` both returned zero. Do not reach for `/s?` — it looks like the
+right endpoint and is not.
+
+The city page's markdown shape (captured verbatim in the fixture):
+
+```
+[**Fleming's Steakhouse - Brookfield** \\
+\\
+4.6 \\
+\\
+1,380 reviews \\
+\\
+Steakhouse$$$$Brookfield \\
+\\
+Booked 21 times today](https://www.opentable.com/flemings-steakhouse-brookfield)
+
+  - 9:30 PM+1,000 pts
+  - 9:45 PM+1,000 pts
+```
+
+Three parser edge cases live in that shape, all present in the fixture:
+
+1. **Cuisine, price and neighborhood are concatenated with no separator** —
+   `Steakhouse$$$$Brookfield`. Split on the `$` run.
+2. **Slots carry a loyalty suffix** — `9:30 PM+1,000 pts`. Strip it.
+3. **One entry's neighborhood bleeds into a URL** —
+   `Pewaukee](https://www.opentable.com/r/point-burger-bar-pewaukee-waukesha)`. The
+   neighborhood capture must stop at `]`.
 
 Firecrawl is **already paid for and already integrated** (`src/lib/reader.ts`), so this
 adds no vendor, no credential, and no per-booking fee. It is also the component that
@@ -110,7 +142,8 @@ Alternatives were tested or ruled out, recorded so they are not re-litigated:
 **`src/lib/openTable.ts`** — pure, no network, no Convex imports. Same pattern as
 `telosLib` / `workflowLib`.
 
-- `searchUrl({ date, time, partySize, metroId })` → the OpenTable search URL
+- `searchUrl({ date, time, partySize })` → the Milwaukee city-page URL
+  (`/milwaukee-restaurants?covers=<n>&dateTime=<ISO>`)
 - `parseSearch(markdown)` → `Restaurant[]`
 - `rankTables(restaurants, wantedTime)` → sorted
 - `Restaurant = { name, rating, reviewCount, price, cuisine, neighborhood, slots[], url }`
@@ -131,17 +164,21 @@ Closest to the requested time first, tie-broken by rating weighted by review cou
 One pure function. It is the seam where layer B's taste plugs in later, and it is
 tunable the moment real use disagrees with it.
 
-## The metro radius problem
+## The stray-neighborhood problem
 
-**A real blocker, found while writing this spec.** `metroId=26` is genuinely Milwaukee —
-OpenTable's own `/milwaukee-restaurants` page links to it — but its search radius
-returns Madison, Sun Prairie and Sheboygan. Roughly half the fixture is 60+ miles from
-downtown Milwaukee.
+Largely solved by using the city page, but not entirely. The 30 results are
+Milwaukee-metro — Milwaukee, Wauwatosa, Mequon, Brookfield, Cedarburg, Greendale,
+Pewaukee — with a small number of Madison and Sun Prairie strays mixed in.
 
-A tool that confidently offers a table in Sheboygan for a Thursday dinner is worse than
-one that says it is confused. `parseSearch` must expose `neighborhood`, and results must
-be filtered to a Milwaukee-area set or by an explicit distance the caller can widen.
-The fix is a distance filter in our code, **not** a different `metroId`.
+A tool that confidently offers a table 80 miles away is worse than one that says it is
+confused. `parseSearch` exposes `neighborhood`; results are filtered to a
+Milwaukee-metro allowlist, and anything outside it is dropped rather than ranked low.
+
+This was originally written as a radius problem against `metroId=26` and was wrong on
+the facts — that endpoint returned **zero** Milwaukee restaurants, not "half." Corrected
+after checking the fixture instead of trusting the first successful-looking response.
+The lesson is recorded because it is the same failure mode as the striderlabs probe:
+a 200 and plausible-looking data is not evidence the requirement was met.
 
 ## Error handling
 
@@ -160,8 +197,9 @@ That third row is the load-bearing one.
 
 ## Testing
 
-`parseSearch` is TDD'd against **`tests/fixtures/opentable-search.md`** — a real 19,705
-character Firecrawl response captured 2026-08-08, not a hand-written fixture. A
+`parseSearch` is TDD'd against **`tests/fixtures/opentable-milwaukee.md`** — a real
+49,324 character Firecrawl response for Milwaukee captured 2026-08-08, not a
+hand-written fixture. A
 hand-written fixture is how `tool.is_error` shipped structurally incapable of being
 `true`.
 
@@ -194,8 +232,9 @@ watching. Recommendations. Cities other than Milwaukee.
 
 ## Open questions carried into the plan
 
-1. The metro radius filter — what defines "Milwaukee enough"? Neighborhood allowlist or
-   a distance the caller can widen.
+1. The Milwaukee-metro allowlist — which neighborhoods count. Observed in the fixture:
+   Milwaukee, Wauwatosa, Mequon, Brookfield, Cedarburg, Greendale, Pewaukee. Confirm
+   with Tarik whether Brookfield and Mequon are "out for dinner" or too far.
 2. Does Resy have enough Milwaukee coverage to be worth calling on every search, or
    should it be queried only on an explicit ask and when travelling?
 3. OpenTable Partner API — free to apply, 3–4 weeks, OAuth, real booking. Probably a
