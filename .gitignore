@@ -45,3 +45,4 @@ next-env.d.ts
 /*-mobile-*.png
 /v[0-9]-*.png
 .playwright-mcp/
+.superpowers/
