@@ -2,17 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-
-const LINKS = [
-  { label: "HOME", href: "/", color: "bg-amber" },
-  { label: "BRIEFS", href: "/briefs", color: "bg-lavender" },
-  { label: "BRAIN", href: "/brain", color: "bg-hudblue" },
-  { label: "TELOS", href: "/telos", color: "bg-cyan-hud" },
-  { label: "HABITS", href: "/habits", color: "bg-sage" },
-  { label: "MAIL", href: "/mail", color: "bg-lavender" },
-  { label: "COMMS", href: "/conversations", color: "bg-salmon" },
-  { label: "CTRL", href: "/control", color: "bg-steel" },
-];
+import { NAV_LINKS, isActiveRoute } from "@/lib/navLinks";
 
 // LCARS rail as real navigation (MOO-483). Active page renders full-opacity
 // with a glow; others dim until hover.
@@ -46,9 +36,8 @@ export function NavRail() {
           VIEW
         </span>
       </button>
-      {LINKS.map((l) => {
-        const active =
-          l.href === "/" ? pathname === "/" : pathname.startsWith(l.href);
+      {NAV_LINKS.map((l) => {
+        const active = isActiveRoute(pathname, l.href);
         return (
           <Link
             key={l.href}
