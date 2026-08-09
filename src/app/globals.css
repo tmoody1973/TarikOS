@@ -110,6 +110,37 @@ body {
   border-radius: 0.375rem;
   border: 1px solid var(--panel-edge);
 }
+
+/* Compose editor content (MOO-532). The editor renders arbitrary HTML — a
+ * reply prefilled from a Gmail-authored draft, or anything pasted out of a
+ * newsletter — and had no width rules at all, while the reader beside it has
+ * had them all along. `.tiptap` is the wrapper TipTap sets; `.ProseMirror` is
+ * what prosemirror-view puts on the editable node.
+ *
+ * Measured at 375px inside the compose panel, so it is on record which rule
+ * is load-bearing and which is not:
+ *   overflow-wrap — an unbroken 300-char token overflowed by 2787px. The
+ *     worst of the three by far, and the least obvious.
+ *   table         — an 8-column newsletter table overflowed by 278px.
+ *   img           — REDUNDANT: Tailwind preflight already caps images at
+ *     max-width:100% (verified with these rules stripped). Kept only to match
+ *     .reader-prose, which declares it explicitly for the same reason. Do not
+ *     mistake it for the thing holding images in. */
+.tiptap,
+.ProseMirror {
+  overflow-wrap: anywhere;
+}
+.tiptap img,
+.ProseMirror img {
+  max-width: 100%;
+  height: auto;
+}
+.tiptap table,
+.ProseMirror table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
 .reader-prose pre {
   overflow-x: auto;
   border: 1px solid var(--panel-edge);
