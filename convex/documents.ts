@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { checkToolSecret } from "./secondBrain";
 import { requireUser } from "./dashboard";
 import {
+  checkShareAccess,
   isConfirmationValid,
   newConfirmation,
   newShareSlug,
@@ -112,5 +113,62 @@ export const createShareLink = mutation({
     });
 
     return { slug, expiresAt, maxDownloads };
+  },
+});
+
+/**
+ * The public read path, behind the tool secret.
+ *
+ * `/f/<slug>` has no session, so the route is the only thing standing between
+ * a guessed slug and an object key — and the route holds the secret. Without
+ * it, anyone with the deployment URL could trade guesses against Convex
+ * directly and skip the route entirely.
+ *
+ * Every denial returns the same bare `{ ok: false }`. The reasons go to the
+ * deployment log and no further: which slugs exist, and why a particular one
+ * is dead, is not something a stranger gets to learn. (console is Convex's
+ * logging interface — there is no logger to inject inside the isolate.)
+ */
+export const resolveShare = mutation({
+  args: {
+    secret: v.string(),
+    slug: v.string(),
+  },
+  handler: async (ctx, { secret, slug }) => {
+    checkToolSecret(secret);
+
+    const link = await ctx.db
+      .query("documentShareLinks")
+      .withIndex("by_slug", (q) => q.eq("slug", slug))
+      .unique();
+
+    if (!link) {
+      console.warn(`share: unknown slug`);
+      return { ok: false as const };
+    }
+
+    const verdict = checkShareAccess(link, Date.now());
+    if (!verdict.allowed) {
+      console.warn(`share: denied ${link._id} — ${verdict.reasons.join(", ")}`);
+      return { ok: false as const };
+    }
+
+    const doc = await ctx.db.get(link.documentId);
+    if (!doc) {
+      // The row survived its document. Nothing to serve, same answer.
+      console.warn(`share: link ${link._id} points at a missing document`);
+      return { ok: false as const };
+    }
+
+    // Only a visit that will actually be served counts. Incrementing before
+    // the check would let a revoked link burn down someone else's cap and
+    // would log traffic as downloads that never happened.
+    await ctx.db.patch(link._id, { downloadCount: link.downloadCount + 1 });
+
+    return {
+      ok: true as const,
+      objectKey: doc.objectKey,
+      filename: doc.filename,
+    };
   },
 });
