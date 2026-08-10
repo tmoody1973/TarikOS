@@ -256,4 +256,55 @@ export default defineSchema({
     text: v.string(),
     variableChanged: v.optional(v.string()),
   }).index("by_habit", ["habitId"]),
+
+  // A brief, research result, or journal digest turned into a stored file.
+  // Bytes live in R2; only the pointer lives here. Single-user per PRODUCT.md,
+  // so there is no ownerId — the same as every table above.
+  documents: defineTable({
+    title: v.string(),
+    sourceType: v.union(
+      v.literal("brief"),
+      v.literal("research"),
+      v.literal("journal_digest"),
+    ),
+    sourceId: v.optional(v.string()),
+    objectKey: v.string(),
+    filename: v.string(),
+    contentType: v.string(),
+    sizeBytes: v.number(),
+    createdAt: v.number(),
+  }).index("by_sourceType", ["sourceType", "createdAt"]),
+
+  // The row that fronts a presigned R2 URL. `/f/<slug>` is exempt from Clerk,
+  // so there is no session on that route: this row IS the access control.
+  // Never store or expose a raw R2 URL — one is minted per visit, short-lived,
+  // after the checks in documentsLib pass.
+  documentShareLinks: defineTable({
+    documentId: v.id("documents"),
+    slug: v.string(),
+    expiresAt: v.optional(v.number()),
+    maxDownloads: v.optional(v.number()),
+    downloadCount: v.number(),
+    revoked: v.boolean(),
+    createdAt: v.number(),
+  }).index("by_slug", ["slug"]),
+
+  // The confirm gate's memory. share_document is two calls — one to ask, one
+  // to act — and on Vercel those are separate invocations with no shared
+  // process, so the token between them has to be persisted rather than held.
+  //
+  // The design assumed a confirm ritual already existed in the tool route. It
+  // did not: what existed was prompt text asking the agent to say a sentence
+  // first. This table is what makes the gate structural instead.
+  //
+  // ponytail: tokens are stored as issued, not hashed. Single-user app,
+  // single-use tokens, five-minute TTL — hash them if this ever grows a
+  // second reader of the table.
+  documentShareConfirmations: defineTable({
+    token: v.string(),
+    documentId: v.id("documents"),
+    expiresAt: v.number(),
+    used: v.boolean(),
+    createdAt: v.number(),
+  }).index("by_token", ["token"]),
 });
