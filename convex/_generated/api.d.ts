@@ -22,6 +22,8 @@ import type * as journal from "../journal.js";
 import type * as memoryOps from "../memoryOps.js";
 import type * as secondBrain from "../secondBrain.js";
 import type * as settingsLib from "../settingsLib.js";
+import type * as telegram from "../telegram.js";
+import type * as telegramLib from "../telegramLib.js";
 import type * as telos from "../telos.js";
 import type * as telosLib from "../telosLib.js";
 import type * as transcripts from "../transcripts.js";
@@ -51,6 +53,8 @@ declare const fullApi: ApiFromModules<{
   memoryOps: typeof memoryOps;
   secondBrain: typeof secondBrain;
   settingsLib: typeof settingsLib;
+  telegram: typeof telegram;
+  telegramLib: typeof telegramLib;
   telos: typeof telos;
   telosLib: typeof telosLib;
   transcripts: typeof transcripts;

@@ -168,7 +168,20 @@ export async function POST(req: NextRequest) {
       "empty or failed, say so plainly in one line.\n\nHis goals right now:\n" +
       goals;
 
-    const messages: Anthropic.MessageParam[] = [{ role: "user", content: text }];
+    // Everything still in this conversation, so "what about tomorrow?" has
+    // something to refer to. The window is decided in convex/telegramLib.ts by
+    // the silence between messages, not by a TTL.
+    const history = await convex.query(api.telegram.context, {
+      secret,
+      chatId: String(chatId),
+    });
+    const messages: Anthropic.MessageParam[] = [
+      ...history.map((turn) => ({
+        role: turn.role as "user" | "assistant",
+        content: turn.content,
+      })),
+      { role: "user", content: text },
+    ];
     let answer = "";
 
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
@@ -207,7 +220,26 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    await sendMessage(String(chatId), answer || "I didn't have an answer for that.");
+    const spoken = answer || "I didn't have an answer for that.";
+    await sendMessage(String(chatId), spoken);
+
+    // Written only after the reply lands. A question that was never answered
+    // should not sit in the history as though it had been, and a failed send
+    // leaves the next message starting where this one did.
+    await Promise.all([
+      convex.mutation(api.telegram.appendTurn, {
+        secret,
+        chatId: String(chatId),
+        role: "user",
+        content: text,
+      }),
+      convex.mutation(api.telegram.appendTurn, {
+        secret,
+        chatId: String(chatId),
+        role: "assistant",
+        content: spoken,
+      }),
+    ]);
   } catch (error) {
     // Tell him something went wrong rather than leaving the message unanswered,
     // but never the error text — it can carry keys and internal paths.

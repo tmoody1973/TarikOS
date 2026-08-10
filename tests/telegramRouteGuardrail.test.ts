@@ -124,3 +124,34 @@ test("the model is told which tags exist and how to escape", () => {
   assert.match(code, /TELEGRAM_TAGS/);
   assert.match(route, /&lt;/, "it must be told to escape a bare less-than");
 });
+
+// ── Conversation memory ───────────────────────────────────────────────────
+
+test("history is loaded before the model is asked", () => {
+  const load = handler.indexOf("api.telegram.context");
+  const ask = handler.indexOf("client.messages.create");
+  assert.ok(load > -1, "the route must load the conversation");
+  assert.ok(load < ask, "context that arrives after the question is no context");
+});
+
+test("turns are stored only after the reply is sent", () => {
+  // A question that was never answered must not sit in the history as though
+  // it had been — the next message would be answered in a frame that never
+  // actually happened.
+  const send = handler.indexOf("await sendMessage(String(chatId), spoken)");
+  const store = handler.indexOf("api.telegram.appendTurn");
+  assert.ok(send > -1 && store > -1);
+  assert.ok(send < store, "send first, then record");
+});
+
+test("both sides of the exchange are recorded", () => {
+  const stores = [...handler.matchAll(/role:\s*"(user|assistant)"/g)].map((m) => m[1]);
+  assert.ok(stores.includes("user"), "his message");
+  assert.ok(stores.includes("assistant"), "and the answer");
+});
+
+test("history is keyed to the chat it came from", () => {
+  // A single shared history would be an actual leak the moment a second chat
+  // is ever allowed.
+  assert.match(handler, /api\.telegram\.context,\s*{\s*\n?\s*secret,\s*\n?\s*chatId:/);
+});

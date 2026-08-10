@@ -300,6 +300,20 @@ export default defineSchema({
   // ponytail: tokens are stored as issued, not hashed. Single-user app,
   // single-use tokens, five-minute TTL — hash them if this ever grows a
   // second reader of the table.
+  // Text-channel conversation history (Telegram). Kept so "what about
+  // tomorrow?" has something to refer to; windowed by convex/telegramLib.ts
+  // rather than by a TTL, because a gap between messages ends a conversation
+  // and the age of the first message does not.
+  //
+  // ponytail: no per-chat index — this is one user and one chat. Add
+  // by_chat if a second ever exists.
+  telegramTurns: defineTable({
+    chatId: v.string(),
+    role: v.union(v.literal("user"), v.literal("assistant")),
+    content: v.string(),
+    createdAt: v.number(),
+  }).index("by_chat_time", ["chatId", "createdAt"]),
+
   documentShareConfirmations: defineTable({
     token: v.string(),
     documentId: v.id("documents"),
