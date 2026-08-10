@@ -54,22 +54,65 @@ async function runTool(
   return body.slice(0, 12000);
 }
 
-async function sendMessage(chatId: string, text: string): Promise<void> {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (!token) throw new Error("TELEGRAM_BOT_TOKEN is not set");
-  const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+/**
+ * Tags Telegram accepts, verified against the live API rather than the docs
+ * (the formatting page would not fetch). `<h1>` is rejected outright, and so
+ * is a BARE `<` anywhere in the text — "5 < 7" in ordinary prose kills the
+ * whole message with "Unsupported start tag". A bare `&` is fine.
+ */
+const TELEGRAM_TAGS = "b, i, code, pre, s, u, a, blockquote";
+
+/** Everything Telegram would try to parse, removed. */
+function stripTags(html: string): string {
+  return html
+    .replace(/<\/?[a-z][^>]*>/gi, "")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+}
+
+async function post(
+  token: string,
+  chatId: string,
+  text: string,
+  html: boolean,
+): Promise<Response> {
+  return fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       chat_id: chatId,
       text: text.slice(0, MAX_REPLY),
+      ...(html ? { parse_mode: "HTML" } : {}),
       link_preview_options: { is_disabled: true },
     }),
   });
-  if (!res.ok) {
-    // The body carries Telegram's description of what was wrong, which is the
-    // only useful part; it contains no user content.
-    throw new Error(`telegram sendMessage ${res.status}: ${await res.text()}`);
+}
+
+/**
+ * Send as HTML, and fall back to plain text if Telegram refuses to parse it.
+ *
+ * The fallback is not defensive padding: a single stray `<` from the model —
+ * "under 5 < 7 items" — makes Telegram reject the message entirely, and the
+ * failure mode without this is that he asks a question and gets silence. One
+ * ugly message beats no message.
+ */
+async function sendMessage(chatId: string, text: string): Promise<void> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) throw new Error("TELEGRAM_BOT_TOKEN is not set");
+
+  const res = await post(token, chatId, text, true);
+  if (res.ok) return;
+
+  const detail = await res.text();
+  if (!detail.includes("can't parse entities")) {
+    throw new Error(`telegram sendMessage ${res.status}: ${detail}`);
+  }
+
+  console.warn("telegram: HTML rejected, resending as plain text");
+  const plain = await post(token, chatId, stripTags(text), false);
+  if (!plain.ok) {
+    throw new Error(`telegram sendMessage ${plain.status}: ${await plain.text()}`);
   }
 }
 
@@ -117,7 +160,10 @@ export async function POST(req: NextRequest) {
     const system =
       "You are Zola, Tarik's assistant, answering over text message. Be brief — " +
       "this is a phone screen, not a document. No preamble, no sign-off, no " +
-      "markdown headers. Use your tools rather than guessing: if he asks about " +
+      "markdown. Telegram renders a small HTML subset and you may use it: " +
+      "<" + TELEGRAM_TAGS.split(", ").join("> <") + ">. " +
+      "Write a bare less-than sign as &lt; — one of them un-escaped and the " +
+      "whole message fails to send. Use your tools rather than guessing: if he asks about " +
       "his calendar, mail, goals or notes, go and look. If a tool comes back " +
       "empty or failed, say so plainly in one line.\n\nHis goals right now:\n" +
       goals;

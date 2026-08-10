@@ -87,3 +87,40 @@ test("the reply is truncated to something a phone can show", () => {
   assert.match(code, /MAX_REPLY\s*=\s*\d+/);
   assert.match(code, /slice\(0, MAX_REPLY\)/);
 });
+
+// ── Formatting ────────────────────────────────────────────────────────────
+//
+// Verified against the live API, not the docs: Telegram accepts b, i, code,
+// pre, s, u, a and blockquote; it rejects <h1>; a bare `&` is fine; and a
+// bare `<` — "5 < 7" in ordinary prose — rejects the ENTIRE message with
+// "can't parse entities". Without a fallback, that failure mode is a question
+// answered by silence.
+
+test("the reply is sent as HTML", () => {
+  assert.match(code, /parse_mode:\s*"HTML"/);
+});
+
+test("a parse failure falls back to plain text rather than vanishing", () => {
+  assert.match(code, /can't parse entities/, "the retry keys off Telegram's own message");
+  assert.match(code, /stripTags\(/, "and strips what it could not parse");
+  // The fallback must not itself ask for HTML, or it fails the same way twice.
+  const fallback = code.slice(code.indexOf("can't parse entities"));
+  // `[^)]*` was the first attempt and could never match: the argument is
+  // `stripTags(text)`, which contains the paren the class excludes.
+  assert.match(
+    fallback,
+    /post\(token, chatId, stripTags\(text\), false\)/,
+    "the retry sends without parse_mode, or it fails the same way twice",
+  );
+});
+
+test("a failure that is not a parse error still throws", () => {
+  // A 401 or a 429 must not be silently downgraded into a plain-text resend
+  // that fails the same way — those need to reach the log as errors.
+  assert.match(code, /if \(!detail\.includes\("can't parse entities"\)\) \{[\s\S]{0,80}throw/);
+});
+
+test("the model is told which tags exist and how to escape", () => {
+  assert.match(code, /TELEGRAM_TAGS/);
+  assert.match(route, /&lt;/, "it must be told to escape a bare less-than");
+});
