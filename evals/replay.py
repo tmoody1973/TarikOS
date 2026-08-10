@@ -31,6 +31,7 @@ import csv
 import datetime as dt
 import functools
 import json
+import math
 import os
 import pathlib
 import urllib.error
@@ -322,8 +323,9 @@ def predict(client, persona: str, tools: list[dict], row: dict) -> str:
     description rewrite it was meant to measure.
 
     --repeat is the answer to that. Run the suite N times, compare a change
-    against the SPREAD rather than against one number, and only believe a
-    delta that clears it.
+    against the NOISE BAND rather than against one number, and only believe a
+    delta that clears it. The band comes from how many rows flip, not from the
+    range of the aggregate — see instability().
     """
     message = client.messages.create(
         model=MODEL,
@@ -404,29 +406,60 @@ def report(result: dict) -> None:
             print(f"      wanted {m['expected']}, got {m['got']}")
 
 
-def spread(rows: list[dict], runs: list[dict]) -> None:
-    """Report the noise band, and how much of it is a handful of coin-flip rows.
+def instability(rows: list[dict], runs: list[dict]) -> dict:
+    """How much of this harness's output is noise, measured per row.
 
-    Without this the harness reports a single number and invites you to read a
-    2-point move as an improvement. The band is what a change has to clear.
+    The aggregate range across a handful of runs is the wrong number to lead
+    with. On 2026-08-09 three runs of identical code each scored exactly 71.0%
+    while 14 of 107 utterances answered differently between them: the flips
+    cancelled out, the range printed 0.0%, and a bar of zero says every move is
+    real. A fourth scoring of the same code landed at 70.1%, so even the
+    observed range was never actually zero — three runs were just too few to
+    see it.
+
+    The flips are the signal, and they are the thing that does not cancel. Each
+    unstable row behaves like a coin toss, so it contributes Bernoulli variance
+    0.25 to the correct-count; u independent flips give the accuracy a standard
+    deviation of sqrt(u * 0.25) / n, and a ~95% band of twice that — sqrt(u)/n.
+    For 14 of 107 that is +/-3.5%, which is a bar a change can be measured
+    against. Stable rows contribute nothing, so a set that truly does not move
+    still reports zero.
     """
-    accs = [r["accuracy"] for r in runs]
-    band = max(accs) - min(accs)
-    print(f"\nacross {len(runs)} runs of identical code")
-    print(f"  best   {max(accs):.1%}")
-    print(f"  worst  {min(accs):.1%}")
-    print(f"  spread {band:.1%}  <- a change must beat this to mean anything")
-
-    unstable = [
-        (row, {r["predictions"][i] for r in runs})
+    flipped = [
+        (row, seen)
         for i, row in enumerate(rows)
-        if len({r["predictions"][i] for r in runs}) > 1
+        if len(seen := {r["predictions"][i] for r in runs}) > 1
     ]
-    print(f"\n{len(unstable)}/{len(rows)} utterances answered differently between runs")
-    for row, seen in unstable[:10]:
+    accuracies = [r["accuracy"] for r in runs]
+    return {
+        "n": len(rows),
+        "flipped": flipped,
+        "unstable": len(flipped),
+        "band": math.sqrt(len(flipped)) / len(rows) if rows else 0.0,
+        "best": max(accuracies),
+        "worst": min(accuracies),
+        "range": max(accuracies) - min(accuracies),
+    }
+
+
+def spread(rows: list[dict], runs: list[dict]) -> None:
+    """Print the instability, flips first and the aggregate range demoted."""
+    s = instability(rows, runs)
+    print(f"\nacross {len(runs)} runs of identical code")
+    print(f"  {s['unstable']}/{s['n']} utterances answered differently between runs")
+    print(f"  noise band  +/-{s['band']:.1%}  <- a change must beat this to mean anything")
+    print(f"\n  observed range {s['range']:.1%}  (best {s['best']:.1%}, worst {s['worst']:.1%})")
+    print(
+        f"  Secondary, and do not use it as the bar: {len(runs)} runs cannot pin the\n"
+        "  range, and flips that cancel out hold it near zero while the set moves."
+    )
+
+    if s["flipped"]:
+        print()
+    for row, seen in s["flipped"][:10]:
         print(f'  "{" ".join(row["utterance"].split())[:52]}"  {" / ".join(sorted(seen))}')
-    if len(unstable) > 10:
-        print(f"  … and {len(unstable) - 10} more")
+    if s["unstable"] > 10:
+        print(f"  … and {s['unstable'] - 10} more")
 
 
 def selftest() -> None:
@@ -499,6 +532,59 @@ def selftest() -> None:
     )
     assert [t["role"] for t in conversation(from_phoenix)] == ["user", "assistant", "user"]
 
+    # Instability. The whole point of MOO-574: runs that score identically are
+    # not stable if their answers moved. Two of these four rows flip and the
+    # flips cancel, so the aggregate range is 0.0 while the set is noisy.
+    four = [{"utterance": u} for u in ("p", "q", "r", "s")]
+    cancelling = [
+        {"accuracy": 0.5, "predictions": ["a", "b", "c", "d"]},
+        {"accuracy": 0.5, "predictions": ["a", "x", "y", "d"]},
+    ]
+    noisy = instability(four, cancelling)
+    assert noisy["range"] == 0.0, "these runs really do score the same"
+    assert noisy["unstable"] == 2
+    assert [row["utterance"] for row, _ in noisy["flipped"]] == ["q", "r"]
+    assert noisy["flipped"][0][1] == {"b", "x"}
+    # The bar a change must clear comes from the flips, not from the range.
+    assert noisy["band"] == math.sqrt(2) / 4
+    assert noisy["band"] > noisy["range"]
+
+    # A genuinely stable set gets a zero band — the number is not zero by
+    # construction, it is zero only when nothing moved.
+    two = [{"utterance": "p"}, {"utterance": "q"}]
+    steady = instability(
+        two,
+        [
+            {"accuracy": 0.5, "predictions": ["a", "b"]},
+            {"accuracy": 0.5, "predictions": ["a", "b"]},
+        ],
+    )
+    assert steady["unstable"] == 0
+    assert steady["band"] == 0.0
+    assert steady["flipped"] == []
+
+    # The band scales with the flip count and shrinks with set size, so the
+    # real 14-of-107 case lands near 3.5% rather than the 0.0% it reported.
+    assert instability(four, cancelling)["band"] > instability(
+        [{"utterance": str(i)} for i in range(8)],
+        [
+            {"accuracy": 0.5, "predictions": list("abcdefgh")},
+            {"accuracy": 0.5, "predictions": list("abxdefgh")},
+        ],
+    )["band"]
+
+    # Range stays reported, just demoted — it is still the observed evidence.
+    swinging = instability(
+        two,
+        [
+            {"accuracy": 1.0, "predictions": ["a", "b"]},
+            {"accuracy": 0.5, "predictions": ["a", "x"]},
+        ],
+    )
+    assert swinging["best"] == 1.0
+    assert swinging["worst"] == 0.5
+    assert swinging["range"] == 0.5
+
     print("selftest ok")
 
 
@@ -529,8 +615,8 @@ def main() -> None:
         type=int,
         default=1,
         metavar="N",
-        help="score the set N times and report the spread — the only honest way to "
-        "read a delta on a model whose sampling cannot be pinned",
+        help="score the set N times and report the noise band — the only honest way "
+        "to read a delta on a model whose sampling cannot be pinned",
     )
     parser.add_argument("--selftest", action="store_true", help="check the pure logic and exit")
     args = parser.parse_args()
