@@ -46,3 +46,6 @@ next-env.d.ts
 /v[0-9]-*.png
 .playwright-mcp/
 .superpowers/
+
+# wrangler local state (created by `wrangler r2` commands)
+.wrangler/
