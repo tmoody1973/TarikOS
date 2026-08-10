@@ -23,6 +23,73 @@ import {
 // race a second concurrent call could slip through.
 
 /**
+ * Record a file that is already in R2. No confirm gate: saving never leaves
+ * the Clerk boundary, so it is as safe as writing any other row. The gate is
+ * for sharing, which is a different act.
+ */
+export const saveDocument = mutation({
+  args: {
+    secret: v.optional(v.string()),
+    title: v.string(),
+    sourceType: v.union(
+      v.literal("brief"),
+      v.literal("research"),
+      v.literal("journal_digest"),
+    ),
+    sourceId: v.optional(v.string()),
+    objectKey: v.string(),
+    filename: v.string(),
+    contentType: v.string(),
+    sizeBytes: v.number(),
+  },
+  handler: async (ctx, { secret, ...doc }) => {
+    if (secret) checkToolSecret(secret);
+    else await requireUser(ctx);
+
+    const documentId = await ctx.db.insert("documents", {
+      ...doc,
+      createdAt: Date.now(),
+    });
+    return { documentId };
+  },
+});
+
+/**
+ * Kill a link. No gate on this one either, and deliberately so: revoking is
+ * always safe to do immediately, and making it hard would be the actual
+ * hazard. Given a documentId it kills every link to that document, because
+ * "unshare that" means all of them, not the most recent one.
+ */
+export const revokeShare = mutation({
+  args: {
+    secret: v.optional(v.string()),
+    slug: v.optional(v.string()),
+    documentId: v.optional(v.id("documents")),
+  },
+  handler: async (ctx, { secret, slug, documentId }) => {
+    if (secret) checkToolSecret(secret);
+    else await requireUser(ctx);
+
+    const links = slug
+      ? await ctx.db
+          .query("documentShareLinks")
+          .withIndex("by_slug", (q) => q.eq("slug", slug))
+          .collect()
+      : documentId
+        ? (await ctx.db.query("documentShareLinks").collect()).filter(
+            (l) => l.documentId === documentId,
+          )
+        : [];
+
+    // Already-revoked links are skipped so the count reports what changed,
+    // not what was asked for.
+    const live = links.filter((l) => !l.revoked);
+    for (const link of live) await ctx.db.patch(link._id, { revoked: true });
+    return { revoked: live.length, found: links.length };
+  },
+});
+
+/**
  * Phase one. Names the document so Zola can read it back, hands out a
  * single-use token, and writes no link.
  */

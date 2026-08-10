@@ -34,6 +34,14 @@ import {
 import { buildHabitReview } from "../../../../../convex/habitsLib";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { classifyOutcome, type ToolOutcome } from "@/lib/toolOutcome";
+import { uploadBuffer } from "@/lib/r2";
+import {
+  buildDocumentFromBrief,
+  buildDocumentFromJournal,
+  buildDocumentFromResearch,
+  objectKeyFor,
+  shareExpiryFrom,
+} from "@/lib/documentBuilders";
 import { getTracer, safeSetAttrs, safeEndSpan } from "@/lib/tracing";
 
 // Webhook endpoint for Zola's ElevenLabs server tools. Authenticated by
@@ -1055,6 +1063,186 @@ async function runTool(
         message: reason
           ? `Calling you now about ${reason}.`
           : "Calling you now.",
+      };
+    }
+
+    /* Documents (MOO-583). Saving is not sharing: this writes a file only
+     * Tarik can reach, so it needs no confirm gate. The moment it could mint
+     * a link that argument would be false — tests/documentToolsGuardrail
+     * scans this arm for exactly that. */
+    case "save_document": {
+      const sourceType = strArg(body.source_type, 20);
+      const now = Date.now();
+      let built;
+      let sourceId: string | undefined;
+
+      if (sourceType === "brief") {
+        const brief = await convex.query(api.workflows.latestReadyBrief, {
+          secret,
+        });
+        if (!brief) {
+          return { ok: false, message: "There's no brief ready to save." };
+        }
+        built = buildDocumentFromBrief(brief, now);
+        sourceId = brief._id;
+      } else if (sourceType === "journal_digest") {
+        const entries = await convex.query(api.journal.weekEntries, { secret });
+        if (entries.length === 0) {
+          return { ok: false, message: "There's nothing in the journal this week." };
+        }
+        built = buildDocumentFromJournal(
+          buildJournalDigest(
+            entries.map((j) => ({
+              text: j.text,
+              mode: j.mode,
+              at: j._creationTime,
+            })),
+          ),
+          now,
+        );
+      } else if (sourceType === "research") {
+        const query = strArg(body.query, 200);
+        if (!query) {
+          return { ok: false, message: "What research should I save?" };
+        }
+        // Re-run rather than save what Zola remembers. A file of URLs is
+        // only worth keeping if the URLs are real ones.
+        const results = await composioResearch(query);
+        built = buildDocumentFromResearch(query, results, now);
+      } else {
+        return {
+          ok: false,
+          message:
+            "I can save a brief, a research result, or this week's journal digest.",
+        };
+      }
+
+      const objectKey = objectKeyFor(built.title, "md", now);
+      const bytes = Buffer.from(built.body, "utf8");
+      await uploadBuffer(objectKey, bytes, built.contentType);
+
+      const { documentId } = await convex.mutation(api.documents.saveDocument, {
+        secret,
+        title: built.title,
+        sourceType: sourceType as "brief" | "research" | "journal_digest",
+        sourceId,
+        objectKey,
+        filename: built.filename,
+        contentType: built.contentType,
+        sizeBytes: bytes.byteLength,
+      });
+
+      await convex.mutation(api.secondBrain.pushBriefingCards, {
+        secret,
+        tool: "save_document",
+        cards: [
+          {
+            kind: "note",
+            title: built.title,
+            body: `Saved as ${built.filename}.`,
+          },
+        ],
+      });
+
+      return {
+        ok: true,
+        message: `Saved "${built.title}" as a document. It's private until you ask me to share it.`,
+        data: { documentId, title: built.title, filename: built.filename },
+      };
+    }
+    /* Sharing is the one act that reaches past Clerk, so it is two calls.
+     * The first writes nothing and hands back a token; the second spends it.
+     * The `return` between them is load-bearing: without it the route would
+     * mint its own token and immediately spend it, and the gate would be
+     * decoration. See MOO-579 and convex/documentsLib.ts. */
+    case "share_document": {
+      const documentId = strArg(body.document_id, 64);
+      if (!documentId) {
+        return { ok: false, message: "Which document should I share?" };
+      }
+      const token = strArg(body.confirmation_token, 64);
+
+      if (!token) {
+        const asked = await convex.mutation(api.documents.requestShare, {
+          secret,
+          documentId: documentId as Id<"documents">,
+        });
+        return {
+          ok: true,
+          message: `Read this back to Tarik and get a yes before sharing: ${asked.summary}. A link works for anyone who has it, with no sign-in.`,
+          data: {
+            requiresConfirmation: true,
+            confirmationToken: asked.confirmationToken,
+            summary: asked.summary,
+          },
+        };
+      }
+
+      const expiresAt = shareExpiryFrom(
+        typeof body.expires_in_days === "number"
+          ? body.expires_in_days
+          : strArg(body.expires_in_days, 10),
+        Date.now(),
+      );
+      // A refused confirmation is a normal answer, not an outage. The
+      // mutation throws on every denial — missing, spent, expired, wrong
+      // document — and an uncaught throw here reaches the route's catch-all,
+      // which returns a 500 and calls reportToolError. That would take
+      // share_document down in the control panel for a gate doing its job.
+      // Anything that isn't the denial still propagates.
+      let link;
+      try {
+        link = await convex.mutation(api.documents.createShareLink, {
+          secret,
+          documentId: documentId as Id<"documents">,
+          confirmationToken: token,
+          expiresAt,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!/not confirmed/i.test(message)) throw error;
+        return {
+          outcome: "no_match",
+          ok: false,
+          message:
+            "That confirmation has already been used or has expired. Ask Tarik again, then start the share over.",
+        };
+      }
+
+      // Explicit base rather than the request origin: the tool webhook is
+      // called at whatever host ElevenLabs was given, and tarikos.app 308s to
+      // www — a share link should not spend a redirect before it starts.
+      const base = (process.env.SHARE_BASE_URL ?? origin).replace(/\/$/, "");
+      const url = `${base}/f/${link.slug}`;
+      return {
+        ok: true,
+        message: expiresAt
+          ? `Shared. The link is ${url} and it stops working on ${chicagoDateTime(expiresAt)}.`
+          : `Shared, with no expiry. The link is ${url} — it keeps working until you revoke it.`,
+        data: { url, slug: link.slug, expiresAt },
+      };
+    }
+    /* No gate, deliberately: making revocation hard would be the hazard. */
+    case "revoke_document_share": {
+      const slug = strArg(body.slug, 64);
+      const documentId = strArg(body.document_id, 64);
+      if (!slug && !documentId) {
+        return { ok: false, message: "Which share should I revoke?" };
+      }
+      const result = await convex.mutation(api.documents.revokeShare, {
+        secret,
+        slug,
+        documentId: documentId as Id<"documents"> | undefined,
+      });
+      if (result.found === 0) {
+        return { outcome: "no_match", ok: false, message: "I couldn't find that share link." };
+      }
+      return {
+        ok: true,
+        message:
+          result.revoked === 0
+            ? "That link was already revoked."
+            : `Revoked ${result.revoked} link${result.revoked === 1 ? "" : "s"}. It stops working immediately.`,
       };
     }
 

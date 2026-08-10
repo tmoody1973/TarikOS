@@ -717,6 +717,88 @@ export const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
       },
     },
   },
+  {
+    type: "webhook" as const,
+    // The discriminator is the whole description here. This sits beside
+    // capture_thought, remember and journal_entry, which all already mean
+    // "save the thing he just said" — so say plainly what only this one does:
+    // it turns an EXISTING record into a FILE. See MOO-576.
+    name: "save_document",
+    description:
+      "Turn something that already exists — the latest brief, a research query, or this week's journal digest — into a saved file Tarik can download or share later. Use only for existing records; to store new words he just spoke, use capture_thought, remember or journal_entry instead. The file is private to Tarik until he separately asks to share it.",
+    responseTimeoutSecs: 30,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/save_document`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["source_type"],
+        description: "What to turn into a file",
+        properties: {
+          source_type: bodyProp(
+            "One of: brief, research, journal_digest. 'brief' saves the most recent ready brief.",
+          ),
+          query: bodyProp(
+            "Required when source_type is research: the thing to look up. The search is re-run so the saved links are real.",
+          ),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    // Two calls, not one. Call it with no confirmation_token first, read the
+    // summary back, get a spoken yes, then call again with the token you were
+    // given. The server refuses the second call without a valid token, so
+    // there is no way to skip the middle step.
+    name: "share_document",
+    description:
+      "Create a link to a saved document that works for anyone who has it, with no sign-in. This is the one action that puts Tarik's content outside his account, so it takes two calls: call it first WITHOUT confirmation_token, read the summary back to Tarik, wait for an explicit yes, then call again passing the confirmation_token you were given. Never call the second time without a spoken yes.",
+    responseTimeoutSecs: 20,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/share_document`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["document_id"],
+        description: "The document to share",
+        properties: {
+          document_id: bodyProp("The id returned when the document was saved"),
+          confirmation_token: bodyProp(
+            "Omit on the first call. On the second call, the token the first call returned.",
+          ),
+          expires_in_days: bodyProp(
+            "How many days the link should work. Omit for seven days. Pass the word 'never' only if Tarik explicitly says the link should never expire.",
+          ),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "revoke_document_share",
+    description:
+      "Kill a share link so it stops working immediately. Takes no confirmation — revoking is always safe. Use whenever Tarik says to unshare, take down, or stop sharing a document.",
+    responseTimeoutSecs: 15,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/revoke_document_share`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: [],
+        description: "Which share to revoke",
+        properties: {
+          document_id: bodyProp(
+            "The document whose links should all be revoked",
+          ),
+          slug: bodyProp("Or the slug of one specific link"),
+        },
+      },
+    },
+  },
 ];
 
 async function main() {
