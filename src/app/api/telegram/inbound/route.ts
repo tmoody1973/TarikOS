@@ -5,6 +5,7 @@ import { api } from "../../../../../convex/_generated/api";
 import { isAllowedChat, secretMatches } from "@/lib/telegramAllowlist";
 import { buildGoalsSection } from "../../../../../convex/telosLib";
 import { TEXT_TOOLS } from "@/lib/textTools";
+import { sendToChat, TELEGRAM_TAGS } from "@/lib/telegram";
 
 // Zola over Telegram. The keyboard channel SMS was going to be, without the
 // carrier regime: no 10DLC, no brand registration, no account review, and
@@ -52,68 +53,6 @@ async function runTool(
   // Handed to the model as-is: the route already answers with a spoken
   // `message` on failure, which is more useful to Claude than a status code.
   return body.slice(0, 12000);
-}
-
-/**
- * Tags Telegram accepts, verified against the live API rather than the docs
- * (the formatting page would not fetch). `<h1>` is rejected outright, and so
- * is a BARE `<` anywhere in the text — "5 < 7" in ordinary prose kills the
- * whole message with "Unsupported start tag". A bare `&` is fine.
- */
-const TELEGRAM_TAGS = "b, i, code, pre, s, u, a, blockquote";
-
-/** Everything Telegram would try to parse, removed. */
-function stripTags(html: string): string {
-  return html
-    .replace(/<\/?[a-z][^>]*>/gi, "")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&");
-}
-
-async function post(
-  token: string,
-  chatId: string,
-  text: string,
-  html: boolean,
-): Promise<Response> {
-  return fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text: text.slice(0, MAX_REPLY),
-      ...(html ? { parse_mode: "HTML" } : {}),
-      link_preview_options: { is_disabled: true },
-    }),
-  });
-}
-
-/**
- * Send as HTML, and fall back to plain text if Telegram refuses to parse it.
- *
- * The fallback is not defensive padding: a single stray `<` from the model —
- * "under 5 < 7 items" — makes Telegram reject the message entirely, and the
- * failure mode without this is that he asks a question and gets silence. One
- * ugly message beats no message.
- */
-async function sendMessage(chatId: string, text: string): Promise<void> {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (!token) throw new Error("TELEGRAM_BOT_TOKEN is not set");
-
-  const res = await post(token, chatId, text, true);
-  if (res.ok) return;
-
-  const detail = await res.text();
-  if (!detail.includes("can't parse entities")) {
-    throw new Error(`telegram sendMessage ${res.status}: ${detail}`);
-  }
-
-  console.warn("telegram: HTML rejected, resending as plain text");
-  const plain = await post(token, chatId, stripTags(text), false);
-  if (!plain.ok) {
-    throw new Error(`telegram sendMessage ${plain.status}: ${await plain.text()}`);
-  }
 }
 
 export async function POST(req: NextRequest) {
@@ -221,7 +160,7 @@ export async function POST(req: NextRequest) {
     }
 
     const spoken = answer || "I didn't have an answer for that.";
-    await sendMessage(String(chatId), spoken);
+    await sendToChat(String(chatId), spoken);
 
     // Written only after the reply lands. A question that was never answered
     // should not sit in the history as though it had been, and a failed send
@@ -246,7 +185,7 @@ export async function POST(req: NextRequest) {
     console.error(
       `telegram: reply failed — ${error instanceof Error ? error.message : "unknown"}`,
     );
-    await sendMessage(
+    await sendToChat(
       String(chatId),
       "Something broke on my end. It's in the logs.",
     ).catch(() => {});

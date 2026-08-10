@@ -5,6 +5,7 @@ import { api } from "../../../../../convex/_generated/api";
 import { convexServer, requireToolSecret } from "@/lib/convexServer";
 import { browseSections } from "@/lib/browserBrief";
 import { endBrowserSession, replayUrl } from "@/lib/browserSession";
+import { escapeHtml, notifyOwner } from "@/lib/telegram";
 
 // Viewport runner (MOO-485). Secret-gated (Clerk-exempt in proxy.ts —
 // server-to-server only). Replies 202 immediately; the Stagehand loop runs
@@ -77,6 +78,15 @@ async function runLoop(sessionId: string, task: string, secret: string) {
         status: "needs_takeover",
         error: message.replace(/^TAKEOVER:\s*/, "").slice(0, 300),
       });
+      // Tell him where he is needed. This used to be call_tarik's job, and a
+      // ringing phone is the wrong weight for "the site wants a login" — a
+      // message he can act on when he looks is the right one. Fire and forget:
+      // a failed notification must not fail the session that is waiting.
+      void notifyOwner(
+        `<b>Browse session needs you</b>\n${escapeHtml(
+          message.replace(/^TAKEOVER:\s*/, "").slice(0, 300),
+        )}\n\nOpen the Viewport panel to take the wheel.`,
+      );
       return; // Session stays alive so Tarik can take the wheel.
     }
     const briefId = await convex.mutation(api.browserSessions.writeBrowseBrief, {

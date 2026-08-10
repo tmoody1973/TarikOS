@@ -719,6 +719,29 @@ export const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
   },
   {
     type: "webhook" as const,
+    name: "send_telegram",
+    description:
+      "Send Tarik a Telegram message. Use when he asks you to text him something, or when he wants a written record of something you just told him out loud. It goes to him and nobody else.",
+    responseTimeoutSecs: 15,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/send_telegram`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["text"],
+        // Deliberately no recipient field, exactly like call_tarik. The chat
+        // lives in TELEGRAM_OWNER_CHAT_ID on the server, so the agent cannot
+        // be talked into messaging anyone else.
+        description: "The message to send Tarik",
+        properties: {
+          text: bodyProp("What to send, in plain words"),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
     // The discriminator is the whole description here. This sits beside
     // capture_thought, remember and journal_entry, which all already mean
     // "save the thing he just said" — so say plainly what only this one does:

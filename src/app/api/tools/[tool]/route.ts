@@ -35,6 +35,7 @@ import { buildHabitReview } from "../../../../../convex/habitsLib";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { classifyOutcome, type ToolOutcome } from "@/lib/toolOutcome";
 import { uploadBuffer } from "@/lib/r2";
+import { escapeHtml, notifyOwner } from "@/lib/telegram";
 import {
   buildDocumentFromBrief,
   buildDocumentFromJournal,
@@ -1244,6 +1245,30 @@ async function runTool(
             ? "That link was already revoked."
             : `Revoked ${result.revoked} link${result.revoked === 1 ? "" : "s"}. It stops working immediately.`,
       };
+    }
+
+    /* Zola texts Tarik. The guardrail is the same as call_tarik's: there is
+     * no destination parameter anywhere in this arm or in the published
+     * schema, so the chat comes from TELEGRAM_OWNER_CHAT_ID on the server and
+     * nothing in the body can redirect it. tests/telegramSendGuardrail scans
+     * for that. */
+    case "send_telegram": {
+      const text = strArg(body.text, 3000);
+      if (!text) {
+        return { ok: false, message: "What should I send?" };
+      }
+      const sent = await notifyOwner(escapeHtml(text));
+      if (!sent) {
+        return {
+          ok: false,
+          message: "Telegram isn't configured, so I couldn't send that.",
+        };
+      }
+      await convex.mutation(api.secondBrain.markToolHealthyFromTool, {
+        secret,
+        name: "send_telegram",
+      });
+      return { ok: true, message: "Sent it to your Telegram." };
     }
 
     default:

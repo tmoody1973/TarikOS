@@ -14,6 +14,13 @@ const route = readFileSync(
   "utf8",
 );
 const proxy = readFileSync(new URL("../src/proxy.ts", import.meta.url), "utf8");
+// The send path lives in the shared lib now: the tool route, the takeover
+// ping and the brief digest all use it, so its guards protect all of them.
+const lib = readFileSync(
+  new URL("../src/lib/telegram.ts", import.meta.url),
+  "utf8",
+);
+const libCode = lib.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
 
 /** Comments removed — prose explaining a guard has satisfied assertions about
  * that guard twice today. */
@@ -50,7 +57,7 @@ test("a bad secret is refused, not answered", () => {
   );
   assert.match(branch, /status:\s*403/);
   assert.ok(
-    !/sendMessage\(/.test(branch),
+    !/sendToChat\(/.test(branch),
     "no outbound call on the rejection path",
   );
 });
@@ -61,7 +68,7 @@ test("a stranger's chat gets no reply", () => {
   const branch = handler.slice(gate, handler.indexOf("}", handler.indexOf("status: 200", gate)));
   assert.match(branch, /status:\s*200/, "200 so Telegram stops redelivering");
   assert.ok(
-    !/sendMessage\(/.test(branch),
+    !/sendToChat\(/.test(branch),
     "a reply of any kind confirms the bot is live and answering",
   );
 });
@@ -74,7 +81,7 @@ test("the chat id comes from the update, never from the reply target", () => {
 
 test("an error tells him something broke without telling him what", () => {
   const catchBlock = handler.slice(handler.indexOf("catch"));
-  assert.match(catchBlock, /sendMessage\(/, "silence is worse than an apology");
+  assert.match(catchBlock, /sendToChat\(/, "silence is worse than an apology");
   assert.ok(
     !/error\.message[^)]*\)\s*,?\s*\)?\s*;?\s*$/m.test(
       catchBlock.slice(0, catchBlock.indexOf("return")),
@@ -84,8 +91,8 @@ test("an error tells him something broke without telling him what", () => {
 });
 
 test("the reply is truncated to something a phone can show", () => {
-  assert.match(code, /MAX_REPLY\s*=\s*\d+/);
-  assert.match(code, /slice\(0, MAX_REPLY\)/);
+  assert.match(libCode, /MAX_REPLY\s*=\s*\d+/);
+  assert.match(libCode, /slice\(0, MAX_REPLY\)/);
 });
 
 // ── Formatting ────────────────────────────────────────────────────────────
@@ -97,14 +104,14 @@ test("the reply is truncated to something a phone can show", () => {
 // answered by silence.
 
 test("the reply is sent as HTML", () => {
-  assert.match(code, /parse_mode:\s*"HTML"/);
+  assert.match(libCode, /parse_mode:\s*"HTML"/);
 });
 
 test("a parse failure falls back to plain text rather than vanishing", () => {
-  assert.match(code, /can't parse entities/, "the retry keys off Telegram's own message");
-  assert.match(code, /stripTags\(/, "and strips what it could not parse");
+  assert.match(libCode, /can't parse entities/, "the retry keys off Telegram's own message");
+  assert.match(libCode, /stripTags\(/, "and strips what it could not parse");
   // The fallback must not itself ask for HTML, or it fails the same way twice.
-  const fallback = code.slice(code.indexOf("can't parse entities"));
+  const fallback = libCode.slice(libCode.indexOf("can't parse entities"));
   // `[^)]*` was the first attempt and could never match: the argument is
   // `stripTags(text)`, which contains the paren the class excludes.
   assert.match(
@@ -117,11 +124,11 @@ test("a parse failure falls back to plain text rather than vanishing", () => {
 test("a failure that is not a parse error still throws", () => {
   // A 401 or a 429 must not be silently downgraded into a plain-text resend
   // that fails the same way — those need to reach the log as errors.
-  assert.match(code, /if \(!detail\.includes\("can't parse entities"\)\) \{[\s\S]{0,80}throw/);
+  assert.match(libCode, /if \(!detail\.includes\("can't parse entities"\)\) \{[\s\S]{0,80}throw/);
 });
 
 test("the model is told which tags exist and how to escape", () => {
-  assert.match(code, /TELEGRAM_TAGS/);
+  assert.match(libCode, /TELEGRAM_TAGS/);
   assert.match(route, /&lt;/, "it must be told to escape a bare less-than");
 });
 
@@ -138,7 +145,7 @@ test("turns are stored only after the reply is sent", () => {
   // A question that was never answered must not sit in the history as though
   // it had been — the next message would be answered in a frame that never
   // actually happened.
-  const send = handler.indexOf("await sendMessage(String(chatId), spoken)");
+  const send = handler.indexOf("await sendToChat(String(chatId), spoken)");
   const store = handler.indexOf("api.telegram.appendTurn");
   assert.ok(send > -1 && store > -1);
   assert.ok(send < store, "send first, then record");
