@@ -26,7 +26,7 @@ const NOW = Date.parse("2026-08-09T18:00:00Z");
 test("a fresh confirmation for the right document is valid", () => {
   const c = newConfirmation(DOC, NOW);
   assert.equal(
-    isConfirmationValid(c, { token: c.token, documentFileId: DOC, now: NOW }),
+    isConfirmationValid(c, { token: c.token, documentId: DOC, now: NOW }),
     true,
   );
 });
@@ -37,7 +37,7 @@ test("no confirmation record at all is never valid", () => {
   assert.equal(
     isConfirmationValid(undefined, {
       token: "anything",
-      documentFileId: DOC,
+      documentId: DOC,
       now: NOW,
     }),
     false,
@@ -47,7 +47,7 @@ test("no confirmation record at all is never valid", () => {
 test("a token bound to one document cannot share another", () => {
   const c = newConfirmation(DOC, NOW);
   assert.equal(
-    isConfirmationValid(c, { token: c.token, documentFileId: OTHER, now: NOW }),
+    isConfirmationValid(c, { token: c.token, documentId: OTHER, now: NOW }),
     false,
     "confirming one document must not authorize sharing a different one",
   );
@@ -58,7 +58,7 @@ test("the wrong token is rejected even for the right document", () => {
   assert.equal(
     isConfirmationValid(c, {
       token: newConfirmation(DOC, NOW).token,
-      documentFileId: DOC,
+      documentId: DOC,
       now: NOW,
     }),
     false,
@@ -69,7 +69,7 @@ test("a confirmation is single-use", () => {
   const c = newConfirmation(DOC, NOW);
   const used = { ...c, used: true };
   assert.equal(
-    isConfirmationValid(used, { token: c.token, documentFileId: DOC, now: NOW }),
+    isConfirmationValid(used, { token: c.token, documentId: DOC, now: NOW }),
     false,
     "replaying a spent confirmation must not mint a second link",
   );
@@ -80,7 +80,7 @@ test("a confirmation expires", () => {
   assert.equal(
     isConfirmationValid(c, {
       token: c.token,
-      documentFileId: DOC,
+      documentId: DOC,
       now: NOW + CONFIRMATION_TTL_MS + 1,
     }),
     false,
@@ -105,6 +105,6 @@ test("confirmation tokens do not repeat", () => {
 test("a new confirmation starts unused and bound to its document", () => {
   const c = newConfirmation(DOC, NOW);
   assert.equal(c.used, false);
-  assert.equal(c.documentFileId, DOC);
+  assert.equal(c.documentId, DOC);
   assert.equal(c.expiresAt, NOW + CONFIRMATION_TTL_MS);
 });

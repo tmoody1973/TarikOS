@@ -72,19 +72,19 @@ export function checkShareAccess(
 
 export type ShareConfirmation = {
   token: string;
-  documentFileId: string;
+  documentId: string;
   expiresAt: number;
   used: boolean;
 };
 
 /** A confirmation is bound to one document and spendable once. */
 export function newConfirmation(
-  documentFileId: string,
+  documentId: string,
   now: number,
 ): ShareConfirmation {
   return {
     token: randomBytes(24).toString("base64url"),
-    documentFileId,
+    documentId,
     expiresAt: now + CONFIRMATION_TTL_MS,
     used: false,
   };
@@ -98,12 +98,12 @@ export function newConfirmation(
  */
 export function isConfirmationValid(
   record: ShareConfirmation | undefined | null,
-  attempt: { token: string; documentFileId: string; now: number },
+  attempt: { token: string; documentId: string; now: number },
 ): boolean {
   if (!record) return false;
   if (record.used) return false;
   if (attempt.now >= record.expiresAt) return false;
-  if (record.documentFileId !== attempt.documentFileId) return false;
+  if (record.documentId !== attempt.documentId) return false;
   return tokensMatch(record.token, attempt.token);
 }
 
