@@ -4,6 +4,7 @@ import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import { isAllowedChat, secretMatches } from "@/lib/telegramAllowlist";
 import { buildGoalsSection } from "../../../../../convex/telosLib";
+import { TEXT_TOOLS } from "@/lib/textTools";
 
 // Zola over Telegram. The keyboard channel SMS was going to be, without the
 // carrier regime: no 10DLC, no brand registration, no account review, and
@@ -20,6 +21,38 @@ const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 /** Telegram's own limit is 4096 characters per message. */
 const MAX_REPLY = 3500;
+
+/**
+ * How many times Claude may call a tool and think again before answering.
+ *
+ * A cap rather than a while-loop: a model that keeps reaching for one more
+ * lookup would otherwise hold the webhook open until Vercel kills it, and
+ * Telegram would redeliver the same message into the same spiral. Four is
+ * enough for "check my calendar, then my mail, then answer".
+ */
+const MAX_TOOL_ROUNDS = 4;
+
+/**
+ * Run one of Zola's tools — the same HTTP webhook the ElevenLabs runtime
+ * calls, with the same shared secret. There is no second implementation of a
+ * tool anywhere: voice and text go through one door.
+ */
+async function runTool(
+  origin: string,
+  name: string,
+  input: unknown,
+  secret: string,
+): Promise<string> {
+  const res = await fetch(new URL(`/api/tools/${name}`, origin), {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-morpheus-secret": secret },
+    body: JSON.stringify(input ?? {}),
+  });
+  const body = await res.text();
+  // Handed to the model as-is: the route already answers with a spoken
+  // `message` on failure, which is more useful to Claude than a status code.
+  return body.slice(0, 12000);
+}
 
 async function sendMessage(chatId: string, text: string): Promise<void> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -41,6 +74,7 @@ async function sendMessage(chatId: string, text: string): Promise<void> {
 }
 
 export async function POST(req: NextRequest) {
+  const origin = req.nextUrl.origin;
   // The shared secret first, before the body is parsed at all. An unset
   // TELEGRAM_WEBHOOK_SECRET refuses everything rather than accepting it —
   // a deploy that forgot the variable must fail closed, not open.
@@ -79,23 +113,53 @@ export async function POST(req: NextRequest) {
     const items = await convex.query(api.telos.listItems, { secret });
     const goals = buildGoalsSection(items, Date.now());
 
-    const reply = await new Anthropic().messages.create({
-      model: MODEL,
-      max_tokens: 800,
-      system:
-        "You are Zola, Tarik's assistant, answering over text message. Be brief — " +
-        "this is a phone screen, not a document. No preamble, no sign-off, no " +
-        "markdown headers. If you do not know something, say so in one line rather " +
-        "than guessing.\n\nWhat you know about his goals right now:\n" +
-        goals,
-      messages: [{ role: "user", content: text }],
-    });
+    const client = new Anthropic();
+    const system =
+      "You are Zola, Tarik's assistant, answering over text message. Be brief — " +
+      "this is a phone screen, not a document. No preamble, no sign-off, no " +
+      "markdown headers. Use your tools rather than guessing: if he asks about " +
+      "his calendar, mail, goals or notes, go and look. If a tool comes back " +
+      "empty or failed, say so plainly in one line.\n\nHis goals right now:\n" +
+      goals;
 
-    const answer = reply.content
-      .filter((block): block is Anthropic.TextBlock => block.type === "text")
-      .map((block) => block.text)
-      .join("\n")
-      .trim();
+    const messages: Anthropic.MessageParam[] = [{ role: "user", content: text }];
+    let answer = "";
+
+    for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
+      const reply = await client.messages.create({
+        model: MODEL,
+        max_tokens: 1200,
+        system,
+        tools: TEXT_TOOLS,
+        // On the last round the tools are withheld, which forces a written
+        // answer instead of a fifth tool call that would be dropped.
+        ...(round === MAX_TOOL_ROUNDS ? { tool_choice: { type: "none" as const } } : {}),
+        messages,
+      });
+
+      answer = reply.content
+        .filter((b): b is Anthropic.TextBlock => b.type === "text")
+        .map((b) => b.text)
+        .join("\n")
+        .trim();
+
+      const calls = reply.content.filter(
+        (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
+      );
+      if (calls.length === 0) break;
+
+      messages.push({ role: "assistant", content: reply.content });
+      messages.push({
+        role: "user",
+        content: await Promise.all(
+          calls.map(async (call) => ({
+            type: "tool_result" as const,
+            tool_use_id: call.id,
+            content: await runTool(origin, call.name, call.input, secret),
+          })),
+        ),
+      });
+    }
 
     await sendMessage(String(chatId), answer || "I didn't have an answer for that.");
   } catch (error) {
