@@ -11,6 +11,8 @@
 import type * as browserSessions from "../browserSessions.js";
 import type * as crons from "../crons.js";
 import type * as dashboard from "../dashboard.js";
+import type * as documents from "../documents.js";
+import type * as documentsLib from "../documentsLib.js";
 import type * as embeddingsLib from "../embeddingsLib.js";
 import type * as feeds from "../feeds.js";
 import type * as habits from "../habits.js";
@@ -38,6 +40,8 @@ declare const fullApi: ApiFromModules<{
   browserSessions: typeof browserSessions;
   crons: typeof crons;
   dashboard: typeof dashboard;
+  documents: typeof documents;
+  documentsLib: typeof documentsLib;
   embeddingsLib: typeof embeddingsLib;
   feeds: typeof feeds;
   habits: typeof habits;
