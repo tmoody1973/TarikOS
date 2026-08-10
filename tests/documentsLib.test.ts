@@ -1,10 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   checkShareAccess,
   newShareSlug,
   SLUG_LENGTH,
-} from "../src/lib/documentsLib.ts";
+} from "../convex/documentsLib.ts";
 
 // /f/<slug> answers without a Clerk session. There is no cookie to check, no
 // rate limit, and nobody to throttle — so the slug plus these four checks ARE
@@ -29,6 +30,25 @@ test("a fresh, unrevoked, unexpired link is allowed", () => {
   assert.deepEqual(checkShareAccess(link(), NOW), { allowed: true });
 });
 
+test("this module imports nothing from Node — it has to run in the isolate", () => {
+  // The only structural test in this file, and it earns its place: every test
+  // here runs in Node, where `node:crypto` works perfectly. Reintroduce
+  // `randomBytes` or `timingSafeEqual` and all 22 tests still pass — then the
+  // Convex mutation that shares this file dies in production, at runtime, on
+  // an import the build never questioned.
+  const src = readFileSync(
+    new URL("../convex/documentsLib.ts", import.meta.url),
+    "utf8",
+  );
+  const imports = src.match(/^import .*$/gm) ?? [];
+  assert.deepEqual(imports, [], "convex/documentsLib.ts must stay import-free");
+  assert.doesNotMatch(
+    src.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, ""),
+    /\bBuffer\b|\brequire\(/,
+    "no Node globals either — comments explaining the ban are fine",
+  );
+});
+
 test("slugs are long enough that guessing is pointless", () => {
   // No rate limit and no session on /f/<slug>: length is the only cost an
   // attacker pays. 24 url-safe chars is ~143 bits.
@@ -46,6 +66,20 @@ test("slugs do not repeat", () => {
   const seen = new Set<string>();
   for (let i = 0; i < 2000; i++) seen.add(newShareSlug());
   assert.equal(seen.size, 2000, "every generated slug must be distinct");
+});
+
+test("every symbol in the alphabet is reachable — no silent bias", () => {
+  // Slugs are built by masking a random byte into a 64-symbol alphabet, which
+  // is only unbiased because 256 divides evenly by 64. Swap the mask for a
+  // modulo by 63 and the last symbol becomes unreachable while every other
+  // test still passes: right length, right charset, still unique.
+  //
+  // Across 2000 slugs that is 48,000 symbols. A reachable symbol going unseen
+  // has probability (63/64)^48000 — small enough that this is a deterministic
+  // test, not a flaky one.
+  const seen = new Set<string>();
+  for (let i = 0; i < 2000; i++) for (const ch of newShareSlug()) seen.add(ch);
+  assert.equal(seen.size, 64, `expected all 64 symbols, saw ${seen.size}`);
 });
 
 test("a revoked link is denied", () => {

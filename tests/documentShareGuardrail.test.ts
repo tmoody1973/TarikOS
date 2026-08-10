@@ -4,7 +4,7 @@ import {
   CONFIRMATION_TTL_MS,
   isConfirmationValid,
   newConfirmation,
-} from "../src/lib/documentsLib.ts";
+} from "../convex/documentsLib.ts";
 
 // Sharing is the only action in Tarik OS that puts content behind a URL which
 // works with no Clerk session — and the sources are briefs, research, and

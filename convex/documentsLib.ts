@@ -7,12 +7,29 @@
 //
 // Kept dependency-free (no Convex, no R2, no request object) so the rules can
 // be tested directly rather than through a route, the way `habitsLib.ts` and
-// `toolOutcome.ts` are.
+// `telosLib.ts` are — and it lives here, in convex/, for the same reason they
+// do: Convex mutations cannot import from src/, but the Next routes can import
+// from convex/.
+//
+// That placement also rules out `node:crypto`. Convex mutations run in an
+// isolate, not in Node, so `randomBytes` and `timingSafeEqual` are unavailable
+// there — and would fail at runtime rather than at build. Everything below
+// uses Web Crypto, which both the isolate and Node provide.
 
-import { randomBytes, timingSafeEqual } from "node:crypto";
-
-/** 18 random bytes render as exactly 24 base64url characters — ~143 bits. */
+/** 24 characters from a 64-symbol alphabet — 144 bits. */
 export const SLUG_LENGTH = 24;
+
+/** Url-safe and exactly 64 symbols, so `byte & 63` is unbiased. */
+const ALPHABET =
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+function randomString(length: number): string {
+  const bytes = new Uint8Array(length);
+  globalThis.crypto.getRandomValues(bytes);
+  let out = "";
+  for (const byte of bytes) out += ALPHABET[byte & 63];
+  return out;
+}
 
 /**
  * How long a share confirmation stays good. Short on purpose: a long window
@@ -37,7 +54,7 @@ export type ShareAccessVerdict =
 
 /** Url-safe, non-sequential, nothing to escape in a path segment. */
 export function newShareSlug(): string {
-  return randomBytes(18).toString("base64url");
+  return randomString(SLUG_LENGTH);
 }
 
 /**
@@ -83,7 +100,7 @@ export function newConfirmation(
   now: number,
 ): ShareConfirmation {
   return {
-    token: randomBytes(24).toString("base64url"),
+    token: randomString(32),
     documentId,
     expiresAt: now + CONFIRMATION_TTL_MS,
     used: false,
@@ -107,10 +124,17 @@ export function isConfirmationValid(
   return tokensMatch(record.token, attempt.token);
 }
 
-/** Constant-time within a length class; length itself is fixed by construction. */
+/**
+ * Constant-time within a length class; length itself is fixed by construction.
+ * Hand-rolled rather than `timingSafeEqual` because this file has to run in
+ * the Convex isolate, where node:crypto does not exist. The loop never exits
+ * early — that is the whole point of it.
+ */
 function tokensMatch(expected: string, supplied: string): boolean {
-  const a = Buffer.from(expected);
-  const b = Buffer.from(supplied);
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
+  if (expected.length !== supplied.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) {
+    diff |= expected.charCodeAt(i) ^ supplied.charCodeAt(i);
+  }
+  return diff === 0;
 }
