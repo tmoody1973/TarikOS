@@ -1,4 +1,4 @@
-import { mutation } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { checkToolSecret } from "./secondBrain";
 import { requireUser } from "./dashboard";
@@ -21,6 +21,59 @@ import {
 // Both phases run inside a Convex transaction, which is what makes "check the
 // token, spend it, write the link" a single indivisible step rather than a
 // race a second concurrent call could slip through.
+
+/**
+ * Everything saved, newest first, each with its links.
+ *
+ * Owner-only — there is no secret path here. Deliberately no objectKey: this
+ * result is rendered by the browser, and the download route asks for the key
+ * separately rather than having it sit in the page for every row at once.
+ */
+export const list = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireUser(ctx);
+
+    const documents = await ctx.db.query("documents").order("desc").collect();
+    const links = await ctx.db.query("documentShareLinks").collect();
+
+    return documents.map((doc) => ({
+      id: doc._id,
+      title: doc.title,
+      filename: doc.filename,
+      sourceType: doc.sourceType,
+      sizeBytes: doc.sizeBytes,
+      createdAt: doc.createdAt,
+      links: links
+        .filter((l) => l.documentId === doc._id)
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .map((l) => ({
+          id: l._id,
+          slug: l.slug,
+          expiresAt: l.expiresAt,
+          maxDownloads: l.maxDownloads,
+          downloadCount: l.downloadCount,
+          revoked: l.revoked,
+          createdAt: l.createdAt,
+        })),
+    }));
+  },
+});
+
+/**
+ * What the download route needs to presign one file, and nothing else. Split
+ * from `list` so the object keys of every document don't travel to the
+ * browser just to render a row of buttons.
+ */
+export const downloadTarget = query({
+  args: { documentId: v.id("documents") },
+  handler: async (ctx, { documentId }) => {
+    await requireUser(ctx);
+    const doc = await ctx.db.get(documentId);
+    if (!doc) return null;
+    return { objectKey: doc.objectKey, filename: doc.filename };
+  },
+});
 
 /**
  * Record a file that is already in R2. No confirm gate: saving never leaves
