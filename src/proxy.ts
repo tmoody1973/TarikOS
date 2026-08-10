@@ -15,6 +15,9 @@ const isPublicRoute = createRouteMatcher([
   "/api/browser/run",
   "/api/elevenlabs(.*)",
   "/f/(.*)",
+  // Telnyx inbound SMS: the caller is a carrier webhook, authenticated by an
+  // Ed25519 signature inside the route rather than a browser session.
+  "/api/sms(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
