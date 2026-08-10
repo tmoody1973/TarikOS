@@ -1,0 +1,89 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+// The bot username is discoverable and anyone can open a chat with it, so two
+// checks carry the whole boundary — and unlike the Telnyx route there is no
+// signature to fall back on, only a shared secret in a plain header.
+//
+//   The secret  — proves Telegram sent it.
+//   The chat id — proves Tarik sent it.
+
+const route = readFileSync(
+  new URL("../src/app/api/telegram/inbound/route.ts", import.meta.url),
+  "utf8",
+);
+const proxy = readFileSync(new URL("../src/proxy.ts", import.meta.url), "utf8");
+
+/** Comments removed — prose explaining a guard has satisfied assertions about
+ * that guard twice today. */
+const code = route.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
+const handler = code.slice(code.indexOf("export async function POST"));
+
+test("/api/telegram is exempt from Clerk, deliberately", () => {
+  assert.match(proxy, /"\/api\/telegram\(\.\*\)"/);
+});
+
+test("the secret is checked before the body is even read", () => {
+  const secret = handler.indexOf("secretMatches");
+  const parse = handler.indexOf("req.json()");
+  assert.ok(secret > -1, "the route must check the shared secret");
+  assert.ok(parse > -1, "the route must read the update");
+  assert.ok(
+    secret < parse,
+    "an unauthenticated caller must not get as far as being parsed",
+  );
+  // Ordering of *mentions* was the first version of this, and
+  // `if (false && !secretMatches(...))` sailed past it — the call was still
+  // there, just disabled. Pin the guard's shape: the negation leads.
+  assert.match(
+    handler,
+    /if\s*\(\s*\n?\s*!secretMatches\(/,
+    "the secret check must be the condition, not a term inside one",
+  );
+});
+
+test("a bad secret is refused, not answered", () => {
+  const branch = handler.slice(
+    handler.indexOf("secretMatches"),
+    handler.indexOf("req.json()"),
+  );
+  assert.match(branch, /status:\s*403/);
+  assert.ok(
+    !/sendMessage\(/.test(branch),
+    "no outbound call on the rejection path",
+  );
+});
+
+test("a stranger's chat gets no reply", () => {
+  const gate = handler.indexOf("if (!isAllowedChat");
+  assert.ok(gate > -1, "the allowlist must guard, not merely be consulted");
+  const branch = handler.slice(gate, handler.indexOf("}", handler.indexOf("status: 200", gate)));
+  assert.match(branch, /status:\s*200/, "200 so Telegram stops redelivering");
+  assert.ok(
+    !/sendMessage\(/.test(branch),
+    "a reply of any kind confirms the bot is live and answering",
+  );
+});
+
+test("the chat id comes from the update, never from the reply target", () => {
+  // Answering `chat.id` from the same update is what keeps this a private
+  // line. A configured destination would be a second, unchecked way out.
+  assert.match(handler, /update\.message\?\.chat\?\.id/);
+});
+
+test("an error tells him something broke without telling him what", () => {
+  const catchBlock = handler.slice(handler.indexOf("catch"));
+  assert.match(catchBlock, /sendMessage\(/, "silence is worse than an apology");
+  assert.ok(
+    !/error\.message[^)]*\)\s*,?\s*\)?\s*;?\s*$/m.test(
+      catchBlock.slice(0, catchBlock.indexOf("return")),
+    ) || !/sendMessage\([^)]*error/.test(catchBlock),
+    "the error text can carry keys and internal paths — it stays in the log",
+  );
+});
+
+test("the reply is truncated to something a phone can show", () => {
+  assert.match(code, /MAX_REPLY\s*=\s*\d+/);
+  assert.match(code, /slice\(0, MAX_REPLY\)/);
+});

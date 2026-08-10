@@ -18,6 +18,8 @@ const isPublicRoute = createRouteMatcher([
   // Telnyx inbound SMS: the caller is a carrier webhook, authenticated by an
   // Ed25519 signature inside the route rather than a browser session.
   "/api/sms(.*)",
+  // Telegram bot webhook: same shape, authenticated by a shared secret header.
+  "/api/telegram(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
