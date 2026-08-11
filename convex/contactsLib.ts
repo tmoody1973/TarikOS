@@ -23,6 +23,17 @@ const E164_MIN_DIGITS = 7;
 const EXTENSION = /(?:\s*(?:x|ext\.?|extension)\s*\d+|;.*)$/i;
 
 /**
+ * A trailing "(IDP)" / "(mobile)" style label.
+ *
+ * Kept because the real address book has them: of 615 phone strings in Tarik's
+ * contacts, one of the seven rejects was a valid ten-digit number carrying
+ * "(IDP)". Anchored to the END, which is what keeps the leading "(414)" of an
+ * area code safe — the letter requirement is a second, weaker filter and does
+ * not carry that job on its own.
+ */
+const TRAILING_LABEL = /\s*\([^)]*\p{L}[^)]*\)\s*$/u;
+
+/**
  * A phone number as E.164 (`+14145551234`), or null if it is not one.
  *
  * Letters are a rejection rather than something to strip: "414-555-CALL" has
@@ -31,7 +42,7 @@ const EXTENSION = /(?:\s*(?:x|ext\.?|extension)\s*\d+|;.*)$/i;
  */
 export function normalizePhone(raw: string | null | undefined): string | null {
   if (typeof raw !== "string") return null;
-  const trimmed = raw.trim().replace(EXTENSION, "");
+  const trimmed = raw.trim().replace(TRAILING_LABEL, "").replace(EXTENSION, "");
   if (!trimmed) return null;
 
   // Anything that is not punctuation, a digit or a leading + means this is not
@@ -103,6 +114,58 @@ export function identityKeys(contact: ContactIdentity): string[] {
     ...(contact.emails ?? []).map(normalizeEmail).filter(Boolean).map((e) => `email:${e}`),
   ];
   return [...new Set(keys)];
+}
+
+// ------------------------------------------------------- google people rows
+
+type PeopleRow = {
+  resourceName?: string;
+  metadata?: { deleted?: boolean };
+  names?: { displayName?: string; unstructuredName?: string }[];
+  phoneNumbers?: { value?: string; canonicalForm?: string }[];
+  emailAddresses?: { value?: string }[];
+  organizations?: { name?: string; title?: string }[];
+  photos?: { url?: string }[];
+};
+
+/**
+ * Google People API rows → SourceContact.
+ *
+ * Shapes here came from a real response over Tarik's 4,934 contacts rather
+ * than the API reference, and the sample is why this is permissive: 85 of 100
+ * rows had no email, 34 had no phone, and 2 had no name at all. Sparse is the
+ * normal case, so a row missing almost everything is still a contact.
+ *
+ * `canonicalForm` is Google's own E.164 and parses international numbers
+ * better than normalizePhone does, so it wins where Google produced one.
+ * Both paths still run through normalizePhone downstream, which is what keeps
+ * dedupe consistent regardless of which source the string came from.
+ */
+export function googlePeopleToContacts(rows: PeopleRow[] | undefined): SourceContact[] {
+  return (rows ?? []).flatMap((row) => {
+    // No resourceName means no stable identity, so a re-sync could not tell an
+    // edit from a new contact and would duplicate the row every run.
+    if (!row?.resourceName) return [];
+    // Incremental syncs return tombstones for removed people; taken as
+    // contacts they would overwrite the real row with empty fields.
+    if (row.metadata?.deleted) return [];
+
+    const name = row.names?.find((n) => n.displayName || n.unstructuredName);
+    const org = row.organizations?.find((o) => o.name);
+    return [
+      {
+        source: "google" as const,
+        sourceId: row.resourceName,
+        name: (name?.displayName ?? name?.unstructuredName ?? "").trim(),
+        phones: (row.phoneNumbers ?? [])
+          .map((p) => (p.canonicalForm || p.value || "").trim())
+          .filter(Boolean),
+        emails: (row.emailAddresses ?? []).map((e) => (e.value || "").trim()).filter(Boolean),
+        org: org?.name,
+        photo: row.photos?.find((p) => p.url)?.url,
+      },
+    ];
+  });
 }
 
 // ------------------------------------------------------------------ merging

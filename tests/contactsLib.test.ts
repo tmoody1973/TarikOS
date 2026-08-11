@@ -64,15 +64,33 @@ test("a vanity number is rejected, not silently mangled", () => {
   assert.equal(normalizePhone("414-555-CALL"), null);
 });
 
-test("stray letters reject the value even when the digits look dialable", () => {
-  // The cases above are also caught by length, so they do not prove the letter
-  // guard does anything. These do: ten valid digits with text attached. The
-  // strict answer is deliberate — an unexpected character means the value was
-  // not understood, and a contact missing one number is recoverable while a
-  // contact holding a wrong one is not.
-  assert.equal(normalizePhone("414-555-1234 (mobile)"), null);
+test("a trailing parenthesised label is dropped, not treated as corruption", () => {
+  // Changed on evidence. This originally rejected anything containing a
+  // letter, on the reasoning that a label was speculative. Running the real
+  // address book disproved that: of 615 phone strings, one of the 7 rejects
+  // was a valid ten-digit number carrying "(IDP)". Providers do label numbers
+  // in the value, so the label is stripped and the number kept.
+  assert.equal(normalizePhone("(414) 555-1234 (IDP)"), "+14145551234");
+  assert.equal(normalizePhone("414-555-1234 (mobile)"), "+14145551234");
+  assert.equal(normalizePhone("414-555-1234 (work fax)"), "+14145551234");
+});
+
+test("the area code parentheses are not mistaken for a label", () => {
+  // "(414) 555-1234" leads with a bracketed group that must survive.
+  assert.equal(normalizePhone("(414) 555-1234"), "+14145551234");
+  assert.equal(normalizePhone("(414) 555-1234 (cell)"), "+14145551234");
+});
+
+test("letters anywhere else still reject the value", () => {
+  // A label is a known shape at a known position. Text loose in the middle
+  // means the value was not understood, and a contact missing one number is
+  // recoverable while a contact holding a wrong one is not.
   assert.equal(normalizePhone("4145551234abc"), null);
   assert.equal(normalizePhone("call 4145551234"), null);
+  assert.equal(normalizePhone("414-555-CALL (mobile)"), null);
+  // A label is only a label at the END. Bracketed text in the middle means
+  // the value was not understood, so it is rejected rather than spliced out.
+  assert.equal(normalizePhone("414 (main) 555-1234"), null);
 });
 
 test("an extension is dropped — it is not part of the dialable number", () => {
