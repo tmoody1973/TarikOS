@@ -27,6 +27,7 @@ traces for the true baseline.
 
 import argparse
 import collections
+import concurrent.futures
 import csv
 import datetime as dt
 import functools
@@ -34,6 +35,7 @@ import json
 import math
 import os
 import pathlib
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -55,6 +57,12 @@ PHOENIX_TIMEOUT = 30
 # was a tool call.
 MAX_TOKENS = 4096
 TRUNCATED = "__truncated__"
+FAILED = "__failed__"
+
+# Rows are independent one-shot calls, so this is pure throughput. 8 is the
+# calibration knob, not a constant: it is set against the account's rate limit,
+# not against anything in the code. Raise it until 429s appear, then back off.
+WORKERS = 8
 
 
 @functools.lru_cache(maxsize=None)
@@ -346,6 +354,66 @@ def predict(client, persona: str, tools: list[dict], row: dict) -> str:
     return "none"
 
 
+def save_run(name: str, result: dict) -> pathlib.Path:
+    """One place a run reaches disk, so mid-repeat saves and the final save
+    cannot drift into writing different shapes under the same filename."""
+    path = EVALS / f"run-{name}.json"
+    path.write_text(json.dumps(result, indent=2))
+    return path
+
+
+def score_row(client, persona: str, tools: list[dict], row: dict) -> tuple:
+    """One row's prediction, its timing, and its error if the call raised.
+
+    A row that raises must not take the rest of the pass with it. Before this,
+    a single failure at row 300 of 321 lost every prediction already paid for
+    and cost a full re-run. The failure becomes its own outcome so it shows up
+    in the report instead of being quietly scored as "she chose no tool" —
+    the same mistake truncation used to make.
+    """
+    started = dt.datetime.now(dt.timezone.utc)
+    try:
+        predicted, error = predict(client, persona, tools, row), None
+    except Exception as exc:  # noqa: BLE001 — any API failure, recorded not raised
+        predicted, error = FAILED, f"{type(exc).__name__}: {exc}"
+    ended = dt.datetime.now(dt.timezone.utc)
+    return predicted, (started.isoformat(), ended.isoformat()), error
+
+
+def score_pass(
+    client,
+    persona: str,
+    tools: list[dict],
+    rows: list[dict],
+    label: str = "  ",
+    workers: int = WORKERS,
+) -> tuple[list[str], list[tuple[str, str]], list[str]]:
+    """Score every row once, concurrently, and return answers in ROW order.
+
+    Serially this was ~7s a row — 107 rows x 3 runs is about 35 minutes, which
+    is long enough that nobody runs --repeat, and an instability band nobody
+    measures is not a band. The calls are independent, so concurrency changes
+    throughput and nothing else.
+
+    Results are restored by submission index, never by completion order.
+    score(), the confusion matrix and the Phoenix push all pair a prediction to
+    a row positionally, so a reordered pass would score plausibly against the
+    wrong utterances — wrong in the one way that leaves no trace in the output.
+    """
+    done: list = [None] * len(rows)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+        pending = {pool.submit(score_row, client, persona, tools, row): i for i, row in enumerate(rows)}
+        for finished, future in enumerate(concurrent.futures.as_completed(pending), 1):
+            done[pending[future]] = future.result()
+            print(f"\r{label}{finished}/{len(rows)}", end="", flush=True)
+    print()
+    return (
+        [d[0] for d in done],
+        [d[1] for d in done],
+        [f"row {i}: {d[2]}" for i, d in enumerate(done) if d[2]],
+    )
+
+
 def score(rows: list[dict], predictions: list[str]) -> dict:
     correct = 0
     confusion: dict[tuple[str, str], int] = collections.Counter()
@@ -379,6 +447,15 @@ def report(result: dict) -> None:
             f"  Those are truncations, not decisions — raise MAX_TOKENS (currently\n"
             f"  {MAX_TOKENS}); thinking shares this budget. They are scored as wrong,\n"
             "  but the model never got to answer.\n"
+        )
+
+    failed = sum(1 for p in result["predictions"] if p == FAILED)
+    if failed:
+        print(
+            f"  WARNING: {failed} rows failed outright — the API call raised. Those\n"
+            "  are scored as wrong but were never answered, so this accuracy is a\n"
+            f"  floor, not a measurement. Re-run, or drop --workers below {WORKERS}\n"
+            "  if they were rate limits.\n"
         )
 
     # Per-tool recall: of the times this tool was the right answer, how often
@@ -460,6 +537,29 @@ def spread(rows: list[dict], runs: list[dict]) -> None:
         print(f'  "{" ".join(row["utterance"].split())[:52]}"  {" / ".join(sorted(seen))}')
     if s["unstable"] > 10:
         print(f"  … and {s['unstable'] - 10} more")
+
+
+class _FakeBlock:
+    """Enough of an Anthropic content block for the offline concurrency test."""
+
+    type = "tool_use"
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
+class _FakeMessage:
+    stop_reason = "tool_use"
+
+    def __init__(self, name: str) -> None:
+        self.content = [_FakeBlock(name)]
+
+
+class _FakeClient:
+    """A client whose `messages.create` is whatever function you hand it."""
+
+    def __init__(self, answer) -> None:
+        self.messages = type("_M", (), {"create": staticmethod(answer)})()
 
 
 def selftest() -> None:
@@ -585,6 +685,62 @@ def selftest() -> None:
     assert swinging["worst"] == 0.5
     assert swinging["range"] == 0.5
 
+    # ---- concurrency. score() pairs predictions to rows BY POSITION, and so
+    # does the Phoenix push (dataset_example_id comes from rows[i]). Threading
+    # the calls must therefore not reorder anything: a pass that returns the
+    # right answers against the wrong utterances would score plausibly and be
+    # entirely meaningless.
+    scored = [{"utterance": u, "expected_tool": f"tool_{u}"} for u in ("a", "b", "c", "d")]
+
+    def slow_first(**kwargs):
+        # Row "a" is submitted first and finishes last, so completion order is
+        # guaranteed to differ from row order. Without an index-keyed restore
+        # this is the assertion that fails.
+        said = kwargs["messages"][-1]["content"]
+        time.sleep(0.05 if said == "a" else 0.0)
+        return _FakeMessage(f"tool_{said}")
+
+    predictions, timings, errors = score_pass(
+        _FakeClient(slow_first), "persona", [], scored, "  ", workers=4
+    )
+    assert predictions == ["tool_a", "tool_b", "tool_c", "tool_d"], predictions
+    assert errors == []
+    assert len(timings) == 4
+    assert all(start <= end for start, end in timings)
+    assert score(scored, predictions)["accuracy"] == 1.0
+
+    # Timings belong to their own row too — Phoenix records them as each run's
+    # start/end. Only row "a" slept, so only row "a" may show a long span; a
+    # count-and-ordering check alone passes happily when every row is handed
+    # whichever timing finished first.
+    spans = [
+        (dt.datetime.fromisoformat(end) - dt.datetime.fromisoformat(start)).total_seconds()
+        for start, end in timings
+    ]
+    assert spans[0] > 0.04, spans
+    assert max(spans[1:]) < 0.04, spans
+
+    # One row raising must not take the pass down with it. Before this, a
+    # failure at row 300 of 321 reported nothing at all and cost a full re-run.
+    def fails_on_c(**kwargs):
+        said = kwargs["messages"][-1]["content"]
+        if said == "c":
+            raise RuntimeError("overloaded_error")
+        return _FakeMessage(f"tool_{said}")
+
+    survived, _, caught = score_pass(
+        _FakeClient(fails_on_c), "persona", [], scored, "  ", workers=4
+    )
+    assert survived == ["tool_a", "tool_b", FAILED, "tool_d"], survived
+    assert len(caught) == 1
+    assert "overloaded_error" in caught[0]
+    # A failure is not a decision to do nothing, exactly as a truncation isn't.
+    assert FAILED != "none" and FAILED != TRUNCATED
+
+    # Concurrency must not change the answers either — same fake, one worker.
+    serial, _, _ = score_pass(_FakeClient(slow_first), "persona", [], scored, "  ", workers=1)
+    assert serial == predictions
+
     print("selftest ok")
 
 
@@ -618,6 +774,13 @@ def main() -> None:
         help="score the set N times and report the noise band — the only honest way "
         "to read a delta on a model whose sampling cannot be pinned",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=WORKERS,
+        metavar="N",
+        help=f"how many rows to score at once (default {WORKERS}); lower it if you see 429s",
+    )
     parser.add_argument("--selftest", action="store_true", help="check the pure logic and exit")
     args = parser.parse_args()
 
@@ -644,19 +807,27 @@ def main() -> None:
 
     client = anthropic.Anthropic(api_key=env("ANTHROPIC_API_KEY"))
 
-    print(f"scoring {len(rows)} utterances against {len(tools)} tools on {MODEL}")
+    print(
+        f"scoring {len(rows)} utterances against {len(tools)} tools on {MODEL}"
+        f"  ({args.workers} at a time)"
+    )
     runs: list[dict] = []
     for attempt in range(1, args.repeat + 1):
-        predictions = []
-        timings = []
-        for i, row in enumerate(rows, 1):
-            started = dt.datetime.now(dt.timezone.utc)
-            predictions.append(predict(client, persona, tools, row))
-            timings.append((started.isoformat(), dt.datetime.now(dt.timezone.utc).isoformat()))
-            label = f"run {attempt}/{args.repeat}  " if args.repeat > 1 else "  "
-            print(f"\r{label}{i}/{len(rows)}", end="", flush=True)
-        print()
+        label = f"run {attempt}/{args.repeat}  " if args.repeat > 1 else "  "
+        predictions, timings, errors = score_pass(
+            client, persona, tools, rows, label, args.workers
+        )
         runs.append(score(rows, predictions))
+
+        for line in errors[:5]:
+            print(f"  ERROR {line}")
+        if len(errors) > 5:
+            print(f"  … and {len(errors) - 5} more failed rows")
+
+        # Write each run as it finishes rather than only at the end, so a crash
+        # in a later repeat does not throw away the passes already paid for.
+        if args.save:
+            save_run(args.save, runs[-1])
 
     result = runs[-1]
     report(result)
@@ -670,9 +841,7 @@ def main() -> None:
         )
 
     if args.save:
-        path = EVALS / f"run-{args.save}.json"
-        path.write_text(json.dumps(result, indent=2))
-        print(f"\nsaved {path.name}")
+        print(f"\nsaved {save_run(args.save, result).name}")
 
     if args.compare:
         path = EVALS / f"run-{args.compare}.json"
