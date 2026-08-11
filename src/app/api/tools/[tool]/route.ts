@@ -235,7 +235,20 @@ async function resolveOneContact(
       result: {
         ok: true,
         message: `${query} matches ${total} people: ${list}. Which one should I ${verb}?`,
-        data: { ambiguous: true, total, matches },
+        // Speakable fields only. The provider ids that resolve carries are for
+        // this function, not for the transcript: handing Zola a
+        // `people/c2280...` gives her a string she can only mangle, and the
+        // next turn re-resolves by name anyway.
+        data: {
+          ambiguous: true,
+          total,
+          matches: matches.map((m) => ({
+            name: m.name,
+            phones: m.phones,
+            emails: m.emails,
+            org: m.org,
+          })),
+        },
       },
     };
   }

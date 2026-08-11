@@ -201,6 +201,27 @@ test("neither tool acts when the name matches more than one person", () => {
   }
 });
 
+test("a provider id never reaches the transcript", () => {
+  // Found by running it against the real book: the ambiguous answer handed
+  // Zola the whole resolve row, `people/c2280...` included. She can only
+  // mangle a string like that, and the next turn re-resolves by name anyway.
+  const resolve = ROUTE.split("async function resolveOneContact")[1]?.split(
+    "\nasync function runTool",
+  )[0] ?? "";
+  // Bounded to the ambiguous branch. Slicing to the end of the function swept
+  // in the `match.sources` lookup below it and failed on its own code.
+  const ambiguous = resolve.slice(
+    resolve.indexOf("ambiguous: true"),
+    resolve.indexOf("const match = matches[0]"),
+  );
+  assert.ok(
+    !/matches,/.test(ambiguous),
+    "the ambiguous answer must not hand back the raw rows",
+  );
+  assert.match(ambiguous, /matches\.map/);
+  assert.ok(!/sources/.test(ambiguous), "sources carry the provider ids");
+});
+
 test("a contact that does not live in Google is refused, not silently missed", () => {
   // An iCloud-only row has no writable id. Reporting success over an address
   // book that never changed is worse than saying no.
