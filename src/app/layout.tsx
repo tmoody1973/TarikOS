@@ -36,7 +36,12 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         lang="en"
         className={`${antonio.variable} ${geistMono.variable} h-full antialiased`}
       >
-        <body className="min-h-full flex flex-col">
+        {/* Grammarly writes data-gr-ext-installed and data-new-gr-c-s-check-loaded
+            onto <body> before React hydrates, which Next reports as a hydration
+            mismatch on every page load. Scoped to this one element on purpose:
+            it silences the attributes an extension added, and nothing about the
+            markup we actually render. */}
+        <body className="min-h-full flex flex-col" suppressHydrationWarning>
           <ConvexClientProvider>
             {isAuthenticated && !owner ? (
               <NotOwner />
