@@ -1,20 +1,25 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Plate, PlateContent, usePlateEditor, type PlateElementProps } from "platejs/react";
+import { Plate, usePlateEditor } from "platejs/react";
 import type { Value } from "platejs";
-import {
-  BasicBlocksPlugin,
-  BasicMarksPlugin,
-} from "@platejs/basic-nodes/react";
+import { EditorKit } from "@/components/editor/editor-kit";
+import { Editor, EditorContainer } from "@/components/ui/editor";
 import type { StudioValue } from "../../../../convex/studioLib";
-import { AskZola } from "./AskZola";
 
-// The writing surface.
+// The writing surface: Plate's full editor.
 //
-// Elements are hand-rolled rather than pulled from Plate's shadcn registry:
-// DESIGN.md forbids a component library for visual primitives, and a document
-// on this system reads in Geist Mono on space-black like everything else.
+// DESIGN.md's "no component library for visual primitives" rule is
+// DELIBERATELY relaxed here, and only here. Tarik asked for the real thing —
+// lists, tables, links, media, a floating toolbar on selection, a slash menu,
+// drag handles, DOCX export — and the honest version of that is Plate's own
+// components rather than a hand-rolled imitation that is permanently one
+// feature behind. The exception stops at this editor's frame; every other
+// surface in Tarik OS is still hand-rolled Tailwind on the LCARS tokens.
+//
+// The AI menu is Plate's, on ⌘J, pointed at /api/ai/command — which was
+// repointed from the Vercel AI Gateway to Claude on the key this project
+// already has, so the editor writes in Zola's voice.
 //
 // The save story is the reason this file is careful. Plate fires on every
 // keystroke; we debounce, and every save carries the revision it was written
@@ -35,68 +40,18 @@ type Status =
   | { kind: "saved"; at: number }
   | { kind: "blocked"; message: string };
 
-function Block({ children, attributes, className }: PlateElementProps & { className: string }) {
-  return (
-    <div {...attributes} className={className}>
-      {children}
-    </div>
-  );
-}
-
-const H1 = (props: PlateElementProps) => (
-  <Block
-    {...props}
-    className="mt-6 mb-2 font-[family-name:var(--font-display)] text-2xl uppercase tracking-[0.05em] text-foreground first:mt-0"
-  />
-);
-
-const H2 = (props: PlateElementProps) => (
-  <Block
-    {...props}
-    className="mt-5 mb-1 font-[family-name:var(--font-display)] text-lg uppercase tracking-[0.05em] text-ochre"
-  />
-);
-
-const H3 = (props: PlateElementProps) => (
-  <Block
-    {...props}
-    className="mt-4 mb-1 text-xs uppercase tracking-[0.3em] text-steel"
-  />
-);
-
-// min-h-6 so an EMPTY paragraph is still a target. Found by using it: the
-// blank paragraphs a template puts between its headings collapse to zero
-// height, so a click aimed at one lands on the nearest heading instead and the
-// sentence gets typed into "Context".
-const Paragraph = (props: PlateElementProps) => (
-  <Block {...props} className="my-2 min-h-6 text-sm leading-[1.7] text-foreground/85" />
-);
-
-const Blockquote = (props: PlateElementProps) => (
-  <Block
-    {...props}
-    className="my-3 border-l-2 border-ochre/50 pl-3 text-sm italic text-steel"
-  />
-);
-
 export function StudioEditor({
   documentId,
   initialContent,
   initialRevision,
-  docType,
-  references,
   save,
 }: {
   documentId: string;
   initialContent: StudioValue;
   initialRevision: number;
-  docType: string;
-  references: { sourceType: string; label: string }[];
   save: (content: string, revision: number) => Promise<SaveOutcome>;
 }) {
   const [status, setStatus] = useState<Status>({ kind: "idle" });
-  const [asking, setAsking] = useState(false);
-  const [selected, setSelected] = useState("");
 
   // The revision lives in a ref, not in state: the autosave timer closes over
   // it, and a stale closure here is the exact bug the counter exists to catch.
@@ -106,25 +61,11 @@ export function StudioEditor({
   const blocked = useRef(false);
 
   const editor = usePlateEditor({
-    plugins: [
-      BasicBlocksPlugin,
-      BasicMarksPlugin,
-      // ponytail: five node types is what the templates use. Lists, tables and
-      // the reference node land in Phase 2 with the source picker they need.
-    ],
-    components: {
-      h1: H1,
-      h2: H2,
-      h3: H3,
-      p: Paragraph,
-      blockquote: Blockquote,
-    },
+    plugins: EditorKit,
     // Cast at the boundary, deliberately. StudioValue is the STORAGE type and
-    // its `children` is optional, because content arrives from a database and,
-    // in Phase 3, from a model — studioLib has to survive a malformed node
-    // rather than throw during a render. Plate's Value is the EDITOR type and
-    // is strict. The tolerance belongs on the reading side; this is the one
-    // place the two meet.
+    // its `children` is optional, because content arrives from a database and
+    // from a model — studioLib has to survive a malformed node rather than
+    // throw during a render. Plate's Value is the EDITOR type and is strict.
     value: (initialContent.length > 0
       ? initialContent
       : [{ type: "p", children: [{ text: "" }] }]) as unknown as Value,
@@ -184,52 +125,14 @@ export function StudioEditor({
     };
   }, [flush]);
 
-  // The selection is read when the panel OPENS, not while it is open. Clicking
-  // into the panel's own input moves the browser selection out of the document,
-  // so reading it live would hand Zola an empty string the moment you typed.
-  const openAsk = useCallback(() => {
-    setSelected(editor.selection ? editor.api.string(editor.selection) : "");
-    setAsking(true);
-  }, [editor]);
-
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <Toolbar editor={editor} onAsk={openAsk} />
       <SaveState status={status} />
-      <div
-        className="min-h-0 flex-1 overflow-y-auto"
-        onKeyDown={(e) => {
-          // ⌘J / Ctrl+J, the shortcut Plate's own AI menu uses, so the muscle
-          // memory transfers if that menu ever lands here.
-          if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") {
-            e.preventDefault();
-            openAsk();
-          }
-        }}
-      >
-        <Plate editor={editor} onValueChange={onChange}>
-          <PlateContent
-            key={documentId}
-            placeholder="Start writing…"
-            spellCheck
-            className="mx-auto max-w-3xl px-4 py-6 outline-none [&_strong]:font-bold [&_strong]:text-foreground [&_em]:italic [&_code]:rounded [&_code]:bg-black/40 [&_code]:px-1 [&_code]:text-ochre"
-          />
-        </Plate>
-      </div>
-      <AskZola
-        open={asking}
-        onClose={() => setAsking(false)}
-        selectedText={selected}
-        docType={docType}
-        references={references}
-        onAccept={(text) => {
-          // Replaces exactly what was selected, and nothing else. The editor's
-          // own transform, so it lands as a normal edit — undoable with ⌘Z and
-          // picked up by the autosave like anything typed.
-          editor.tf.focus();
-          editor.tf.insertText(text);
-        }}
-      />
+      <Plate editor={editor} onValueChange={onChange}>
+        <EditorContainer variant="default" className="min-h-0 flex-1">
+          <Editor key={documentId} variant="default" placeholder="Start writing…" />
+        </EditorContainer>
+      </Plate>
     </div>
   );
 }
@@ -241,79 +144,6 @@ export function StudioEditor({
  * takes salmon and the full width, because it is the one state where carrying
  * on typing costs something.
  */
-function Toolbar({
-  editor,
-  onAsk,
-}: {
-  editor: NonNullable<ReturnType<typeof usePlateEditor>>;
-  onAsk: () => void;
-}) {
-  const mark = (key: string) => () => {
-    editor.tf.focus();
-    editor.tf.toggleMark(key);
-  };
-  const block = (type: string) => () => {
-    editor.tf.focus();
-    // Toggling back to a paragraph when it is already that type, so one button
-    // both applies a heading and removes it.
-    const current = editor.api.block();
-    const isSame = (current?.[0] as { type?: string } | undefined)?.type === type;
-    editor.tf.setNodes({ type: isSame ? "p" : type });
-  };
-
-  return (
-    <div className="flex flex-wrap items-center gap-1 border-b border-panel-edge px-3 py-1.5">
-      <TB onClick={block("h1")}>Title</TB>
-      <TB onClick={block("h2")}>H2</TB>
-      <TB onClick={block("h3")}>H3</TB>
-      <span className="mx-1 h-4 w-px bg-panel-edge" />
-      <TB onClick={mark("bold")}>
-        <span className="font-bold">B</span>
-      </TB>
-      <TB onClick={mark("italic")}>
-        <span className="italic">I</span>
-      </TB>
-      <TB onClick={mark("strikethrough")}>
-        <span className="line-through">S</span>
-      </TB>
-      <TB onClick={mark("code")}>Code</TB>
-      <span className="mx-1 h-4 w-px bg-panel-edge" />
-      <TB onClick={block("blockquote")}>Quote</TB>
-      <button
-        onClick={onAsk}
-        title="Select text, then ask Zola to change it"
-        className="lcars-cap-left ml-auto flex items-center gap-2 bg-ochre/80 px-3 py-1 transition-opacity hover:bg-ochre focus-visible:outline-2 focus-visible:outline-cyan-hud motion-reduce:transition-none"
-      >
-        <span className="font-[family-name:var(--font-display)] text-xs uppercase tracking-[0.15em] text-black">
-          Ask Zola
-        </span>
-        <span className="text-[10px] text-black/60">⌘J</span>
-      </button>
-    </div>
-  );
-}
-
-/**
- * One quiet toolbar button.
- *
- * onMouseDown with preventDefault, never onClick: a click moves focus out of
- * the editor first, which collapses the selection the button is meant to act
- * on — so bolding selected text would bold nothing.
- */
-function TB({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      onMouseDown={(e) => {
-        e.preventDefault();
-        onClick();
-      }}
-      className="rounded-md border border-panel-edge px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-steel transition-colors hover:border-ochre hover:text-ochre focus-visible:outline-2 focus-visible:outline-cyan-hud motion-reduce:transition-none"
-    >
-      {children}
-    </button>
-  );
-}
-
 function SaveState({ status }: { status: Status }) {
   if (status.kind === "blocked") {
     return (
@@ -342,7 +172,7 @@ function SaveState({ status }: { status: Status }) {
       }`}
       aria-live="polite"
     >
-      {label || " "}
+      {label || " "}
     </p>
   );
 }

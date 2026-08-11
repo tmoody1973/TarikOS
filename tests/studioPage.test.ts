@@ -88,11 +88,29 @@ test("a pending edit survives the tab closing", () => {
   assert.match(EDITOR, /if \(pending\.current !== null\) void flush\(\)/);
 });
 
-test("the editor is styled by hand, not imported from a component library", () => {
-  // DESIGN.md: no component library for visual primitives. Plate ships a
-  // shadcn registry; the elements here are ours.
-  assert.ok(!/@\/components\/ui\/editor/.test(EDITOR), "must not import the shadcn editor");
-  assert.match(EDITOR, /var\(--font-display\)/, "headings use the display face");
+test("the editor uses Plate's full kit, and the exception is written down", () => {
+  // This REVERSES an earlier assertion in this file, deliberately. The rule
+  // "no component library for visual primitives" now carries one scoped
+  // exception — the Studio editor — because a hand-rolled rich-text editor is
+  // permanently one feature behind, and this surface is judged against Notion
+  // and Word rather than against a dashboard.
+  //
+  // The exception has to stay WRITTEN DOWN or a future session will read the
+  // Don'ts, see shadcn imports, and "fix" it back out.
+  assert.match(EDITOR, /EditorKit/, "the editor must use Plate's full plugin kit");
+  assert.match(EDITOR, /@\/components\/ui\/editor/, "and Plate's own editor components");
+  assert.match(DESIGN, /One scoped exception/, "DESIGN.md must record the exception");
+  assert.match(DESIGN, /Studio editor/);
+});
+
+test("the exception does not leak past the editor", () => {
+  // The page around the editor, the index and the history panel stay
+  // hand-rolled. A shadcn import here would be the exception widening.
+  assert.ok(!/@\/components\/ui\//.test(INDEX), "the index must stay hand-rolled");
+  assert.ok(
+    !/@\/components\/ui\//.test(DOC),
+    "the document page around the editor must stay hand-rolled",
+  );
 });
 
 test("restore asks before it replaces what is on screen", () => {
@@ -120,23 +138,53 @@ test("an untitled document is still findable in the index", () => {
   assert.match(INDEX, /Untitled/);
 });
 
-test("every editor control has a visible way to reach it", () => {
-  // Found by Tarik: Ask Zola was wired into the save bar's props and never
-  // rendered as a button, so the only way in was a shortcut that was not
-  // deployed. A keyboard-only affordance is an undiscoverable one.
-  assert.match(EDITOR, /function Toolbar\(/, "the editor needs a toolbar");
-  assert.match(EDITOR, /<Toolbar editor=\{editor\} onAsk=\{openAsk\}/);
-  assert.match(EDITOR, /Ask Zola/, "the AI panel needs a button, not only ⌘J");
-  for (const control of ["bold", "italic", "h1", "h2", "blockquote"]) {
-    assert.ok(EDITOR.includes(`"${control}"`), `no visible control for ${control}`);
+
+
+test("the AI menu speaks to Claude, not to a gateway we have no key for", () => {
+  // Plate's registry route ships pointed at the Vercel AI Gateway with Gemini
+  // and GPT defaults and demands an AI_GATEWAY_API_KEY this project does not
+  // have — so shipped as-is, every AI action would have failed with a 401.
+  const AI = CODE("src/app/api/ai/command/route.ts");
+  assert.match(AI, /claude-/);
+  assert.ok(!/AI_GATEWAY_API_KEY|createGateway/.test(AI), "must not need a gateway key");
+  assert.ok(!/gemini|gpt-4o/.test(AI), "must not fall back to the registry's models");
+  assert.match(AI, /ANTHROPIC_API_KEY/);
+});
+
+test("the AI route is behind a session", () => {
+  // It bills Tarik's key. /api/tools is exempt from Clerk because ElevenLabs
+  // authenticates with a shared secret; nothing under /api/ai may join it.
+  const AI = CODE("src/app/api/ai/command/route.ts");
+  const PROXY = CODE("src/proxy.ts");
+  assert.match(AI, /await auth\(\)/);
+  assert.match(AI, /401/);
+  assert.ok(!/api\/ai/.test(PROXY), "the AI route must not be public");
+});
+
+test("every token Plate's components reference is defined", () => {
+  // Predicted rather than seen: shadcn components name seventeen tokens this
+  // system never had. Undefined, `border-border` and `bg-popover` resolve to
+  // nothing — a toolbar that is present and invisible.
+  const used = new Set(
+    [...readFileSync("src/components/ui/toolbar.tsx", "utf8").matchAll(
+      /\b(?:bg|text|border|ring|fill)-(background|foreground|card|popover|primary|secondary|muted|accent|destructive|border|input|ring)(-foreground)?\b/g,
+    )].map((m) => `${m[1]}${m[2] ?? ""}`),
+  );
+  assert.ok(used.size > 0, "found no tokens to check — the regex or the file moved");
+  for (const token of used) {
+    assert.match(
+      CSS,
+      new RegExp(`--color-${token}:`),
+      `Plate uses ${token} and globals.css does not define it`,
+    );
   }
 });
 
-test("a formatting button does not steal the selection it acts on", () => {
-  // onClick moves focus out of the editor before the handler runs, collapsing
-  // the selection — so bolding selected text would bold nothing.
-  const tb = EDITOR.slice(EDITOR.indexOf("function TB("));
-  assert.match(tb, /onMouseDown/);
-  assert.match(tb, /preventDefault\(\)/);
-  assert.ok(!/onClick=\{\(e\)/.test(tb), "must not use onClick for a selection action");
+test("the editor's chrome inherits LCARS rather than shadcn's greys", () => {
+  // The point of defining them by hand. If these were shadcn's defaults the
+  // editor would arrive with its own palette and read as a foreign object.
+  assert.match(CSS, /--ring: var\(--hud-cyan\)/, "focus is cyan everywhere");
+  assert.match(CSS, /--primary: var\(--lcars-ochre\)/, "primary is Studio's channel");
+  assert.match(CSS, /--destructive: var\(--lcars-salmon\)/);
+  assert.match(CSS, /--border: var\(--panel-edge\)/);
 });

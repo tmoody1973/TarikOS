@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+@plugin "tailwind-scrollbar-hide";
+
+@custom-variant dark (&:is(.dark *));
+
 :root {
   --background: #050608;
   --foreground: #d8e4f0;
@@ -16,6 +20,39 @@
   --hud-cyan: #35e0ff;
   --panel: #0b0e14;
   --panel-edge: #1a2233;
+  --highlight: oklch(0.852 0.199 91.936);
+  --brand: oklch(0.623 0.214 259.815);
+
+  /* The Studio editor's vocabulary, spoken in LCARS.
+   *
+   * Plate's components are shadcn's, and they reference seventeen tokens this
+   * system never had — border, muted, popover, primary, ring and the rest.
+   * Undefined, they render as transparent backgrounds and invisible borders:
+   * a toolbar that is there and cannot be seen.
+   *
+   * Rather than import shadcn's greys, each one is pointed at the LCARS value
+   * that already does that job, so the editor's chrome inherits Tarik OS
+   * instead of arriving with its own palette. `ring` is cyan because the focus
+   * treatment is cyan everywhere; `primary` is ochre because that is Studio's
+   * channel; `destructive` is salmon by the same rule that governs a close
+   * button. */
+  --card: var(--panel);
+  --card-foreground: var(--foreground);
+  --popover: var(--panel);
+  --popover-foreground: var(--foreground);
+  --primary: var(--lcars-ochre);
+  --primary-foreground: #000000;
+  --secondary: var(--panel);
+  --secondary-foreground: var(--lcars-steel);
+  --muted: var(--panel);
+  --muted-foreground: var(--lcars-steel);
+  --accent: color-mix(in srgb, var(--lcars-ochre) 14%, transparent);
+  --accent-foreground: var(--foreground);
+  --destructive: var(--lcars-salmon);
+  --destructive-foreground: #000000;
+  --border: var(--panel-edge);
+  --input: var(--panel-edge);
+  --ring: var(--hud-cyan);
 }
 
 @theme inline {
@@ -33,6 +70,28 @@
   --color-panel-edge: var(--panel-edge);
   --font-display: var(--font-display);
   --font-mono: var(--font-mono-hud);
+  --color-brand: var(--brand);
+  --color-highlight: var(--highlight);
+
+  /* Exposed to Tailwind so Plate's `bg-popover`, `border-border`,
+     `text-muted-foreground` and friends resolve to the LCARS values above. */
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
 }
 
 body {
@@ -211,4 +270,9 @@ body {
 }
 .pulse-soft {
   animation: pulse-soft 2.4s ease-in-out infinite;
+}
+
+.dark {
+  --highlight: oklch(0.852 0.199 91.936);
+  --brand: oklch(0.707 0.165 254.624);
 }
