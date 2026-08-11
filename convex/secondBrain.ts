@@ -2,6 +2,13 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { compileTelosSummary } from "./telosLib";
+import { rankSources, studioHit } from "./studioLib.ts";
+
+/** How many Studio documents recall ranks. See the note inside `recall`. */
+const STUDIO_SCAN = 200;
+
+/** How much of a matched document Zola reads back. */
+const STUDIO_EXCERPT = 220;
 
 // Tool-facing functions, called by the Next.js tool webhook routes on behalf
 // of the ElevenLabs agent. They authenticate with a shared secret rather than
@@ -116,7 +123,7 @@ export const recall = query({
   },
   handler: async (ctx, { secret, searchQuery }) => {
     checkToolSecret(secret);
-    const [thoughts, memories] = await Promise.all([
+    const [thoughts, memories, studioDocs] = await Promise.all([
       ctx.db
         .query("thoughts")
         .withSearchIndex("search_cleaned", (q) =>
@@ -129,10 +136,38 @@ export const recall = query({
           q.search("content", searchQuery),
         )
         .take(5),
+      // No search index here, deliberately. Studio is ranked with rankSources —
+      // the SAME rule the source picker uses — so the brain and the picker
+      // cannot disagree about which document Tarik meant. A Convex search index
+      // would need a stored plain-text column beside the JSON tree, and a second
+      // copy of a document's words inside its own row is exactly the drift this
+      // project rejected twice: once when Studio linked to briefs rather than
+      // owning them, and once when exports went into `documents`.
+      //
+      // Affordable because the table is bounded by how fast one person writes.
+      // If Studio ever holds thousands, this is the line that changes.
+      ctx.db.query("studioDocs").withIndex("by_updated").order("desc").take(STUDIO_SCAN),
     ]);
+
+    // Archived first, then ranked. Filtering afterwards would let something
+    // that was put away take one of the five slots the answer has room for.
+    const studio = rankSources(
+      studioDocs.filter((d) => !d.archivedAt).map(studioHit),
+      searchQuery,
+    ).slice(0, 5);
+
     return {
       thoughts: thoughts.map((t) => ({ content: t.cleaned, tags: t.tags })),
       memories: memories.map((m) => ({ content: m.content, type: m.type })),
+      // An excerpt, never the document. Zola speaks this aloud, and a whole
+      // plan read into a phone call is not an answer — the hit already carries
+      // the opening of the writing, which is what a person needs to say "yes,
+      // that one".
+      studio: studio.map((s) => ({
+        id: s.sourceId,
+        title: s.title,
+        excerpt: s.snippet.slice(0, STUDIO_EXCERPT),
+      })),
     };
   },
 });

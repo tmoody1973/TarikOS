@@ -1,11 +1,11 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { requireUser } from "./dashboard";
-import { rankSources, sourceLabel, type SourceHit } from "./studioLib.ts";
+import { rankSources, sourceLabel, studioHit, type SourceHit } from "./studioLib.ts";
 
 // The source picker and the reference store (Studio Phase 2).
 //
-// Separate file from studio.ts because it reaches across six unrelated tables
+// Separate file from studio.ts because it reaches across seven unrelated tables
 // and studio.ts is already the persistence layer for one.
 //
 // References, never copies. A reference stores a type and the record's own id,
@@ -21,6 +21,7 @@ const sourceType = v.union(
   v.literal("thought"),
   v.literal("document"),
   v.literal("url"),
+  v.literal("studio"),
 );
 
 /**
@@ -28,7 +29,7 @@ const sourceType = v.union(
  *
  * Bounded per table rather than overall: an unbounded scan of transcripts
  * would make the picker's first keystroke the slowest thing on the system, and
- * taking a global limit would let one chatty table crowd out the other five
+ * taking a global limit would let one chatty table crowd out the other six
  * entirely.
  */
 const PER_TABLE = 200;
@@ -43,12 +44,24 @@ function snippet(text: string): string {
 /**
  * Everything referenceable that matches, best first.
  *
- * Reads six tables and ranks them together, so the answer is "what did I mean"
+ * Reads seven tables and ranks them together, so the answer is "what did I mean"
  * rather than "which table did I look in first".
  */
 export const search = query({
-  args: { query: v.string(), limit: v.optional(v.number()) },
-  handler: async (ctx, { query: text, limit }) => {
+  args: {
+    query: v.string(),
+    limit: v.optional(v.number()),
+    /**
+     * The document doing the searching, so it cannot cite itself.
+     *
+     * Optional because the picker is the only caller that has one, but the rule
+     * belongs here rather than in the component: a self-reference is a chip that
+     * says "this document is grounded in this document", which is both useless
+     * and a cycle for anything that later walks the graph.
+     */
+    excludeDocId: v.optional(v.id("studioDocs")),
+  },
+  handler: async (ctx, { query: text, limit, excludeDocId }) => {
     await requireUser(ctx);
     if (!text.trim()) return [];
 
@@ -125,6 +138,22 @@ export const search = query({
         snippet: snippet(t.turns.map((turn) => turn.text).join(" ")),
         at: t._creationTime,
       });
+    }
+
+    // Studio itself. Its absence was the plainest gap in the picker: a writing
+    // workspace whose documents could point at every table except their own.
+    //
+    // Archived documents are left out. Archiving is how something is put away,
+    // and a picker that keeps offering what was put away makes archiving a lie.
+    const studioDocs = await ctx.db
+      .query("studioDocs")
+      .withIndex("by_updated")
+      .order("desc")
+      .take(PER_TABLE);
+    for (const d of studioDocs) {
+      if (d.archivedAt) continue;
+      if (excludeDocId && d._id === excludeDocId) continue;
+      hits.push(studioHit(d));
     }
 
     return rankSources(hits, text)

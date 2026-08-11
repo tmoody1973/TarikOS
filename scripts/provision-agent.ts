@@ -47,6 +47,12 @@ Your tools:
 - update_telos_item: change an existing telos item — pass "match" with a few words from the item, plus new text, status (active, deferred, done, dropped), or measurable. Use when Tarik completes a goal, drops one, or rewords anything. If the tool reports several matches, ask which he means.
 - journal_entry: Tarik's journal. When he says "journal this", "note for the journal", or is clearly reflecting on his day rather than capturing an idea, save it with journal_entry (mode "capture"). Distinct from capture_thought: thoughts are ideas to build on; journal is lived experience. EVENING REFLECTION: when Tarik says "evening reflection", "let's reflect", or similar, guide a short spoken ritual — ask three questions ONE AT A TIME, saving each answer with journal_entry mode "reflection" before asking the next: 1) What moved today? 2) What stuck or got in the way? 3) What's tomorrow's one thing? Then close with a one-sentence encouraging summary tied to his goals. His journal is mined nightly into memory and telos progress, so tell him it's captured, not lost.
 
+Studio — where Tarik writes. Notes, drafts, briefs, plans and decision records, in a real editor on his screen.
+- find_studio_document: when he asks about something he is writing ("what's in the pledge drive plan", "find the piece about turnout"). It searches the writing itself, not just titles, so a few remembered words work. Several matches means you read them out and ask which — never pick.
+- read_studio_document: read one back to him. Long documents come back as their opening; say that rather than implying it is the whole thing.
+- write_studio_document: start a new one from what he just said — "start a plan for the pledge drive", "take this down as a brief". Pass doc_type, a title if he gave one, and his words as text. Distinct from capture_thought: a thought is an idea to keep, a Studio document is something he is going to write.
+- propose_studio_edit: THE ONE WITH A RITUAL. He has no cursor on a phone call, so to change a passage you QUOTE it — pass a few words from the passage itself as quote, never a description of it. "Tighten the paragraph about turnout in the plan" → document: "plan", quote: "turnout", instruction: "tighten". If two passages match, the tool hands you both: read them out and ask which. YOU PROPOSE; YOU NEVER APPLY. The suggestion waits in the document for Tarik to take or leave, and it appears on his screen while you are still talking — tell him it's waiting there, and move on. You cannot accept an edit and you must never say you changed his writing, because you did not.
+
 - get_brief: the latest pre-built brief document (morning brief and other workflows). This is your FIRST choice for any briefing.
 - run_workflow: kick off a workflow by name. When Tarik says "build me a brief on X" or "research X for me", call run_workflow with name "research-brief" and the topic — then tell him it's building on his Briefs page and move on; don't wait for it. Never pretend a disabled or failed workflow ran.
 
@@ -907,6 +913,98 @@ export const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
             "The document whose links should all be revoked",
           ),
           slug: bodyProp("Or the slug of one specific link"),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "find_studio_document",
+    description:
+      "Find something Tarik is writing in Studio — a note, draft, brief, plan or decision record. Searches titles AND the writing itself, so a few words from the middle of a document find it. Returns ranked candidates; if more than one comes back, read them out and ask which he means, never pick for him.",
+    responseTimeoutSecs: 15,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/find_studio_document`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["query"],
+        description: "Studio document lookup",
+        properties: {
+          query: bodyProp(
+            "What Tarik called it, or a few words he remembers from inside it",
+          ),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "read_studio_document",
+    description:
+      "Read a Studio document back to Tarik in his own words. Use when he asks what a document says, or wants it read out. If several documents match, ask which before reading. Long documents come back as their opening only — say so rather than pretending that is the whole thing.",
+    responseTimeoutSecs: 20,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/read_studio_document`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["query"],
+        description: "Which document to read",
+        properties: {
+          query: bodyProp("What Tarik called it, or words he remembers from it"),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "write_studio_document",
+    description:
+      "Start a new document in Studio from what Tarik just said — 'start a plan for the pledge drive', 'take this down as a brief'. Pass doc_type, a title if he gave one, and his words as text. The document opens with the right shape for its type, so a dictated brief is still a brief when he opens it. Distinct from capture_thought: a thought is an idea to keep, a Studio document is a thing he is going to write.",
+    responseTimeoutSecs: 20,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/write_studio_document`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["doc_type"],
+        description: "A new Studio document",
+        properties: {
+          doc_type: bodyProp("One of: note, draft, brief, plan, decision"),
+          title: bodyProp("What Tarik called it, if he named it"),
+          text: bodyProp(
+            "What he dictated, as he said it. Each line becomes its own paragraph.",
+          ),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "propose_studio_edit",
+    description:
+      "Suggest a rewrite of ONE passage in a Studio document. Tarik has no cursor on a phone call, so identify the passage by QUOTING a few of its words — pass them as quote. The suggestion is written into the document as a proposal he can take or leave; it does NOT change the document, and you cannot apply it. If the quote matches two passages, the tool returns both — read them out and ask which. If it matches none, say so.",
+    responseTimeoutSecs: 60,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/propose_studio_edit`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["document", "quote", "instruction"],
+        description: "A proposed rewrite of one passage",
+        properties: {
+          document: bodyProp("Which document — what Tarik called it"),
+          quote: bodyProp(
+            "A few words FROM the passage itself, so the right one is found. Not a description of it.",
+          ),
+          instruction: bodyProp(
+            "What Tarik wants done to that passage, in his words — 'tighten this', 'make it less formal'",
+          ),
         },
       },
     },

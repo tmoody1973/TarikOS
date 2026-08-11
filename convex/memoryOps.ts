@@ -11,6 +11,7 @@ import type { ActionCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { checkToolSecret, markToolHealthy } from "./secondBrain";
 import { voyageEmbed } from "./embeddingsLib";
+import { excerpt, parseValue, plainText } from "./studioLib.ts";
 
 // Memory consolidation + semantic recall (MOO-484). The Claude call happens
 // in the Next tool route (/api/tools/consolidate_memories); these functions
@@ -18,6 +19,19 @@ import { voyageEmbed } from "./embeddingsLib";
 // (VOYAGE_API_KEY lives in Convex env only).
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** How much of a matched Studio document Zola reads back. */
+const STUDIO_EXCERPT = 220;
+
+/**
+ * How much of a document is embedded.
+ *
+ * Voyage takes a bounded input and a plan can run to thousands of words. The
+ * opening carries the subject, which is what a "what was I writing about X"
+ * question is actually asking. Chunking a document into several vectors is the
+ * real answer and is not what today needs.
+ */
+const EMBED_CHARS = 8000;
 const MEMORY_TYPES = ["preference", "fact", "project", "person"] as const;
 const memoryType = v.union(...MEMORY_TYPES.map((t) => v.literal(t)));
 
@@ -198,6 +212,7 @@ export const unembedded = internalQuery({
     thoughts: { id: Id<"thoughts">; text: string }[];
     telos: { id: Id<"telosItems">; text: string }[];
     journal: { id: Id<"journalEntries">; text: string }[];
+    studio: { id: Id<"studioDocs">; text: string; revision: number }[];
   }> => {
     const memories = await ctx.db
       .query("memories")
@@ -215,11 +230,36 @@ export const unembedded = internalQuery({
       .query("journalEntries")
       .filter((q) => q.eq(q.field("embedding"), undefined))
       .take(64);
+    // Studio is the one kind whose staleness is a COMPARISON rather than an
+    // absence. The other four clear their embedding when their text changes, so
+    // "no embedding" means "due". A Studio document is edited for weeks and
+    // always has an embedding — of some earlier revision. So the counter it was
+    // embedded from is stored, and a row is due when that counter is behind.
+    //
+    // Collected rather than taken: the take has to happen AFTER the comparison,
+    // or 64 already-embedded documents fill the batch and the stale one never
+    // gets a turn. Affordable because the table is bounded by how fast one
+    // person writes — the same reason recall scans it.
+    const studioAll = await ctx.db.query("studioDocs").collect();
+    const studio = studioAll
+      .filter((d) => !d.archivedAt && d.embeddedRevision !== d.revision)
+      .slice(0, 64);
     return {
       memories: memories.map((m) => ({ id: m._id, text: m.content })),
       thoughts: thoughts.map((t) => ({ id: t._id, text: t.cleaned })),
       telos: telos.map((t) => ({ id: t._id, text: t.text })),
       journal: journal.map((j) => ({ id: j._id, text: j.text })),
+      studio: studio.map((d) => ({
+        id: d._id,
+        // The writing, not the tree it is stored in. Embedding the stored
+        // string would embed "children" and "type" once per block, and every
+        // document would sit near every other document.
+        text: `${d.title}\n${plainText(parseValue(d.content))}`.slice(0, EMBED_CHARS),
+        // Captured with the text, not read again later: by the time the vector
+        // comes back the document may have moved on, and stamping it with the
+        // newer number would mark work as done that was never done.
+        revision: d.revision,
+      })),
     };
   },
 });
@@ -238,8 +278,15 @@ export const storeEmbeddings = internalMutation({
     journal: v.array(
       v.object({ id: v.id("journalEntries"), embedding: v.array(v.float64()) }),
     ),
+    studio: v.array(
+      v.object({
+        id: v.id("studioDocs"),
+        embedding: v.array(v.float64()),
+        revision: v.number(),
+      }),
+    ),
   },
-  handler: async (ctx, { memories, thoughts, telos, journal }): Promise<void> => {
+  handler: async (ctx, { memories, thoughts, telos, journal, studio }): Promise<void> => {
     await Promise.all([
       ...memories.map(async (m) => {
         if (await ctx.db.get(m.id)) await ctx.db.patch(m.id, { embedding: m.embedding });
@@ -252,6 +299,17 @@ export const storeEmbeddings = internalMutation({
       }),
       ...journal.map(async (j) => {
         if (await ctx.db.get(j.id)) await ctx.db.patch(j.id, { embedding: j.embedding });
+      }),
+      // The vector and the counter move together, always. Patching the vector
+      // alone leaves the row due forever — the backfill would re-embed the same
+      // document on every pass, every night, at Voyage's expense.
+      ...studio.map(async (s) => {
+        if (await ctx.db.get(s.id)) {
+          await ctx.db.patch(s.id, {
+            embedding: s.embedding,
+            embeddedRevision: s.revision,
+          });
+        }
       }),
     ]);
   },
@@ -274,12 +332,14 @@ export const backfillEmbeddings = internalAction({
         ...batch.thoughts.map((t) => t.text),
         ...batch.telos.map((t) => t.text),
         ...batch.journal.map((j) => j.text),
+        ...batch.studio.map((s) => s.text),
       ];
       if (texts.length === 0) break;
       const vectors = await voyageEmbed(apiKey, texts, "document");
       const thoughtBase = batch.memories.length;
       const telosBase = thoughtBase + batch.thoughts.length;
       const journalBase = telosBase + batch.telos.length;
+      const studioBase = journalBase + batch.journal.length;
       await ctx.runMutation(internal.memoryOps.storeEmbeddings, {
         memories: batch.memories.map((m, i) => ({
           id: m.id,
@@ -296,6 +356,11 @@ export const backfillEmbeddings = internalAction({
         journal: batch.journal.map((j, i) => ({
           id: j.id,
           embedding: vectors[journalBase + i],
+        })),
+        studio: batch.studio.map((s, i) => ({
+          id: s.id,
+          embedding: vectors[studioBase + i],
+          revision: s.revision,
         })),
       });
       total += texts.length;
@@ -340,6 +405,17 @@ export const getJournalByIds = internalQuery({
   },
 });
 
+export const getStudioByIds = internalQuery({
+  args: { ids: v.array(v.id("studioDocs")) },
+  handler: async (ctx, { ids }): Promise<Doc<"studioDocs">[]> => {
+    const docs = await Promise.all(ids.map((id) => ctx.db.get(id)));
+    // Archived documents are dropped here rather than at the vector search,
+    // which cannot filter on a field it was not built with. A document put away
+    // should not come back because it is semantically close to the question.
+    return docs.filter((d): d is Doc<"studioDocs"> => d !== null && !d.archivedAt);
+  },
+});
+
 // Shared: embed the query and fetch the vector-matched docs (null = no key).
 async function vectorHits(
   ctx: ActionCtx,
@@ -349,17 +425,19 @@ async function vectorHits(
   thoughtDocs: Doc<"thoughts">[];
   telosDocs: Doc<"telosItems">[];
   journalDocs: Doc<"journalEntries">[];
+  studioDocs: Doc<"studioDocs">[];
 } | null> {
   const apiKey = process.env.VOYAGE_API_KEY;
   if (!apiKey) return null;
   const [vector] = await voyageEmbed(apiKey, [searchQuery], "query");
-  const [memHits, thoughtHits, telosHits, journalHits] = await Promise.all([
+  const [memHits, thoughtHits, telosHits, journalHits, studioHits] = await Promise.all([
     ctx.vectorSearch("memories", "by_embedding", { vector, limit: 5 }),
     ctx.vectorSearch("thoughts", "by_embedding", { vector, limit: 5 }),
     ctx.vectorSearch("telosItems", "by_embedding", { vector, limit: 5 }),
     ctx.vectorSearch("journalEntries", "by_embedding", { vector, limit: 5 }),
+    ctx.vectorSearch("studioDocs", "by_embedding", { vector, limit: 5 }),
   ]);
-  const [memDocs, thoughtDocs, telosDocs, journalDocs] = await Promise.all([
+  const [memDocs, thoughtDocs, telosDocs, journalDocs, studioDocs] = await Promise.all([
     ctx.runQuery(internal.memoryOps.getMemoriesByIds, {
       ids: memHits.filter((h) => h._score >= MIN_SCORE).map((h) => h._id),
     }),
@@ -372,8 +450,11 @@ async function vectorHits(
     ctx.runQuery(internal.memoryOps.getJournalByIds, {
       ids: journalHits.filter((h) => h._score >= MIN_SCORE).map((h) => h._id),
     }),
+    ctx.runQuery(internal.memoryOps.getStudioByIds, {
+      ids: studioHits.filter((h) => h._score >= MIN_SCORE).map((h) => h._id),
+    }),
   ]);
-  return { memDocs, thoughtDocs, telosDocs, journalDocs };
+  return { memDocs, thoughtDocs, telosDocs, journalDocs, studioDocs };
 }
 
 function dedupeBy<T>(items: T[], key: (item: T) => string): T[] {
@@ -393,6 +474,7 @@ export const hybridRecall = action({
   ): Promise<{
     memories: { content: string; type: string }[];
     thoughts: { content: string; tags: string[] }[];
+    studio: { id: string; title: string; excerpt: string }[];
     semantic: boolean;
   }> => {
     checkToolSecret(secret);
@@ -422,6 +504,21 @@ export const hybridRecall = action({
           ...text.thoughts,
         ],
         (t) => t.content,
+      ).slice(0, 6),
+      // Studio stays its own kind rather than riding along as a thought. A
+      // thought is a captured idea; a Studio document is a thing Tarik is
+      // writing, and the answer "it's in your plan" is different from "you had
+      // a thought about that". The id travels so the next tool can open it.
+      studio: dedupeBy(
+        [
+          ...vec.studioDocs.map((d) => ({
+            id: d._id as string,
+            title: d.title,
+            excerpt: excerpt(parseValue(d.content), STUDIO_EXCERPT),
+          })),
+          ...text.studio,
+        ],
+        (s) => s.id,
       ).slice(0, 6),
       semantic: true,
     };

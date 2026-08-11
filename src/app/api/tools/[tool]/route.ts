@@ -37,6 +37,8 @@ import { classifyOutcome, type ToolOutcome } from "@/lib/toolOutcome";
 import { uploadBuffer } from "@/lib/r2";
 import { escapeHtml, notifyOwner } from "@/lib/telegram";
 import { briefDigest } from "@/lib/briefDigest";
+import { proposeRewrite } from "@/lib/studioPropose";
+import { DOC_TYPES } from "../../../../../convex/studioLib";
 import {
   createGoogleContact,
   deleteGoogleContact,
@@ -95,6 +97,20 @@ function strArg(value: unknown, max: number): string | undefined {
   return typeof value === "string" && value.trim()
     ? safeSlice(value.trim(), max)
     : undefined;
+}
+
+/**
+ * How much of a Studio document Zola reads aloud before pointing at the page.
+ *
+ * A plan runs to thousands of words and this is a phone call. Cut here rather
+ * than left to her, because a model asked to "summarise if long" will summarise
+ * a document he asked to HEAR.
+ */
+const STUDIO_SPOKEN_CHARS = 2400;
+
+/** A few words of a passage, enough to tell two paragraphs apart out loud. */
+function excerptOf(text: string): string {
+  return text.length <= 90 ? text : `${text.slice(0, 90).trimEnd()}…`;
 }
 
 function dateArg(value: unknown): string | undefined {
@@ -318,7 +334,11 @@ async function runTool(
         searchQuery,
       });
       await convex.mutation(api.secondBrain.markRecallHealthy, { secret });
-      const count = results.thoughts.length + results.memories.length;
+      // Studio counts. Without it she says "nothing in the second brain matches
+      // that" while holding a document that does — the worst failure a memory
+      // tool has, because it teaches him to stop asking.
+      const count =
+        results.thoughts.length + results.memories.length + results.studio.length;
       return {
         ok: true,
         message:
@@ -1679,6 +1699,194 @@ async function runTool(
         name: "send_brief_digest",
       });
       return { ok: true, message: "Sent the brief to your Telegram." };
+    }
+
+    // ------------------------------------------------------------- Studio
+    //
+    // Four tools, one rule: she resolves to exactly ONE document, or she asks.
+    // Modelled on find_contact, which learned it from real data — a name that
+    // matches two people is a question, never a guess.
+    //
+    // And she PROPOSES; she never applies. Voice cannot show a diff, so voice
+    // must not write into something he is holding. A proposal appears in the
+    // open document while she is still talking, because Convex is realtime.
+
+    case "find_studio_document": {
+      const q = strArg(body.query, 200);
+      if (!q) return { ok: false, message: "Which document are you looking for?" };
+
+      const matches = await convex.query(api.studioTools.search, {
+        secret,
+        query: q,
+        limit: 5,
+      });
+      if (matches.length === 0) {
+        return {
+          ok: true,
+          message: `Nothing in Studio matches ${q}.`,
+          data: { matches: [] },
+        };
+      }
+
+      const describe = (m: (typeof matches)[number]) => `${m.title} — a ${m.docType}`;
+      const message =
+        matches.length === 1
+          ? `${describe(matches[0])}. ${matches[0].excerpt}`
+          : `I have ${matches.length} that could be it: ${matches.map(describe).join("; ")}. Which one?`;
+
+      await convex.mutation(api.secondBrain.markToolHealthyFromTool, {
+        secret,
+        name: "find_studio_document",
+      });
+      return { ok: true, message, data: { matches } };
+    }
+
+    // Plain text, never the stored JSON tree. The tree is the editor's
+    // business; handed to a speech model it is noise she can only mangle.
+    case "read_studio_document": {
+      const q = strArg(body.query, 200);
+      if (!q) return { ok: false, message: "Which document should I read?" };
+
+      const matches = await convex.query(api.studioTools.search, {
+        secret,
+        query: q,
+        limit: 5,
+      });
+      if (matches.length === 0) {
+        return { ok: true, message: `Nothing in Studio matches ${q}.` };
+      }
+      if (matches.length !== 1) {
+        return {
+          ok: true,
+          message: `I have several: ${matches.map((m) => m.title).join("; ")}. Which one should I read?`,
+          data: { matches },
+        };
+      }
+
+      const doc = await convex.query(api.studioTools.read, {
+        secret,
+        id: matches[0].id,
+        limit: STUDIO_SPOKEN_CHARS,
+      });
+      if (!doc) return { ok: false, message: "That document is gone." };
+
+      await convex.mutation(api.secondBrain.markToolHealthyFromTool, {
+        secret,
+        name: "read_studio_document",
+      });
+      return {
+        ok: true,
+        // The truncation is SAID rather than hidden: a document that stops
+        // mid-sentence with no explanation reads as a document that ends there.
+        message: doc.truncated
+          ? `${doc.text}\n\n(That is the first part of ${doc.title}; there is more on the page.)`
+          : doc.text,
+        data: { id: doc.id, title: doc.title, docType: doc.docType },
+      };
+    }
+
+    // Dictation into a real document, shaped by its type's template — a brief
+    // dictated over the phone is still a brief when he opens it.
+    case "write_studio_document": {
+      const type = strArg(body.doc_type, 20)?.toLowerCase();
+      if (!type || !(DOC_TYPES as readonly string[]).includes(type)) {
+        return {
+          ok: false,
+          message: `What kind of document — a ${DOC_TYPES.join(", a ")}?`,
+        };
+      }
+      const text = strArg(body.text, 20_000) ?? "";
+      const title = strArg(body.title, 120) ?? "";
+      if (!title.trim() && !text.trim()) {
+        return { ok: false, message: "What should the document say?" };
+      }
+
+      const created = await convex.mutation(api.studioTools.create, {
+        secret,
+        docType: type as (typeof DOC_TYPES)[number],
+        title,
+        text,
+      });
+      return {
+        ok: true,
+        message: `Started ${created.title} as a ${type}. It's in Studio.`,
+        data: created,
+      };
+    }
+
+    // The interesting one. She has no cursor, so she QUOTES the passage, and
+    // the quote resolves exactly the way a contact name does.
+    case "propose_studio_edit": {
+      const which = strArg(body.document, 200);
+      const quote = strArg(body.quote, 400);
+      const instruction = strArg(body.instruction, 600);
+      if (!which) return { ok: false, message: "Which document?" };
+      if (!quote) return { ok: false, message: "Which passage — read me a few words of it?" };
+      if (!instruction) return { ok: false, message: "What should I do to that passage?" };
+
+      const found = await convex.query(api.studioTools.search, {
+        secret,
+        query: which,
+        limit: 5,
+      });
+      if (found.length === 0) {
+        return { ok: true, message: `Nothing in Studio matches ${which}.` };
+      }
+      if (found.length !== 1) {
+        return {
+          ok: true,
+          message: `I have several: ${found.map((m) => m.title).join("; ")}. Which one?`,
+          data: { matches: found },
+        };
+      }
+
+      const doc = await convex.query(api.studioTools.blocks, {
+        secret,
+        id: found[0].id,
+        quote,
+      });
+      if (!doc) return { ok: false, message: "That document is gone." };
+
+      const matches = doc.matches;
+      if (matches.length === 0) {
+        return {
+          ok: true,
+          message: `I can't find anything about ${quote} in ${doc.title}.`,
+        };
+      }
+      if (matches.length > 1) {
+        // She reads them back and asks. She never picks — proposing against the
+        // wrong paragraph is a rewrite he did not ask for, in a document he was
+        // not looking at.
+        return {
+          ok: true,
+          message: `Two passages mention that. One says: ${excerptOf(matches[0].text)}. The other: ${excerptOf(matches[1].text)}. Which one?`,
+          data: { matches },
+        };
+      }
+
+      const rewritten = await proposeRewrite({
+        docType: doc.docType,
+        references: doc.references,
+        block: matches[0].text,
+        instruction,
+      });
+
+      const stored = await convex.mutation(api.studioTools.propose, {
+        secret,
+        docId: found[0].id,
+        blockIndex: matches[0].index,
+        original: matches[0].text,
+        proposed: rewritten,
+        instruction,
+      });
+      if (!stored.ok) return { ok: false, message: "That document is gone." };
+
+      return {
+        ok: true,
+        message: `I've suggested a version. It's waiting in ${doc.title} for you to take or leave.`,
+        data: { id: stored.id, proposed: rewritten },
+      };
     }
 
     default:

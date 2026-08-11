@@ -30,6 +30,7 @@ import type * as settingsLib from "../settingsLib.js";
 import type * as studio from "../studio.js";
 import type * as studioLib from "../studioLib.js";
 import type * as studioSources from "../studioSources.js";
+import type * as studioTools from "../studioTools.js";
 import type * as telegram from "../telegram.js";
 import type * as telegramLib from "../telegramLib.js";
 import type * as telos from "../telos.js";
@@ -69,6 +70,7 @@ declare const fullApi: ApiFromModules<{
   studio: typeof studio;
   studioLib: typeof studioLib;
   studioSources: typeof studioSources;
+  studioTools: typeof studioTools;
   telegram: typeof telegram;
   telegramLib: typeof telegramLib;
   telos: typeof telos;

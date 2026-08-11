@@ -59,6 +59,10 @@ function StudioInner() {
   const [creating, setCreating] = useState(false);
 
   const docs = useQuery(api.studio.list, { includeArchived: showArchived });
+  // Zola can propose a rewrite while the document is closed. Without a count
+  // here it waits somewhere he has no reason to look, which is the same as not
+  // having been made.
+  const pending = useQuery(api.studio.pendingCounts, {});
   const create = useMutation(api.studio.create);
 
   const shown = useMemo(
@@ -126,7 +130,7 @@ function StudioInner() {
           <ul className="mt-3 flex flex-col gap-2">
             {shown.map((doc) => (
               <li key={doc._id}>
-                <DocumentRow doc={doc} />
+                <DocumentRow doc={doc} pending={pending?.[doc._id] ?? 0} />
               </li>
             ))}
           </ul>
@@ -161,6 +165,7 @@ function TypeChip({
 
 function DocumentRow({
   doc,
+  pending,
 }: {
   doc: {
     _id: Id<"studioDocs">;
@@ -170,6 +175,7 @@ function DocumentRow({
     updatedAt: number;
     archivedAt?: number;
   };
+  pending: number;
 }) {
   return (
     <Link
@@ -187,6 +193,11 @@ function DocumentRow({
         </span>
         {doc.archivedAt ? (
           <span className="text-[10px] uppercase tracking-[0.3em] text-steel">ARCHIVED</span>
+        ) : null}
+        {pending > 0 ? (
+          <span className="rounded-full border border-ochre px-2 py-0.5 text-[10px] uppercase tracking-[0.3em] text-ochre">
+            {pending} suggested
+          </span>
         ) : null}
         <span className="ml-auto text-[10px] tracking-[0.2em] text-steel">
           {chicagoDateTime(doc.updatedAt)}

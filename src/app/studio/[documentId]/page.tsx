@@ -9,6 +9,7 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 import type { StudioValue } from "../../../../convex/studioLib";
 import { chicagoDateTime } from "@/lib/briefArchive";
 import { StudioEditor, type SaveOutcome } from "./StudioEditor";
+import { ProposalsPanel } from "./ProposalsPanel";
 
 // One document. Editor in the middle, its history behind a toggle.
 //
@@ -119,15 +120,21 @@ function DocumentInner({ id }: { id: Id<"studioDocs"> }) {
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col gap-2 lg:flex-row">
-        <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-panel-edge bg-panel">
-          <StudioEditor
-            documentId={id}
-            initialContent={parseContent(doc.content)}
-            initialRevision={doc.revision}
-            title={doc.title}
-            save={save}
-          />
-        </section>
+        <div className="flex min-h-0 flex-1 flex-col gap-2">
+          {/* Above the editor, not beside it: a rewrite waiting is the one
+              thing on this page that is asking a question, and below lg the
+              side column is gone entirely. */}
+          <ProposalsPanel id={id} />
+          <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-panel-edge bg-panel">
+            <StudioEditor
+              documentId={id}
+              initialContent={parseContent(doc.content)}
+              initialRevision={doc.revision}
+              title={doc.title}
+              save={save}
+            />
+          </section>
+        </div>
         {showHistory ? <HistoryPanel id={id} /> : null}
       </div>
     </div>

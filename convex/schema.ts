@@ -382,7 +382,47 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
     archivedAt: v.optional(v.number()),
-  }).index("by_updated", ["updatedAt"]),
+    // voyage-3.5-lite, 1024 dims, same as memories and thoughts — absent until
+    // the backfill embeds the row.
+    embedding: v.optional(v.array(v.float64())),
+    // WHICH revision that embedding was made from. Not a boolean "embedded"
+    // flag: a document is edited for weeks, and a flag cannot tell an embedding
+    // of today's text from an embedding of last Tuesday's. Behind the counter
+    // means stale, which is the only question the backfill asks.
+    embeddedRevision: v.optional(v.number()),
+  })
+    .index("by_updated", ["updatedAt"])
+    .vectorIndex("by_embedding", {
+      vectorField: "embedding",
+      dimensions: 1024,
+    }),
+
+  // A rewrite waiting for Tarik to look at it.
+  //
+  // The same object whether it came from the screen or from Zola's voice, so
+  // there is ONE review panel. Voice cannot show a diff, so voice must not
+  // write: she proposes, the screen decides. That is not a limitation being
+  // engineered around — it is what makes it safe to let her near his writing.
+  //
+  // `original` is what the block said WHEN THE PROPOSAL WAS MADE, and it is the
+  // load-bearing field. By the time it is accepted the document may have moved
+  // under it, and a proposal applied to a paragraph that has since been
+  // rewritten by hand silently deletes the rewrite.
+  studioProposals: defineTable({
+    docId: v.id("studioDocs"),
+    blockIndex: v.number(),
+    original: v.string(),
+    proposed: v.string(),
+    instruction: v.string(),
+    origin: v.union(v.literal("voice"), v.literal("screen")),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("applied"),
+      v.literal("rejected"),
+    ),
+    createdAt: v.number(),
+    resolvedAt: v.optional(v.number()),
+  }).index("by_doc_status", ["docId", "status", "createdAt"]),
 
   // What a Studio document points at. A reference, never a copy: the type and
   // the record's own id, plus a label snapshotted for display so a chip still
@@ -401,6 +441,9 @@ export default defineSchema({
       v.literal("thought"),
       v.literal("document"),
       v.literal("url"),
+      // A Studio document can ground another one — the most obvious thing a
+      // writing workspace should do, and the thing it could not do until now.
+      v.literal("studio"),
     ),
     sourceId: v.string(),
     label: v.string(),

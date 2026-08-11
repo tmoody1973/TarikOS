@@ -41,6 +41,13 @@ const str = (description: string) => ({ type: "string", description });
  *                   — writes whose confirmation today is prompt text. Over a
  *                     channel with no spoken confirmation they would commit on
  *                     a mis-read message.
+ *   write_studio_document, propose_studio_edit
+ *                   — voice-first by design and untried anywhere else. The
+ *                     quoting ritual exists BECAUSE voice has no cursor; over
+ *                     text he can open the document and edit it directly, so
+ *                     the tool would be a worse version of the page. Reading
+ *                     (find_studio_document, read_studio_document) is a
+ *                     different question and is simply not built yet.
  */
 export const EXCLUDED_FROM_TEXT = [
   "call_tarik",
@@ -52,6 +59,8 @@ export const EXCLUDED_FROM_TEXT = [
   "update_calendar_event",
   "add_telos_item",
   "update_telos_item",
+  "write_studio_document",
+  "propose_studio_edit",
 ] as const;
 
 export const TEXT_TOOLS: TextTool[] = [

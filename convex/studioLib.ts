@@ -85,12 +85,37 @@ export function plainText(value: StudioValue): string {
  */
 const SECTION_HEADINGS = new Set(["h2", "h3", "h4", "h5", "h6"]);
 
-function textOf(node: StudioNode): string {
+/**
+ * One block's words, marks and nesting flattened away.
+ *
+ * Exported because accepting a proposal has to ask "does this block still say
+ * what it said when the proposal was made", and that question has to be asked
+ * with the SAME reading of a block that produced the answer stored on it.
+ */
+export function blockText(node: StudioNode): string {
   const kids = Array.isArray(node.children) ? node.children : [];
   return kids
-    .map((k) => (isText(k) ? k.text : textOf(k)))
+    .map((k) => (isText(k) ? k.text : blockText(k)))
     .join("")
     .trim();
+}
+
+const textOf = blockText;
+
+/**
+ * The stored string, back as blocks. An empty document if it cannot be read.
+ *
+ * Lives here rather than in studio.ts because four callers now need it — the
+ * editor's persistence, the source picker, recall, and the voice tools — and a
+ * private copy in each is four places for the malformed-content rule to drift.
+ */
+export function parseValue(content: string): StudioValue {
+  try {
+    const value = JSON.parse(content);
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -150,6 +175,7 @@ export const REFERENCE_TYPES = [
   "thought",
   "document",
   "url",
+  "studio",
 ] as const;
 
 export type ReferenceType = (typeof REFERENCE_TYPES)[number];
@@ -217,6 +243,101 @@ export function rankSources(hits: SourceHit[], query: string): SourceHit[] {
         a.hit.sourceId.localeCompare(z.hit.sourceId),
     )
     .map((r) => r.hit);
+}
+
+/**
+ * How much of a Studio document travels with a search hit.
+ *
+ * Larger than the 240 the other six tables use, because Studio is the one table
+ * whose body IS the reason to find it — a plan is found by the paragraph about
+ * turnout, and the title almost never repeats it. Not unbounded: the picker
+ * ranks up to 200 rows on every keystroke, and whole documents would make the
+ * first keystroke the slowest thing on the system.
+ */
+const STUDIO_SNIPPET = 600;
+
+/**
+ * One Studio document as a rankable hit.
+ *
+ * Shared by the source picker and by recall on purpose. Studio then has ONE
+ * ranking rule wherever it is searched from, instead of a picker and a brain
+ * that disagree about which document someone meant.
+ */
+export function studioHit(doc: {
+  _id: string;
+  title: string;
+  content: string;
+  updatedAt: number;
+}): SourceHit {
+  return {
+    type: "studio",
+    sourceId: doc._id,
+    title: doc.title,
+    // The writing, not the tree it is stored in. Indexing the stored string
+    // would make every document match a search for "children" or "type".
+    snippet: plainText(parseValue(doc.content)).replace(/\s+/g, " ").trim().slice(0, STUDIO_SNIPPET),
+    at: doc.updatedAt,
+  };
+}
+
+// ------------------------------------------------------ addressing a block
+
+/** A top-level block, its position, and the words in it. */
+export type BlockMatch = { index: number; text: string };
+
+/**
+ * The blocks a spoken quote could mean.
+ *
+ * Voice has no cursor. Zola cannot be told "this paragraph" — she quotes it,
+ * and the quote resolves the way a contact name does: to exactly one thing, or
+ * to a question the caller has to answer. That is why this returns EVERY
+ * candidate rather than a best guess. Nothing downstream may pick.
+ *
+ * Top-level blocks only. A list item is addressable as its list, which is the
+ * unit someone means when they say "the bullets about funding".
+ *
+ * Compared through `comparable`, so a quote survives the em-dashes, quotation
+ * marks and capitals a speaker cannot pronounce.
+ */
+export function blocksMatching(value: StudioValue, quote: string): BlockMatch[] {
+  const needle = comparable(quote);
+  // An empty quote must match NOTHING. Matching everything would let one
+  // dropped word in transcription silently address the whole document.
+  if (!needle) return [];
+
+  const matches: BlockMatch[] = [];
+  const blocks = Array.isArray(value) ? value : [];
+  for (let index = 0; index < blocks.length; index++) {
+    const block = blocks[index];
+    if (!block) continue;
+    const text = textOf(block);
+    if (text && comparable(text).includes(needle)) matches.push({ index, text });
+  }
+  return matches;
+}
+
+/**
+ * The document with one block's words replaced.
+ *
+ * The block's TYPE survives: a rewritten heading has to come back a heading,
+ * and Plate decides how a block renders from its type alone. Its marks do not —
+ * a rewrite is new text, and carrying the old bold runs onto it would put the
+ * emphasis on whatever words happen to land in those positions.
+ *
+ * An index that is not there returns the document untouched. By the time a
+ * proposal is applied the document may have moved, and refusing is the whole
+ * point of storing what the block used to say.
+ */
+export function replaceBlockText(
+  value: StudioValue,
+  index: number,
+  text: string,
+): StudioValue {
+  const blocks = Array.isArray(value) ? value : [];
+  if (index < 0 || index >= blocks.length || !blocks[index]) return value;
+  return blocks.map((block, i) =>
+    i === index ? { ...block, children: [{ text }] } : block,
+  );
 }
 
 /** How wide a chip may get before it breaks the line it sits in. */
@@ -305,6 +426,37 @@ function sectioned(headings: string[]): StudioValue {
  * constant: a shared value would let the first document's first edit mutate the
  * template every later document is created from.
  */
+/**
+ * A new document from dictation.
+ *
+ * Starts from the type's template, so a brief dictated over the phone is still
+ * a brief when it is opened — headings and all — rather than a wall of spoken
+ * text that has to be shaped by hand afterwards.
+ *
+ * The title goes into the template's own h1 rather than being prepended as a
+ * new block, because `deriveTitle` reads the first block with words in it and a
+ * stray leading paragraph would name the document twice.
+ *
+ * Spoken lines become one paragraph each. Joined into one block they would
+ * arrive as a single run-on paragraph that has to be split by hand — the exact
+ * work dictation is supposed to save.
+ */
+export function documentFrom(type: DocType, title: string, text: string): StudioValue {
+  const template = templateFor(type);
+  const named =
+    title.trim() && template[0]?.type === "h1"
+      ? [{ ...template[0], children: [{ text: title.trim() }] }, ...template.slice(1)]
+      : template;
+
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  // No empty trailing paragraph when nothing was dictated.
+  if (lines.length === 0) return named;
+  return [...named, ...lines.map((line) => paragraph(line))];
+}
+
 export function templateFor(type: DocType): StudioValue {
   switch (type) {
     // A note imposes no shape. That is the whole point of a note.

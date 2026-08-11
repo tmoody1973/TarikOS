@@ -1,7 +1,15 @@
 import { mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { requireUser } from "./dashboard";
-import { deriveTitle, excerpt, templateFor, type StudioValue } from "./studioLib.ts";
+import {
+  blockText,
+  deriveTitle,
+  excerpt,
+  parseValue,
+  replaceBlockText,
+  templateFor,
+} from "./studioLib.ts";
 
 // Studio persistence.
 //
@@ -30,15 +38,13 @@ const EXCERPT_CHARS = 160;
  */
 const MAX_CONTENT_BYTES = 400_000;
 
-/** The stored tree, or an empty document if it cannot be read. */
-function parse(content: string): StudioValue {
-  try {
-    const value = JSON.parse(content);
-    return Array.isArray(value) ? value : [];
-  } catch {
-    return [];
-  }
-}
+/**
+ * The stored tree, or an empty document if it cannot be read.
+ *
+ * The rule lives in studioLib now: four callers need it, and a private copy in
+ * each is four places for the malformed-content rule to drift apart.
+ */
+const parse = parseValue;
 
 /**
  * The document index.
@@ -198,7 +204,21 @@ export const remove = mutation({
   },
 });
 
-/** Keep this moment, so there is something to come back to. */
+/**
+ * Keep this moment, so there is something to come back to.
+ *
+ * Also the moment the document is embedded. That is a deliberate choice and the
+ * reason it is written here rather than in `save`: `save` fires on a 900ms
+ * debounce while someone is typing, so embedding there would call Voyage
+ * several times per sentence, for text that is mid-word. Keeping a version is
+ * the one act in Studio that means "this is worth coming back to" — which is
+ * exactly the text worth being findable.
+ *
+ * Between snapshots a document is still findable by WORDS, because text recall
+ * ranks the live rows; only the semantic half waits. And nothing is lost if
+ * Tarik never keeps a version: the nightly consolidation runs the same backfill
+ * and picks up every document whose embedding is behind its revision.
+ */
 export const snapshot = mutation({
   args: { id: v.id("studioDocs"), label: v.optional(v.string()) },
   handler: async (ctx, { id, label }) => {
@@ -213,6 +233,99 @@ export const snapshot = mutation({
       label: label?.trim() || undefined,
       createdAt: Date.now(),
     });
+    await ctx.scheduler.runAfter(0, internal.memoryOps.backfillEmbeddings, {});
+    return { ok: true as const };
+  },
+});
+
+// ------------------------------------------------------------- proposals
+//
+// Zola proposes; Tarik decides. She has no way to show him a diff over a phone
+// call, so she never applies one — and that is not a limitation to engineer
+// around, it is the rule that makes it safe to let her near his writing.
+//
+// One table serves both origins, so there is ONE review panel. A second review
+// UI for the voice path would be the same disagreement two brief stores would
+// have caused: two places that must always agree, and eventually will not.
+
+/** What is waiting in this document. */
+export const proposals = query({
+  args: { id: v.id("studioDocs") },
+  handler: async (ctx, { id }) => {
+    await requireUser(ctx);
+    return await ctx.db
+      .query("studioProposals")
+      .withIndex("by_doc_status", (q) => q.eq("docId", id).eq("status", "pending"))
+      .order("desc")
+      .take(20);
+  },
+});
+
+/** How many are waiting, for the index — without shipping the text of any. */
+export const pendingCounts = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireUser(ctx);
+    const pending = await ctx.db
+      .query("studioProposals")
+      .filter((q) => q.eq(q.field("status"), "pending"))
+      .collect();
+    const counts: Record<string, number> = {};
+    for (const p of pending) counts[p.docId] = (counts[p.docId] ?? 0) + 1;
+    return counts;
+  },
+});
+
+/**
+ * Take the rewrite.
+ *
+ * Refuses if that block no longer says what it said when the proposal was
+ * made. A proposal can sit for an hour, and in that hour the paragraph may have
+ * been rewritten by hand — applying anyway would delete the rewrite, and the
+ * screen would look entirely correct afterwards. This is the same failure the
+ * revision counter exists to prevent, one block down.
+ */
+export const acceptProposal = mutation({
+  args: { id: v.id("studioProposals") },
+  handler: async (ctx, { id }) => {
+    await requireUser(ctx);
+    const proposal = await ctx.db.get(id);
+    if (!proposal || proposal.status !== "pending") {
+      return { ok: false as const, reason: "gone" as const };
+    }
+    const doc = await ctx.db.get(proposal.docId);
+    if (!doc) return { ok: false as const, reason: "missing" as const };
+
+    const value = parse(doc.content);
+    const block = value[proposal.blockIndex];
+    const current = block ? blockText(block) : undefined;
+    if (current !== proposal.original) {
+      return { ok: false as const, reason: "moved" as const };
+    }
+
+    const next = replaceBlockText(value, proposal.blockIndex, proposal.proposed);
+    const revision = doc.revision + 1;
+    await ctx.db.patch(proposal.docId, {
+      content: JSON.stringify(next),
+      title: doc.title || deriveTitle(next),
+      revision,
+      updatedAt: Date.now(),
+    });
+    await ctx.db.patch(id, { status: "applied", resolvedAt: Date.now() });
+    return { ok: true as const, revision };
+  },
+});
+
+/** Leave it. The document is not touched, and the proposal stops asking. */
+export const rejectProposal = mutation({
+  args: { id: v.id("studioProposals") },
+  handler: async (ctx, { id }) => {
+    await requireUser(ctx);
+    const proposal = await ctx.db.get(id);
+    if (!proposal || proposal.status !== "pending") {
+      return { ok: false as const };
+    }
+    await ctx.db.patch(id, { status: "rejected", resolvedAt: Date.now() });
     return { ok: true as const };
   },
 });
