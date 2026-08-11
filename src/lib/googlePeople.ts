@@ -43,26 +43,39 @@ function proxyKey(): string {
 }
 
 /**
- * One proxied GET, with our own abort rather than the SDK's.
+ * One proxied call, with our own abort rather than the SDK's.
  *
  * Called directly rather than through @composio/core so the timeout is ours:
  * a library's own timeout option has silently failed to abort a stalled
  * request on this project before (rss-parser, which hung for minutes).
  */
-async function proxyGet(endpoint: string, connectedAccountId: string): Promise<Record<string, unknown>> {
+async function proxy(
+  method: "GET" | "POST" | "PATCH" | "DELETE",
+  endpoint: string,
+  connectedAccountId: string,
+  body?: unknown,
+): Promise<Record<string, unknown>> {
   const abort = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
   const res = await fetch("https://backend.composio.dev/api/v3.1/tools/execute/proxy", {
     method: "POST",
     headers: { "x-api-key": proxyKey(), "content-type": "application/json" },
-    body: JSON.stringify({ endpoint, method: "GET", connected_account_id: connectedAccountId }),
+    body: JSON.stringify({
+      endpoint,
+      method,
+      connected_account_id: connectedAccountId,
+      ...(body === undefined ? {} : { body }),
+    }),
     signal: abort,
   });
   if (!res.ok) {
     throw new Error(`Composio proxy ${res.status}: ${(await res.text()).slice(0, 200)}`);
   }
-  const body = (await res.json()) as { data?: Record<string, unknown> };
-  return body.data ?? (body as Record<string, unknown>);
+  const payload = (await res.json()) as { data?: Record<string, unknown> };
+  return payload.data ?? (payload as Record<string, unknown>);
 }
+
+const proxyGet = (endpoint: string, connectedAccountId: string) =>
+  proxy("GET", endpoint, connectedAccountId);
 
 /**
  * Every contact on the connected Google account.
@@ -119,25 +132,87 @@ function writeAccountId(): string {
  * there is no second shape to keep in step.
  */
 export async function createGoogleContact(person: unknown): Promise<PeopleRow> {
-  const abort = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
-  const res = await fetch("https://backend.composio.dev/api/v3.1/tools/execute/proxy", {
-    method: "POST",
-    headers: { "x-api-key": proxyKey(), "content-type": "application/json" },
-    body: JSON.stringify({
-      endpoint: "https://people.googleapis.com/v1/people:createContact",
-      method: "POST",
-      connected_account_id: writeAccountId(),
-      body: person,
-    }),
-    signal: abort,
-  });
-  if (!res.ok) {
-    throw new Error(`Composio proxy ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  }
-  const body = (await res.json()) as { data?: PeopleRow };
-  const row = body.data ?? (body as PeopleRow);
+  const row = await proxy(
+    "POST",
+    "https://people.googleapis.com/v1/people:createContact",
+    writeAccountId(),
+    person,
+  );
   if (!row?.resourceName) {
     throw new Error("Google accepted the write but returned no contact");
   }
   return row;
+}
+
+/**
+ * A resource name is a path segment, so it is checked rather than trusted.
+ *
+ * It reaches here from a Convex row that a provider wrote, and it is
+ * concatenated into a URL. `people/c123` and nothing else.
+ */
+function resourcePath(resourceName: string): string {
+  if (!/^people\/[A-Za-z0-9_-]+$/.test(resourceName)) {
+    throw new Error(`Not a Google contact id: ${resourceName.slice(0, 40)}`);
+  }
+  return resourceName;
+}
+
+/**
+ * Read one contact fresh from Google, through the WRITE connection.
+ *
+ * Two reasons it is not the sync's read path. Google's updateContact demands
+ * the `etag` of the version being replaced — that is its whole concurrency
+ * story, and a stale one is rejected rather than silently clobbering — so it
+ * has to come from a read taken moments before the write. And an etag is only
+ * meaningful against the grant that will do the writing.
+ */
+export async function getGoogleContact(resourceName: string): Promise<PeopleRow> {
+  const path = resourcePath(resourceName);
+  const row = await proxy(
+    "GET",
+    `https://people.googleapis.com/v1/${path}?personFields=${PERSON_FIELDS}`,
+    writeAccountId(),
+  );
+  if (!row?.etag) {
+    throw new Error("Google returned a contact with no etag, so it cannot be changed safely");
+  }
+  return row;
+}
+
+/**
+ * Overwrite the named fields of one contact.
+ *
+ * `updatePersonFields` is a replace mask: a field named there is replaced by
+ * what this body carries, and a field NOT named is untouched. Never widen it
+ * to cover a field the caller did not ask for — an omitted value under a named
+ * field clears it.
+ */
+export async function updateGoogleContact(
+  resourceName: string,
+  etag: string,
+  person: unknown,
+  updatePersonFields: string,
+): Promise<PeopleRow> {
+  const path = resourcePath(resourceName);
+  const mask = encodeURIComponent(updatePersonFields);
+  const row = await proxy(
+    "PATCH",
+    `https://people.googleapis.com/v1/${path}:updateContact?updatePersonFields=${mask}&personFields=${PERSON_FIELDS}`,
+    writeAccountId(),
+    { ...(person as Record<string, unknown>), etag },
+  );
+  if (!row?.resourceName) {
+    throw new Error("Google accepted the change but returned no contact");
+  }
+  return row;
+}
+
+/** Remove one contact from Google. Nothing brings it back. */
+export async function deleteGoogleContact(resourceName: string): Promise<void> {
+  const path = resourcePath(resourceName);
+  await proxy(
+    "DELETE",
+    `https://people.googleapis.com/v1/${path}:deleteContact`,
+    writeAccountId(),
+  );
 }

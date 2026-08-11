@@ -37,12 +37,20 @@ import { classifyOutcome, type ToolOutcome } from "@/lib/toolOutcome";
 import { uploadBuffer } from "@/lib/r2";
 import { escapeHtml, notifyOwner } from "@/lib/telegram";
 import { briefDigest } from "@/lib/briefDigest";
-import { createGoogleContact, fetchGooglePeople } from "@/lib/googlePeople";
+import {
+  createGoogleContact,
+  deleteGoogleContact,
+  fetchGooglePeople,
+  getGoogleContact,
+  updateGoogleContact,
+} from "@/lib/googlePeople";
 import {
   buildPersonPayload,
+  buildUpdatePayload,
   contactKey,
   googlePeopleToContacts,
   mergeContacts,
+  type CurrentPerson,
 } from "../../../../../convex/contactsLib";
 import {
   buildDocumentFromBrief,
@@ -189,6 +197,61 @@ export async function POST(
       { status: 500 },
     );
   }
+}
+
+/**
+ * The single contact a spoken name meant, or the sentence to say instead.
+ *
+ * One match or nothing. Zola never picks between two people here, for the same
+ * reason find_contact hands back every candidate: changing or deleting the
+ * wrong Marcus is not recoverable, and "which one?" costs one turn.
+ *
+ * Only Google rows can be acted on. A contact merged from iCloud has no
+ * writable id, and pretending otherwise would report success over an untouched
+ * address book.
+ */
+async function resolveOneContact(
+  secret: string,
+  query: string,
+  verb: string,
+): Promise<
+  | { ok: true; match: { key: string; name: string; phones: string[]; emails: string[] }; resourceName: string }
+  | { ok: false; result: ToolResult }
+> {
+  const { total, matches } = await convex.query(api.contacts.resolve, {
+    secret,
+    query,
+    limit: 5,
+  });
+  if (matches.length === 0) {
+    return { ok: false, result: { ok: true, message: `I don't have anyone matching ${query}.` } };
+  }
+  if (matches.length > 1) {
+    const list = matches
+      .map((m) => [m.name || "unnamed", m.phones[0], m.emails[0]].filter(Boolean).join(", "))
+      .join("; ");
+    return {
+      ok: false,
+      result: {
+        ok: true,
+        message: `${query} matches ${total} people: ${list}. Which one should I ${verb}?`,
+        data: { ambiguous: true, total, matches },
+      },
+    };
+  }
+
+  const match = matches[0];
+  const google = match.sources.find((s) => s.source === "google");
+  if (!google) {
+    return {
+      ok: false,
+      result: {
+        ok: false,
+        message: `${match.name || "That contact"} doesn't live in Google, so I can't change it.`,
+      },
+    };
+  }
+  return { ok: true, match, resourceName: google.sourceId };
 }
 
 async function runTool(
@@ -1386,6 +1449,104 @@ async function runTool(
         ok: true,
         message: `Saved ${saved?.name || "the contact"}${saved?.phones[0] ? ` at ${saved.phones[0]}` : ""} to your Google contacts.`,
         data: { name: saved?.name, phones: saved?.phones, emails: saved?.emails },
+      };
+    }
+
+    // Change someone already in the book. Write-through like add_contact:
+    // Google is changed first, the stored row is refreshed from Google's own
+    // response, and the next sync simply reads back what is already true.
+    //
+    // The dangerous part is not the write, it is the field mask. Google
+    // replaces a named field entirely, so a new number displaces every number
+    // the contact had. buildUpdatePayload reports what it displaced and the
+    // confirmation reads it back, because that is the only moment the old
+    // value still exists anywhere.
+    case "update_contact": {
+      const who = strArg(body.query, 120);
+      if (!who) return { ok: false, message: "Who should I change?" };
+
+      const found = await resolveOneContact(secret, who, "change");
+      if (!found.ok) return found.result;
+
+      // Fresh from Google, not from the stored row: updateContact rejects a
+      // stale etag, and the current values decide what counts as a change.
+      const current = await getGoogleContact(found.resourceName);
+      const built = buildUpdatePayload(current as unknown as CurrentPerson, {
+        name: strArg(body.name, 120),
+        phone: strArg(body.phone, 60),
+        email: strArg(body.email, 200),
+        org: strArg(body.org, 120),
+      });
+      if (!built.ok || !built.person || !built.updatePersonFields) {
+        return { ok: false, message: built.error ?? "I can't make that change." };
+      }
+
+      const updated = await updateGoogleContact(
+        found.resourceName,
+        current.etag as string,
+        built.person,
+        built.updatePersonFields,
+      );
+      const merged = mergeContacts(googlePeopleToContacts([updated]));
+      if (merged.length > 0) {
+        await convex.mutation(api.contacts.upsertBatch, {
+          secret,
+          syncedAt: Date.now(),
+          contacts: merged.map((c) => ({
+            key: contactKey(c),
+            name: c.name,
+            phones: c.phones,
+            emails: c.emails,
+            org: c.org,
+            photo: c.photo,
+            sources: c.sources,
+          })),
+        });
+      }
+
+      await convex.mutation(api.secondBrain.markToolHealthyFromTool, {
+        secret,
+        name: "update_contact",
+      });
+      const name = merged[0]?.name || found.match.name || "that contact";
+      // "was 414-555-1234" is the part that matters. Without it a replaced
+      // second number leaves no trace anywhere.
+      const said = (built.replaced ?? [])
+        .map((r) => `${r.field} is now ${r.to}${r.from.length ? ` (was ${r.from.join(" and ")})` : ""}`)
+        .join(", ");
+      return {
+        ok: true,
+        message: `Updated ${name}: ${said}.`,
+        data: { name, replaced: built.replaced },
+      };
+    }
+
+    // Remove someone from Google entirely. The one contact tool with nothing
+    // behind it: no sync restores a deleted contact and Google keeps no undo,
+    // which is why the persona has to confirm the full name out loud first and
+    // why resolveOneContact refuses to choose between two people.
+    case "delete_contact": {
+      const who = strArg(body.query, 120);
+      if (!who) return { ok: false, message: "Who should I delete?" };
+
+      const found = await resolveOneContact(secret, who, "delete");
+      if (!found.ok) return found.result;
+
+      await deleteGoogleContact(found.resourceName);
+      // Google first, then the local row. The other order would leave a
+      // contact deleted here and alive there, and tomorrow's sync would put it
+      // straight back with no sign anything happened.
+      await convex.mutation(api.contacts.removeByKey, { secret, key: found.match.key });
+
+      await convex.mutation(api.secondBrain.markToolHealthyFromTool, {
+        secret,
+        name: "delete_contact",
+      });
+      const name = found.match.name || "that contact";
+      return {
+        ok: true,
+        message: `Deleted ${name}${found.match.phones[0] ? ` (${found.match.phones[0]})` : ""} from your Google contacts.`,
+        data: { name },
       };
     }
 

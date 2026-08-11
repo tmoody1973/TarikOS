@@ -288,6 +288,50 @@ export const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
   },
   {
     type: "webhook" as const,
+    name: "update_contact",
+    description:
+      "Change a contact Tarik already has — their number, email, name or workplace. ALWAYS look them up first, read back exactly what is changing and what it replaces, and get an explicit yes BEFORE calling this: a new number REPLACES every number that contact had, and nothing undoes it. Send only the fields he is actually changing.",
+    responseTimeoutSecs: 20,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/update_contact`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["query"],
+        description: "Contact change",
+        properties: {
+          query: bodyProp("The name of the person to change, as Tarik said it"),
+          name: bodyProp("Their corrected full name, only if the name is what is changing"),
+          phone: bodyProp("Their new phone number, digits as spoken"),
+          email: bodyProp("Their new email address"),
+          org: bodyProp("Where they now work"),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "delete_contact",
+    description:
+      "Delete someone from Tarik's Google contacts for good. Read the full name back and get an explicit yes BEFORE calling this — nothing undoes it and no sync brings them back. If the name matches more than one person, ask which he means rather than deleting.",
+    responseTimeoutSecs: 20,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/delete_contact`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["query"],
+        description: "Contact deletion",
+        properties: {
+          query: bodyProp("The name of the person to delete, as Tarik said it"),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
     name: "browse",
     description:
       "Open a real browser and work through the live web step by step while Tarik watches and can take over. Use this when the answer needs digging rather than a search: comparing places or options, exploring a particular site, or following a trail across several pages. If one round of searching would settle it, use web_research instead. Reading and research only — never enter a password, never purchase. Findings become a brief. Sessions are signed out unless Tarik explicitly asks you to use his saved logins.",

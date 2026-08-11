@@ -450,18 +450,154 @@ export function buildPersonPayload(
     emailAddresses = [{ value: normalized }];
   }
 
-  // Everything after the first word is the family name: "Sarah A Chen" keeps
-  // its middle initial rather than losing it to a three-way split.
-  const [givenName, ...rest] = name.split(" ");
-  const names = [rest.length ? { givenName, familyName: rest.join(" ") } : { givenName }];
-
   return {
     ok: true,
     person: {
-      names,
+      names: splitName(name),
       ...(phoneNumbers ? { phoneNumbers } : {}),
       ...(emailAddresses ? { emailAddresses } : {}),
       ...(input.org?.trim() ? { organizations: [{ name: input.org.trim() }] } : {}),
     },
   };
+}
+
+/**
+ * A spoken name as Google's given/family pair.
+ *
+ * Everything after the first word is the family name: "Sarah A Chen" keeps its
+ * middle initial rather than losing it to a three-way split.
+ */
+function splitName(name: string): { givenName: string; familyName?: string }[] {
+  const [givenName, ...rest] = name.split(" ");
+  return [rest.length ? { givenName, familyName: rest.join(" ") } : { givenName }];
+}
+
+// ----------------------------------------------------------------- editing
+
+/** The subset of a Google person this can change. Absent means "leave it". */
+export type ContactChanges = {
+  name?: string;
+  phone?: string;
+  email?: string;
+  org?: string;
+};
+
+/** What Google returned for a contact — only the fields we ever touch. */
+export type CurrentPerson = {
+  names?: { givenName?: string; familyName?: string }[];
+  phoneNumbers?: { value?: string }[];
+  emailAddresses?: { value?: string }[];
+  organizations?: { name?: string }[];
+};
+
+/** One field this update overwrites, and what was standing there. */
+export type Replacement = { field: string; from: string[]; to: string };
+
+export type UpdatePayload = {
+  ok: boolean;
+  person?: Partial<PersonPayload>;
+  /** Google's field mask. ONLY the fields named here are touched. */
+  updatePersonFields?: string;
+  replaced?: Replacement[];
+  error?: string;
+};
+
+function currentName(person: CurrentPerson): string {
+  const n = person.names?.[0];
+  return [n?.givenName, n?.familyName].filter(Boolean).join(" ");
+}
+
+function values(list: { value?: string }[] | undefined): string[] {
+  return (list ?? []).map((v) => v.value ?? "").filter(Boolean);
+}
+
+/**
+ * A Google People updateContact body and its field mask, or a refusal.
+ *
+ * Stricter than the create path, because an edit can destroy something that
+ * was right. Two rules carry that:
+ *
+ * Every accepted change reports what it DISPLACED. Google's updateContact
+ * replaces a named field entirely — there is no "change the second number" —
+ * so a person with a mobile and a work line loses one the moment a new number
+ * is written, and this is the only place that fact is still visible.
+ *
+ * A change that changes nothing is refused rather than sent. Not because a
+ * no-op write is dangerous, but because "his number is already that" is the
+ * true answer and a cheerful "updated" hides it.
+ *
+ * ponytail: replaces the whole field. Per-value editing ("change his WORK
+ * number") when the book has people whose second number actually matters.
+ */
+export function buildUpdatePayload(
+  current: CurrentPerson,
+  changes: ContactChanges,
+): UpdatePayload {
+  const person: Partial<PersonPayload> = {};
+  const fields: string[] = [];
+  const replaced: Replacement[] = [];
+  // Distinct from "nothing changed": one means he asked for nothing, the other
+  // means what he asked for is already true.
+  let asked = false;
+
+  if (changes.name !== undefined) {
+    asked = true;
+    const name = changes.name.trim().replace(/\s+/g, " ");
+    if (!name) return { ok: false, error: "I need a name to change it to." };
+    const was = currentName(current);
+    if (name !== was) {
+      person.names = splitName(name);
+      fields.push("names");
+      replaced.push({ field: "name", from: was ? [was] : [], to: name });
+    }
+  }
+
+  if (changes.phone !== undefined) {
+    asked = true;
+    const normalized = normalizePhone(changes.phone);
+    if (!normalized) {
+      return { ok: false, error: `${changes.phone} isn't a number I can dial. Say it again?` };
+    }
+    const was = values(current.phoneNumbers);
+    if (!(was.length === 1 && was[0] === normalized)) {
+      person.phoneNumbers = [{ value: normalized }];
+      fields.push("phoneNumbers");
+      replaced.push({ field: "phone", from: was, to: normalized });
+    }
+  }
+
+  if (changes.email !== undefined) {
+    asked = true;
+    const normalized = normalizeEmail(changes.email);
+    if (!normalized) {
+      return { ok: false, error: `${changes.email} isn't an email address I can use.` };
+    }
+    const was = values(current.emailAddresses);
+    if (!(was.length === 1 && was[0] === normalized)) {
+      person.emailAddresses = [{ value: normalized }];
+      fields.push("emailAddresses");
+      replaced.push({ field: "email", from: was, to: normalized });
+    }
+  }
+
+  if (changes.org !== undefined) {
+    asked = true;
+    const org = changes.org.trim();
+    if (!org) return { ok: false, error: "I need a workplace to change it to." };
+    const was = (current.organizations ?? []).map((o) => o.name ?? "").filter(Boolean);
+    if (!(was.length === 1 && was[0] === org)) {
+      person.organizations = [{ name: org }];
+      fields.push("organizations");
+      replaced.push({ field: "org", from: was, to: org });
+    }
+  }
+
+  if (!asked) {
+    return { ok: false, error: "What should I change about them?" };
+  }
+  if (fields.length === 0) {
+    return { ok: false, error: "That's already what I have saved for them." };
+  }
+
+  return { ok: true, person, updatePersonFields: fields.join(","), replaced };
 }

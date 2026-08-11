@@ -178,6 +178,32 @@ export const TEXT_TOOLS: TextTool[] = [
     },
   },
   {
+    name: "update_contact",
+    description:
+      "Change a saved contact's number, email, name or workplace. Look them up first, read back exactly what will change and what it replaces, and get an explicit yes BEFORE calling this — a new number replaces every number they had. Only send the fields he is changing.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: str("The name of the person to change"),
+        name: str("Their corrected full name"),
+        phone: str("Their new phone number"),
+        email: str("Their new email address"),
+        org: str("Where they now work"),
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "delete_contact",
+    description:
+      "Delete someone from his Google contacts for good. Say the full name back and get an explicit yes BEFORE calling this — nothing undoes it and no sync brings them back. If the name is ambiguous, ask which one rather than deleting.",
+    input_schema: {
+      type: "object",
+      properties: { query: str("The name of the person to delete") },
+      required: ["query"],
+    },
+  },
+  {
     name: "get_telos",
     description:
       "Read his goals, mission, problems and challenges in full, with status and deadlines.",

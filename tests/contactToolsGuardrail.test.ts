@@ -156,3 +156,145 @@ test("a write that returns no contact is an error, not a silent success", () => 
   const people = CODE("src/lib/googlePeople.ts");
   assert.match(people, /returned no contact/);
 });
+
+// update_contact and delete_contact change or destroy something that was
+// already right. Nothing undoes either.
+
+test("editing and deleting are offered to Zola on voice and text", () => {
+  for (const name of ["update_contact", "delete_contact"]) {
+    assert.match(AGENT, new RegExp(name), `${name} missing from the voice agent`);
+    assert.match(TEXT, new RegExp(name), `${name} missing from the text tools`);
+  }
+});
+
+test("both descriptions demand a spoken confirmation first", () => {
+  for (const name of ["update_contact", "delete_contact"]) {
+    const def = AGENT.split(`name: "${name}"`)[1]?.split("apiSchema")[0] ?? "";
+    assert.match(def, /BEFORE calling this/, `${name} does not demand a confirmation`);
+  }
+});
+
+test("the edit description warns that a new number replaces the old ones", () => {
+  // The trap of Google's field mask, in the one place the model reads before
+  // it acts. Without this it will happily overwrite a work line it never saw.
+  const def = AGENT.split('name: "update_contact"')[1]?.split("apiSchema")[0] ?? "";
+  assert.match(def, /REPLACES every number/);
+});
+
+test("neither tool acts when the name matches more than one person", () => {
+  // The whole reason resolveOneContact exists. Deleting the wrong Marcus is
+  // not recoverable, and picking silently is how that happens.
+  const resolve = ROUTE.split("async function resolveOneContact")[1]?.split(
+    "\nasync function runTool",
+  )[0] ?? "";
+  assert.ok(resolve, "resolveOneContact missing");
+  assert.match(resolve, /matches\.length > 1/);
+  assert.match(resolve, /ambiguous: true/);
+  for (const name of ["update_contact", "delete_contact"]) {
+    const fn = arm(name);
+    assert.ok(fn, `${name} arm missing`);
+    assert.match(fn, /resolveOneContact/, `${name} must resolve before acting`);
+    assert.ok(
+      fn.indexOf("resolveOneContact") < fn.indexOf("Google"),
+      `${name} must resolve before it touches Google`,
+    );
+  }
+});
+
+test("a contact that does not live in Google is refused, not silently missed", () => {
+  // An iCloud-only row has no writable id. Reporting success over an address
+  // book that never changed is worse than saying no.
+  const resolve = ROUTE.split("async function resolveOneContact")[1]?.split(
+    "\nasync function runTool",
+  )[0] ?? "";
+  assert.match(resolve, /source === "google"/);
+  assert.match(resolve, /ok:\s*false/);
+});
+
+test("an edit reads the contact fresh from Google before writing it", () => {
+  // Two reasons, both load-bearing: updateContact rejects a stale etag, and
+  // the stored row cannot say what the change is about to displace.
+  const fn = arm("update_contact");
+  assert.match(fn, /getGoogleContact/);
+  assert.ok(
+    fn.indexOf("getGoogleContact") < fn.indexOf("updateGoogleContact"),
+    "the read must come before the write",
+  );
+  assert.match(fn, /current\.etag/);
+});
+
+test("a refused change can never reach Google", () => {
+  const fn = arm("update_contact");
+  assert.match(fn, /!built\.ok \|\| !built\.person/);
+  assert.ok(
+    fn.indexOf("built.person") < fn.indexOf("updateGoogleContact"),
+    "the validity check must come before the write",
+  );
+});
+
+test("the confirmation says what the change displaced", () => {
+  // The only moment the replaced value still exists anywhere.
+  const fn = arm("update_contact");
+  assert.match(fn, /built\.replaced/);
+  assert.match(fn, /was \$\{/);
+});
+
+test("the field mask is never widened past what was asked for", () => {
+  // A field named in updatePersonFields is replaced by this body — so a field
+  // named without a value in the body is CLEARED.
+  const fn = arm("update_contact");
+  assert.match(fn, /built\.updatePersonFields/);
+  // Naming a Google field HERE is the tell that the mask was hand-written.
+  // Checking for `updatePersonFields: "` alone did not catch it — the mask is
+  // a positional argument, and a hardcoded one survived that assertion.
+  assert.ok(
+    !/phoneNumbers|emailAddresses|organizations/.test(fn),
+    "the mask must come from the payload builder, never be spelled out here",
+  );
+});
+
+test("a delete hits Google before the local row is dropped", () => {
+  // The other order leaves the contact gone here and alive there, and
+  // tomorrow's sync puts it straight back with no sign anything happened.
+  const fn = arm("delete_contact");
+  assert.ok(
+    fn.indexOf("deleteGoogleContact") < fn.indexOf("removeByKey"),
+    "Google must be the one to go first",
+  );
+});
+
+test("a deleted contact stops being findable immediately", () => {
+  // Otherwise find_contact keeps offering someone he just deleted, until the
+  // next sync.
+  assert.match(arm("delete_contact"), /removeByKey/);
+});
+
+test("a resource name is checked before it is put in a URL", () => {
+  // It arrives from a provider row and is concatenated into a path.
+  const people = CODE("src/lib/googlePeople.ts");
+  assert.match(people, /function resourcePath/);
+  assert.match(people, /\^people\\\//);
+  for (const fn of ["getGoogleContact", "updateGoogleContact", "deleteGoogleContact"]) {
+    const body = people.split(`export async function ${fn}`)[1]?.split("\nexport ")[0] ?? "";
+    assert.ok(body, `${fn} missing`);
+    assert.match(body, /resourcePath\(/, `${fn} must not use a raw resource name`);
+  }
+});
+
+test("editing and deleting use the write connection, never the read one", () => {
+  const people = CODE("src/lib/googlePeople.ts");
+  for (const fn of ["getGoogleContact", "updateGoogleContact", "deleteGoogleContact"]) {
+    const body = people.split(`export async function ${fn}`)[1]?.split("\nexport ")[0] ?? "";
+    assert.match(body, /writeAccountId\(\)/, `${fn} must use the write connection`);
+    assert.ok(
+      !/connectedAccounts\("gmail"\)/.test(body),
+      `${fn} must not go through the Gmail connection`,
+    );
+  }
+});
+
+test("the new arms keep contact details out of the logs", () => {
+  for (const name of ["update_contact", "delete_contact"]) {
+    assert.ok(!/console\.(log|warn|error)/.test(arm(name)), `${name} must not log`);
+  }
+});

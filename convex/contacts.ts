@@ -113,6 +113,57 @@ export const search = query({
   },
 });
 
+/**
+ * The same ranking as `search`, but carrying the provider ids.
+ *
+ * Separate from `search` on purpose. `search` answers "who did he mean" and
+ * its result is read out loud, so it hands back only what can be spoken.
+ * Changing or deleting someone additionally needs the row to point at — a
+ * `people/c123` in the transcript is noise Zola has to carry and could
+ * hallucinate a variant of.
+ */
+export const resolve = query({
+  args: { secret: v.string(), query: v.string(), limit: v.optional(v.number()) },
+  handler: async (ctx, { secret, query: text, limit }) => {
+    checkToolSecret(secret);
+    const all = await ctx.db.query("contacts").collect();
+    const ranked = rankContacts(all, text, all.length);
+    return {
+      total: ranked.length,
+      matches: ranked.slice(0, limit ?? 5).map((m) => ({
+        key: m.key,
+        name: m.name,
+        phones: m.phones,
+        emails: m.emails,
+        org: m.org,
+        sources: m.sources,
+      })),
+    };
+  },
+});
+
+/**
+ * Drop one stored contact, after the provider has already dropped it.
+ *
+ * Local only — Google is the source of truth and this never calls it. Keeping
+ * the row until the next sync would leave find_contact offering someone who no
+ * longer exists, and a deletion he just asked for reappearing is worse than
+ * useless.
+ */
+export const removeByKey = mutation({
+  args: { secret: v.string(), key: v.string() },
+  handler: async (ctx, { secret, key }) => {
+    checkToolSecret(secret);
+    const row = await ctx.db
+      .query("contacts")
+      .withIndex("by_key", (q) => q.eq("key", key))
+      .unique();
+    if (!row) return { deleted: false };
+    await ctx.db.delete(row._id);
+    return { deleted: true };
+  },
+});
+
 /** Count and freshness, for the dashboard and for sync health. */
 export const stats = query({
   args: { secret: v.string() },
