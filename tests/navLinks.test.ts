@@ -1,13 +1,26 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { NAV_LINKS, isActiveRoute } from "../src/lib/navLinks.ts";
 
 test("every destination has a label, href and channel colour", () => {
-  assert.equal(NAV_LINKS.length, 9);
+  assert.equal(NAV_LINKS.length, 10);
   for (const l of NAV_LINKS) {
     assert.ok(l.label.length > 0, "label");
     assert.ok(l.href.startsWith("/"), `href: ${l.href}`);
     assert.match(l.color, /^bg-/, `colour: ${l.color}`);
+  }
+});
+
+test("every destination is reachable as a real page", () => {
+  // The rail and the spine both render from this list, so an entry with no
+  // page is a nav cap that goes nowhere on every device at once.
+  for (const l of NAV_LINKS) {
+    if (l.href === "/") continue;
+    assert.ok(
+      existsSync(`src/app${l.href}/page.tsx`),
+      `no page for nav entry ${l.label} (${l.href})`,
+    );
   }
 });
 

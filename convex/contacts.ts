@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { checkToolSecret } from "./secondBrain";
+import { requireUser } from "./dashboard";
 import { rankContacts } from "./contactsLib.ts";
 
 // Contacts storage and lookup (MOO-499).
@@ -94,11 +95,14 @@ export const search = query({
     // matching is fuzzy in ways an index cannot express — prefix-per-word,
     // normalized phone equality, org fallback.
     const all = await ctx.db.query("contacts").collect();
-    const matches = rankContacts(all, text, limit ?? 5);
+    // Ranked ONCE. Ranking a second time purely to count the total scored
+    // every contact twice on every keystroke of the contacts page.
+    const ranked = rankContacts(all, text, all.length);
+    const matches = ranked.slice(0, limit ?? 5);
     return {
       // The total is what lets Zola say "I have eight, here are five" rather
       // than presenting a truncated list as though it were complete.
-      total: rankContacts(all, text, all.length).length,
+      total: ranked.length,
       matches: matches.map((m) => ({
         name: m.name,
         phones: m.phones,
@@ -119,6 +123,58 @@ export const stats = query({
       total: all.length,
       reachable: all.filter((c) => c.phones.length || c.emails.length).length,
       lastSyncedAt: all.reduce((max, c) => Math.max(max, c.syncedAt), 0),
+    };
+  },
+});
+
+/**
+ * The book for the /contacts page. Clerk-gated, not secret-gated — this one
+ * has a browser session behind it, unlike the tool routes above.
+ *
+ * Returns rows for the client to search in memory rather than a query per
+ * keystroke: matching is fuzzy in ways an index cannot express, and a round
+ * trip per character on a 4,800-row scan is the slower answer anyway.
+ *
+ * Unreachable contacts are excluded by default. 4,033 of the 4,825 have
+ * neither a phone nor an email — addresses Gmail collected from people Tarik
+ * emailed once — so the unfiltered list is 84% noise and several times the
+ * payload on a phone.
+ */
+export const book = query({
+  args: { includeUnreachable: v.optional(v.boolean()) },
+  handler: async (ctx, { includeUnreachable }) => {
+    await requireUser(ctx);
+    const all = await ctx.db.query("contacts").collect();
+    const rows = includeUnreachable
+      ? all
+      : all.filter((c) => c.phones.length > 0 || c.emails.length > 0);
+    return {
+      total: all.length,
+      reachable: all.filter((c) => c.phones.length > 0 || c.emails.length > 0).length,
+      lastSyncedAt: all.reduce((max, c) => Math.max(max, c.syncedAt), 0),
+      contacts: rows
+        .map((c) => ({
+          key: c.key,
+          name: c.name,
+          phones: c.phones,
+          emails: c.emails,
+          org: c.org,
+          photo: c.photo,
+          sources: c.sources,
+        }))
+        // People with a phone first, then alphabetical.
+        //
+        // Having an email is not evidence of being a person: most of the
+        // "reachable" 792 are addresses Gmail collected from things he was
+        // mailed BY, and sorted by name alone the list opens on
+        // "02 Asana - Mobile App Tasks" and eight of its siblings. A phone
+        // number is the closest thing to a signal that someone is a human he
+        // deals with — nothing auto-collects one.
+        .sort(
+          (a, z) =>
+            Number(z.phones.length > 0) - Number(a.phones.length > 0) ||
+            (a.name || "\uffff").localeCompare(z.name || "\uffff"),
+        ),
     };
   },
 });
