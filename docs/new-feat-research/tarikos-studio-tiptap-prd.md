@@ -615,7 +615,7 @@ From Studio, user can:
 ### 15.3 Existing TarikOS entities
 
 - Conversations: insert as source cards or create a document from a selected conversation/excerpt.
-- Briefs: determine whether Studio v1 owns new briefs or links to existing Brief records. Avoid duplicate canonical Brief storage.
+- Briefs: **DECIDED 2026-08-11 — Studio links, it never owns.** The `briefs` table stays the single canonical brief store: the 07:00 workflow writes it, `/briefs` renders it, `get_brief` and `find_brief` read it, and `send_brief_digest` mails it to Telegram. A Studio document of `documentType: "brief"` is a *draft that references* a brief record, never a second one. Studio may propose a `createNativeArtifact` of type `brief`, which writes to that same table behind its own confirmation — it does not create a parallel representation. The reason is that "what's my brief" has exactly one true answer today, and a second store makes every reader — voice, dashboard, digest, search — pick between two. Studio bends to the existing shape; the shape does not fork for Studio.
 - Telos: link goals/objectives and create plan documents anchored to a goal.
 - Habits: link habit context, but do not make Studio responsible for habit tracking.
 - Mail: use references or extracted items with strict authorization; do not bulk expose mail content.
@@ -791,7 +791,8 @@ Tiptap content may be rendered server-side or client-side. Any HTML derived from
 
 - Read `AGENTS.md`, `PRODUCT.md`, `DESIGN.md`, `README.md`, `package.json`, existing Convex modules, auth flow, Anthropic integration, Briefs, Conversations, Telos, and Canvas implementation status.
 - Identify actual entity names/IDs and existing design-system conventions.
-- Decide whether Studio v1 introduces a new canonical Brief representation or adapts/links existing Briefs.
+- ~~Decide whether Studio v1 introduces a new canonical Brief representation or adapts/links existing Briefs.~~ Decided 2026-08-11: links. See §15.3.
+- Tiptap 3.29 (`@tiptap/react`, `starter-kit`, `extension-link`) is ALREADY a dependency and already in use in `src/app/mail/Compose.tsx`. Match its configuration and styling rather than introducing a second setup.
 - Confirm attachment and storage capabilities before enabling Tiptap Image.
 
 ### Phase 1: Persistent Tiptap documents
@@ -827,7 +828,7 @@ Tiptap content may be rendered server-side or client-side. Any HTML derived from
 
 ## 21. Open questions
 
-1. What exact existing TarikOS entity/schema represents a Brief? Should Studio documents with `documentType: "brief"` replace it, synchronize with it, or link to it?
+1. ~~What exact existing TarikOS entity/schema represents a Brief? Should Studio documents with `documentType: "brief"` replace it, synchronize with it, or link to it?~~ **ANSWERED 2026-08-11.** The `briefs` table in `convex/schema.ts` (title, workflowName, status, runStartedAt, sections[]). Studio **links** — see §15.3. Note the name collision: an unrelated `documents` table already exists for saved R2 files and their share links, so Studio's document table needs a different name.
 2. What exact user/auth table and ownership utility does TarikOS use in Convex?
 3. Is the current Anthropic layer capable of structured outputs/tool use and streaming? Reuse it where it fits; do not add a parallel agent framework.
 4. What package/version conventions exist for rich-text or UI components already? Avoid conflicting editors or CSS resets.

@@ -174,7 +174,6 @@ ask what *else* would make this assertion pass.
 - **MOO-529** — thirty seconds in airplane mode. Open since two handoffs ago.
 - **The Telnyx number** (+1 414 635 2386) serves `call_tarik` only and still
   costs money. Keep or drop.
-- **Studio §15.3** — unresolved since before yesterday.
 
 **Settled, do not raise again:**
 
