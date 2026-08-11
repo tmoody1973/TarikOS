@@ -1,211 +1,249 @@
-# Handoff — Tarik OS, 2026-08-11
+# Handoff — Tarik OS, 2026-08-11 (evening)
 
-Three threads today: **contacts** (MOO-499, the big one), the **morning brief on
-Telegram**, and two **eval harness** fixes that should have been one.
+Studio shipped today, from nothing to a full writing workspace in production.
+It works, and it is an **island**: everything works inside it and nothing
+outside knows it exists.
 
-Everything that fits in a ticket is in one. This carries what does not: the
-traps, the corrections, and the things that will mislead you if you trust a
-document over the code.
+Your job is to end that. Three things, in this order:
+
+1. **Make Studio documents findable** — by the source picker, and by `recall`.
+2. **Put them in the brain** — searchable, and embedded like everything else.
+3. **Give Zola Studio tools** — find, read, write, edit.
 
 **Read first**
-- [MOO-499](https://linear.app/moodyco/issue/MOO-499) — In Progress, three long comments recording every design decision and what disproved the first version of each.
-- The commit messages. They carry the reasoning; do not re-derive it.
+- The commit messages from today. They carry the reasoning; do not re-derive it.
+- `docs/decisions/2026-08-11-studio-editor.md` — why Plate, and three reversals.
 - The previous handoff's traps still apply. They are not repeated here.
 
 ## State
 
-`main` in sync with origin. **567/567 tests, tsc and eslint clean.** Everything
-below is deployed to production and exercised there, not just in tests.
+`main` in sync with origin. **690/690 tests, tsc clean, `next build` green.**
+Everything below is deployed to production and exercised there.
 
-Working tree carries only `.claude/`, which is not mine to decide on.
+Working tree carries only `.claude/`, which is not yours to decide on.
 
 ## What is live
 
-**Contacts.** Synced daily at 09:00 UTC. `find_contact`, `add_contact`,
-`update_contact` and `delete_contact` on voice and text; `/contacts` (PEOPLE,
-salmon) for search and cards — Tarik confirmed the mobile layout on their phone.
-Reads ride the **existing Gmail connection**; writes use a separate
-`googlecontacts` connection Tarik authorised on 2026-08-11.
+**Contacts.** `update_contact` and `delete_contact` joined `find_contact` and
+`add_contact`. Both resolve to exactly ONE person or refuse — two matches is a
+question, never a guess. An edit reports what it displaced, because Google's
+field mask replaces a whole field and that is the last moment the old value
+exists.
 
-Editing and deleting resolve to exactly ONE person or refuse — two matches is a
-question, never a guess.
+**Studio.** `/studio`, ochre channel. Five document types, autosave, versions,
+restore, references, Plate's full editor — floating toolbar, slash menu, drag
+handles, tables, lists, media — Zola on ⌘J, and DOCX export into `/documents`.
 
-**The count moved and I cannot explain it.** Google returned 4,934 raw rows on
-2026-08-11 morning and 4,375 that afternoon (4,825 → 4,370 merged); the sync
-mirrored it and dropped 486 local rows. Verified against Google directly, so it
-is not a paging failure: `fetchGooglePeople` itself returns 4,375. If it moves
-again by that much, look at Google before suspecting the sync.
+**Muted mail.** `/control` has a MUTED MAIL panel. Senders and subjects are
+excluded **inside the Gmail query**, so a muted message never spends one of the
+six slots the inbox asks for, never reaches the brief, and is never read out.
 
-**Morning brief on Telegram.** The 7am cron already built a brief and wrote it
-to the dashboard; it now also arrives on their phone. Off switch is the
-`send_brief_digest` toggle in the control panel — no deploy needed.
+## The three gaps, with what to build
 
-**Evals.** The noise bar is honest (per-row flips, not aggregate range) and a
-3-run pass takes 3 minutes instead of 35.
+Verified by grep at 16:31 today. All three are genuinely absent, not partial.
 
-## The lesson that matters more than any trap
+### 1. Studio documents are invisible to the picker
 
-**I spent three commits on the eval harness before Tarik asked "are we ever
-going to start working on new features."** They were right. Nothing in those three
-commits changed anything they could use. I picked the well-specified ticket over
-the valuable one, and then explained it twice when they had already said they did
-not care.
+`convex/studioSources.ts` `search` reads six tables — `briefs`, `thoughts`,
+`telosItems`, `contacts`, `documents`, `transcripts`. **`studioDocs` is not one
+of them.** So a Studio document cannot cite another Studio document, which is
+the most obvious thing a writing workspace should do.
 
-The measuring instrument is not the product. When they say "what's next," the
-answer should be something they can *feel*, not something that makes a number
-more accurate.
+Smallest correct fix: add a seventh block to that query, and `"studio"` to
+`REFERENCE_TYPES` in `convex/studioLib.ts`. Use `plainText(parse(d.content))`
+for the snippet — `studioLib` already exports it, and it walks nested blocks so
+list items are searchable.
 
-They also asked me to "pretend I'm a teenager." **Write plainly.** No jargon, no
-implementation nouns they never asked about.
+Watch: `rankSources` requires every query term to land somewhere. A document
+whose body is long will match on body and score 20, below a title match. That
+is correct; do not "fix" it.
 
-## Traps — every one of these cost real time today
+### 2. Nothing is in the brain
 
-- **The Convex `tools` table has NO last-success timestamp.** Only
-  name/description/enabled/health/lastError. Column 2 of `convex data tools` is
-  `_creationTime` — set once, never updated. I read it as "when did this last
-  run", concluded a working feature was broken, and spent twenty minutes on it.
-  **There is no server-side signal that a tool call succeeded.** To confirm a
-  notification actually arrived, ask Tarik.
-- **`npx convex codegen` generates types; it does not deploy.** A route calling
-  a new Convex function will typecheck and then fail at runtime with "Could not
-  find public function". `npx convex dev --once` for dev, `npx convex deploy`
+`recall` (`convex/secondBrain.ts:112`) searches exactly two tables via full-text
+indexes: `thoughts.search_cleaned` and `memories.search_content`. There is also
+a semantic path — `convex/memoryOps.ts:357` vector-searches `memories`,
+`thoughts`, `telosItems`, `journalEntries` on `by_embedding`, 1024 dims,
+`voyage-3.5-lite` (`convex/embeddingsLib.ts`).
+
+**Decide deliberately, and record it:** does a Studio document become a
+*thought*, or does `studioDocs` get its own search + vector index and join both
+recall paths?
+
+The second is almost certainly right, by the rule this project already follows
+twice today: one canonical store per kind of thing. Copying a document's text
+into `thoughts` creates a second copy that drifts the moment the document is
+edited — the same argument that made Studio LINK to briefs rather than own them,
+and that put exports in `documents` rather than a new table.
+
+So: add `.searchIndex` and `.vectorIndex` to `studioDocs`, extend `recall` and
+the semantic search to include it, and embed on save. **Embedding on every
+keystroke-debounced save is too often** — embed on version snapshot, or debounce
+hard, or only when the text changed by more than a trivial amount. Decide and
+write down why.
+
+### 3. Zola has no Studio tools at all
+
+```
+grep -c "studio" scripts/provision-agent.ts src/lib/textTools.ts  →  0, 0
+```
+
+Four tools, following the pattern in `AGENTS.md` (route case → `TOOLS` in
+`scripts/provision-agent.ts` → `node scripts/provision-agent.ts` → auto-registers
+in the `tools` table on first call):
+
+| Tool | Notes |
+|---|---|
+| `find_studio_document` | Model it on `find_contact`. Ambiguous → return every candidate and ask. |
+| `read_studio_document` | Returns `plainText`, not the JSON tree. The tree is noise she can only mangle. |
+| `write_studio_document` | Creates a new one from dictation. `templateFor(type)` then append. |
+| `propose_studio_edit` | The interesting one — see below. |
+
+**The voice editing design, already agreed with Tarik.** Voice has no cursor, so
+she cannot be told "this paragraph". She **quotes** it instead, the same way
+`find_contact` resolves a name:
+
+```
+You:   "Zola, tighten the paragraph about turnout in the plan."
+Zola → propose_studio_edit(document: "plan", quote: "turnout", instruction: "tighten")
+Server: finds the plan → finds ONE paragraph containing "turnout"
+        → asks Claude, grounded in the document's references
+        → writes a PENDING proposal. The document is untouched.
+Zola:  "I've suggested a tighter version. It's waiting in the document."
+```
+
+Two paragraphs match → she reads both back and asks which. **She never picks.**
+
+**She proposes; she never applies.** Voice cannot show a diff, so voice must not
+write. This is not a limitation to engineer around — it is the rule that makes
+it safe to let her near his writing. It is also the PRD's own rule.
+
+Because Convex is realtime, a proposal made by voice appears **in the open
+document while she is still talking**. If the document is closed it waits, and
+the index shows a count.
+
+Build a `studioProposals` table so the screen path and the voice path produce
+**the same object** and share one review panel. Today's ⌘J menu is Plate's own
+and applies directly; that is fine for now, but the voice path must not grow a
+second review UI.
+
+## Traps — each of these cost real time today
+
+- **`npx convex codegen` generates types; it does not deploy.** `studioSources`
+  typechecked clean and then failed at runtime with "Could not find public
+  function". The tell that distinguishes it: a **validator** error means the
+  function exists and your arguments are wrong; "could not find public function"
+  means you never pushed. `npx convex dev --once` for dev, `npx convex deploy`
   for prod.
-- **`convex logs` tails; `--history` does not replay.** If your code only logs
-  on failure, silence is evidence of success — but you cannot go back and look.
-- **Vercel sensitive env vars really cannot be pulled back.** `vercel env pull`
-  returns the literal string `"[SENSITIVE]"` for every one. Do not plan a
-  recovery around it.
-- **`.env.local` dropped lines again — third time.** It went 54 → 44 on one
-  hand-edit and took `TELEGRAM_BOT_TOKEN`, `TELEGRAM_OWNER_CHAT_ID`,
-  `SHARE_BASE_URL` and two `R2_*` vars with it. Check `wc -l` after any edit.
-- **The dev server dies between commands.** Check `lsof -ti tcp:3005`, and
-  identify a port by the process's working directory (`lsof -a -p <pid> -d cwd`),
-  never by the page title — 3000 is `pm-portfolio`.
-- **A screenshot is not a measurement.** The CALL button on `/contacts` looked
-  clipped; `document.documentElement.scrollWidth === window.innerWidth` proved
-  the page was fine and the capture was cropped.
-- **Chrome would not resize below ~1263px**, so I could not see the mobile
-  layout of `/contacts` myself. Tarik checked it on their phone on 2026-08-11
-  and it reads correctly — but the tool limit is real and will bite again. When
-  a layout cannot be seen, say so and ask them to look rather than reporting the
-  class contract in tests as if it were a look.
+- **`legacy-peer-deps` does not only relax peer CONFLICTS — it disables
+  automatic peer INSTALLATION.** An `.npmrc` with it silently removed all seven
+  of `@vercel/otel`'s OpenTelemetry peers and broke the build, in dev and on
+  Vercel. There is no `.npmrc` now. Do not add one.
+- **The shadcn installer prints instructions after the file list.** It said
+  "wrap your app with TooltipProvider"; that was skipped and the editor crashed
+  in production, because a Radix Tooltip outside its provider **throws** rather
+  than degrading.
+- **A shadcn registry component assumes shadcn's tokens exist.** Plate's
+  components reference seventeen this system never had. Undefined, they render
+  as nothing — a toolbar that is present and invisible. They are now mapped onto
+  LCARS in `globals.css`; a test enumerates them from `toolbar.tsx`.
+- **Screenshots are upscaled from the viewport.** A screenshot came back 1375px
+  wide for a 1300px viewport, so clicking at screenshot coordinates landed 40px
+  off and typing went into the wrong block. Measure with
+  `getBoundingClientRect()` and scale, or click by element ref.
+- **Grammarly is installed in Tarik's Chrome.** It attaches to contenteditable
+  and blocks synthetic typing entirely, and it injects attributes into `<body>`
+  that caused a hydration error until `suppressHydrationWarning` was added. When
+  editor automation "does nothing", suspect this before the code.
+- **Tarik's localhost Clerk session loops on sign-in.** He ships straight to
+  production; do not spend time on it. Verify in prod.
 
-## Composio, specifically
+## What the mutation sweep caught today
 
-- **Check `composio_managed_auth_schemes` before assuming a toolkit is usable.**
-  `GET /api/v3/toolkits/<slug>`. `gmail` and `googlecalendar` return
-  `["OAUTH2"]`; `googlecontacts` returns `[]`, meaning bring-your-own OAuth app.
-  Composio's dashboard only shows this by demanding a Client ID.
-- **The proxy is the escape hatch.**
-  `POST /api/v3.1/tools/execute/proxy` makes arbitrary API calls with
-  credentials Composio already holds — which is how Google contacts are read
-  through the Gmail connection, whose grant already carried `contacts.readonly`.
-  **Check what an existing connection was actually granted before building a
-  new one.**
-- **API keys are scoped per route.** The default key has read on
-  `auth_configs` and *none* on `proxy_execute`. `COMPOSIO_PROXY_API_KEY` is a
-  second key with proxy write.
+Twelve weak tests across seven files, and **reading found none of them**. The
+recurring shapes, all worth internalising:
 
-## Corrections I had to make out loud
+- **A regex whose wildcard matches the character under test.** The escaping
+  guard was `/-subject:"say .hi. now"/` — `.` matches a double quote, so the
+  unescaped output passed its own check.
+- **An ordering assertion with no existence check.** `indexOf` returns `-1` when
+  code is missing, and `-1 < anything` is true — so the guard passed most
+  confidently with the thing it guarded deleted.
+- **An ordering assertion against an import.** `uploadBuffer` appears in the
+  import line before everything, so comparing against the identifier rather than
+  the call was trivially true.
+- **A fixture whose incidental ordering does the work.** Ids that happened to
+  sort correctly meant the alphabetical tie-break produced the expected answer
+  with the real rule deleted. Name fixtures so only the rule under test can pass.
+- **A word that appears twice.** `/sourceId/` matched where the form is parsed,
+  so dropping it from the database call passed. `/pagehide/` matched the cleanup
+  `removeEventListener`, so never adding the listener passed.
+- **A cut length that lands on a boundary by luck.** The excerpt test used 30,
+  which happens to end a word, so removing word-boundary logic passed.
 
-Each of these I stated confidently and was wrong about.
-
-- **"The workflow path did not fire."** I was reading an immutable column. There
-  was no failure. Verify that your instrument can move before trusting it.
-- **"This is the Workspace admin block."** Google's "This app is blocked — tried
-  to access sensitive info" was the **OAuth consent screen Test users list**. I
-  had named that possibility, then talked myself past it because the wording
-  sounded like the admin restriction. Tarik fixed it in a minute.
-- **"No Google Cloud project needed."** True for reading, false for writing. I
-  generalised from the Gmail and Calendar configs being Composio-managed.
-- **"A labelled phone number is speculative."** I rejected any number containing
-  a letter. The real address book had `(414) 555-1234 (IDP)` — a valid number
-  thrown away. Trailing labels are stripped now.
-
-## What only real data found
-
-Three bugs that no fixture would have produced, all from running against the
-real 4,825:
-
-- **`contactKey` keyed on the first phone collapsed two people who share a
-  household landline** — the exact pair `compatibleNames` was written to keep
-  apart, colliding one layer further down. The first sync wrote 4,823 rows for
-  4,825 people. Key on the provider id.
-- **"Reachable" is not "a person."** 4,033 of 4,825 have no phone and no email,
-  and most of the remaining 792 are addresses Gmail collected from senders.
-  Sorted by name, `/contacts` opened on `02 Asana - Mobile App Tasks`. Nothing
-  auto-collects a phone number, so phone-holders sort first.
-- **The `(IDP)` number above.**
-
-**The mutation sweep found weak tests seven times today**, and reading found
-none of them. The recurring shape: a test that passes for a reason other than
-the one you intended. A single-word query cannot tell `every()` from `some()`.
-A uniform-filler truncation test passes a naive `.slice()`. Asserting a timing
-array's length and ordering passes when every row gets the same timing. Always
-ask what *else* would make this assertion pass.
+**Always ask what ELSE would make this assertion pass.**
 
 ## Known gaps, deliberately left
 
+**Studio**
+- No PDF. Plate's client-side PDF is `html2canvas` + `pdf-lib` — it screenshots
+  the editor, so there is no selectable text. Their own docs say it is "not for
+  paginated print layout". The good free path is a print stylesheet or headless
+  Chrome (Browserbase is already a dependency), and it works with any editor.
+- **No .docx has been opened in Word.** Everything around the export is tested;
+  the bytes come from Plate's exporter and were never verified.
+- Canvas integration is unbuilt because Canvas does not exist. `REFERENCE_TYPES`
+  deliberately omits it rather than offering a type nothing can resolve.
+- The AI is grounded in reference **labels**, not their contents. Zola is told
+  "this is grounded in the brief 'Turnout in the 4th'"; she cannot read it.
+- ⌘J applies directly through Plate's menu. There is no stored proposal yet —
+  see gap 3.
+
 **Contacts**
-- iCloud CardDAV sync unbuilt — needs an app-specific password.
-- No dashboard tile. `contacts.stats` exists; nothing renders it.
-- Full pull every sync rather than incremental `syncToken`. Deliberate: a full pull
-  cannot drift, and 20 seconds a day does not justify tombstone handling.
-- Create, edit and delete all ship for Google. No iCloud writes.
-- An edit REPLACES a whole field — Google's updateContact has no "change the
-  second number". `buildUpdatePayload` reports what it displaced and the spoken
-  confirmation reads it back, which is the only mitigation. Per-value editing
-  is unbuilt.
-
-**Evals**
-- The bar is ±4.0% on 107 labels. Nothing smaller is provable. **MOO-578**
-  (grow the label set) is the only thing that moves it; the band shrinks as
-  `1/n`.
-- A row came back `__truncated__` at `MAX_TOKENS=4096`, and `report()` only
-  inspects the last run, so a truncation in an earlier repeat goes unwarned.
-
-**Telegram**
-- Morning brief digest ships; the weekly review deliberately does not
-  (`DIGEST_WORKFLOWS` in `convex/workflowRunner.ts` is the whole policy).
+- Editing replaces a whole field. Per-value editing ("change his WORK number")
+  is unbuilt; the mitigation is that the confirmation names what it displaced.
+- iCloud sync still unbuilt; needs an app-specific password.
 
 ## Open, needs Tarik
 
 - **iCloud app-specific password**, if the iCloud half of MOO-499 is wanted.
-- **MOO-529** — thirty seconds in airplane mode. Open since two handoffs ago.
-- **The Telnyx number** (+1 414 635 2386) serves `call_tarik` only and still
-  costs money. Keep or drop.
+- **MOO-529** — thirty seconds in airplane mode. Open since three handoffs ago.
+- **The Telnyx number** (+1 414 635 2386) serves `call_tarik` only and costs
+  money. Raised today; he said keep it.
+- **Open an exported .docx in Word** and confirm it is not corrupt.
 
 **Settled, do not raise again:**
 
-- The Telegram bot token rotation. It was pasted into a transcript; rotation was
-  proposed and Tarik declined.
-- **`.env.local`.** It is missing ten variables the Next code reads, not the
-  five recorded earlier. All ten are present in Vercel production — verified by
-  name, not assumed. Tarik ships straight to production and does not run `next
-  dev`, so this breaks nothing they use, and Vercel will not return a sensitive
-  value to restore them with. Do not carry it as open, and verify features
-  against production instead: create a throwaway record, exercise the tool,
-  delete it.
+- The Telegram bot token rotation. Proposed, declined.
+- **`.env.local`.** Missing ten variables the Next code reads; all ten are in
+  Vercel production, verified by name. Tarik ships straight to production and
+  does not run `next dev`. Verify features against production instead: create a
+  throwaway record, exercise the tool, delete it.
+- **The Studio editor uses shadcn components.** DESIGN.md's "no component
+  library" rule carries one written, scoped exception, and a test guards its
+  boundary. Do not "correct" it back.
 
 ## Tarik
 
 They/them. Decisive — picks and moves, dislikes re-litigation. Answers very
 short, so put the recommended option first and make it unambiguous.
 
-Write in plain language. They asked for it explicitly today. Lead with what they can
-do now, not with what you built.
+**When they ask a one-word question, give a one-line answer.** Late today they
+said "hello" and got a status report, then said "what". Read the length of the
+question.
 
-They push back accurately. Every push today was right: the eval detour, the
-"didn't you do this via cli" that exposed I had over-complicated the auth story,
-and the test-users fix I had talked myself out of.
+Write in plain language. Lead with what they can do now.
+
+They push back accurately. Every push today was right: the reference-vs-link
+probe that was bureaucracy, the missing toolbar, "where is the editor", the
+Plate AI kit I had walked past, and BlockNote's export licence.
 
 ## Suggested skills
 
 - **`superpowers:test-driven-development`** — test → RED → implement → GREEN →
-  mutation sweep. Every guard that survived today went through it.
+  mutation sweep. Everything that landed cleanly today went through it.
 - **`superpowers:verification-before-completion`** — before any "done".
 - **`ponytail`** — active all day.
 
-Do **not** reach for the PAI ALGORITHM ceremony for a single scoped commit.
-Everything that landed cleanly today was TDD with a mutation sweep on top, and
-then run against real data — which is where the three real bugs came from.
+Add `npx next build` to what you run before saying done. `tsc` and the tests
+both passed while the build was broken, twice.
