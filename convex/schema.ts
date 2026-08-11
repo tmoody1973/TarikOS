@@ -379,6 +379,29 @@ export default defineSchema({
     archivedAt: v.optional(v.number()),
   }).index("by_updated", ["updatedAt"]),
 
+  // What a Studio document points at. A reference, never a copy: the type and
+  // the record's own id, plus a label snapshotted for display so a chip still
+  // reads as something after the record behind it is gone.
+  //
+  // `label` is a display snapshot and may drift from the record's current
+  // title. That is deliberate — resolving six tables to render a list would
+  // make every document open at the speed of its slowest source.
+  studioRefs: defineTable({
+    docId: v.id("studioDocs"),
+    sourceType: v.union(
+      v.literal("brief"),
+      v.literal("conversation"),
+      v.literal("telos"),
+      v.literal("contact"),
+      v.literal("thought"),
+      v.literal("document"),
+      v.literal("url"),
+    ),
+    sourceId: v.string(),
+    label: v.string(),
+    createdAt: v.number(),
+  }).index("by_doc", ["docId", "createdAt"]),
+
   // A snapshot of one document at one moment. Separate from the revision
   // counter and doing a different job: the counter prevents a lost update, the
   // snapshots are the way back to last Tuesday.

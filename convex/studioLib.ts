@@ -130,6 +130,111 @@ export function excerpt(value: StudioValue, max: number): string {
   return `${lastSpace > max * 0.5 ? cut.slice(0, lastSpace) : cut}…`;
 }
 
+// ----------------------------------------------------------- references
+
+/**
+ * What a Studio document can point at.
+ *
+ * References, not copies: a reference stores a type and the record's own id,
+ * so a brief written in March still knows where it came from even after the
+ * conversation behind it is gone.
+ *
+ * `canvas` is deliberately absent. Canvas does not exist yet — listing a type
+ * nothing can resolve would put a dead option in the picker.
+ */
+export const REFERENCE_TYPES = [
+  "brief",
+  "conversation",
+  "telos",
+  "contact",
+  "thought",
+  "document",
+  "url",
+] as const;
+
+export type ReferenceType = (typeof REFERENCE_TYPES)[number];
+
+/** One candidate from the source picker, whatever table it came from. */
+export type SourceHit = {
+  type: ReferenceType;
+  sourceId: string;
+  title: string;
+  snippet: string;
+  /** When the record was last touched. Breaks ties toward the newest. */
+  at: number;
+};
+
+/** Comparable form: lowercase, punctuation gone, spacing collapsed. */
+function comparable(text: string): string {
+  return (text ?? "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Score one candidate. 0 means it does not belong in the picker at all.
+ *
+ * A title match beats a body match outright, because a long transcript that
+ * says the word once would otherwise bury the brief actually called that.
+ */
+function scoreSource(hit: SourceHit, terms: string[]): number {
+  const title = comparable(hit.title);
+  const body = comparable(hit.snippet);
+
+  // Every spoken word has to land somewhere, or "turnout brief" matches a
+  // document called "Turnout" on one word out of two — the rule contact
+  // search learned from real data.
+  const haystack = `${title} ${body}`;
+  if (!terms.every((t) => haystack.includes(t))) return 0;
+
+  const joined = terms.join(" ");
+  if (title === joined) return 100;
+  if (terms.every((t) => title.includes(t))) return title.startsWith(joined) ? 70 : 60;
+  return 20;
+}
+
+/**
+ * The records worth offering for a query, best first.
+ *
+ * Non-matches are dropped rather than ranked low: a picker padded with weak
+ * candidates is how the wrong record gets attached. Ties break on recency and
+ * then on id, so the list cannot reorder under a stationary cursor between
+ * keystrokes.
+ */
+export function rankSources(hits: SourceHit[], query: string): SourceHit[] {
+  const terms = comparable(query).split(" ").filter(Boolean);
+  if (terms.length === 0) return [];
+
+  return hits
+    .map((hit) => ({ hit, score: scoreSource(hit, terms) }))
+    .filter((r) => r.score > 0)
+    .sort(
+      (a, z) =>
+        z.score - a.score ||
+        z.hit.at - a.hit.at ||
+        a.hit.sourceId.localeCompare(z.hit.sourceId),
+    )
+    .map((r) => r.hit);
+}
+
+/** How wide a chip may get before it breaks the line it sits in. */
+const LABEL_MAX = 80;
+
+/**
+ * What a reference reads as on the page.
+ *
+ * Half the referenceable records have no title at all — a thought and a
+ * transcript are just text — so an untitled one is named by its kind rather
+ * than left blank in the middle of a sentence.
+ */
+export function sourceLabel(source: { type: string; title: string }): string {
+  const title = (source.title ?? "").trim();
+  if (!title) return `Untitled ${source.type}`;
+  return title.length > LABEL_MAX ? `${title.slice(0, LABEL_MAX - 1)}…` : title;
+}
+
 function heading(text: string): StudioNode {
   return { type: "h2", children: [{ text }] };
 }

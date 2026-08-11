@@ -27,6 +27,7 @@ import type * as secondBrain from "../secondBrain.js";
 import type * as settingsLib from "../settingsLib.js";
 import type * as studio from "../studio.js";
 import type * as studioLib from "../studioLib.js";
+import type * as studioSources from "../studioSources.js";
 import type * as telegram from "../telegram.js";
 import type * as telegramLib from "../telegramLib.js";
 import type * as telos from "../telos.js";
@@ -63,6 +64,7 @@ declare const fullApi: ApiFromModules<{
   settingsLib: typeof settingsLib;
   studio: typeof studio;
   studioLib: typeof studioLib;
+  studioSources: typeof studioSources;
   telegram: typeof telegram;
   telegramLib: typeof telegramLib;
   telos: typeof telos;
