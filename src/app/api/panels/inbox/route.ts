@@ -1,10 +1,20 @@
 import { NextResponse } from "next/server";
+import { ConvexHttpClient } from "convex/browser";
 import { getRecentEmails, GoogleAuthError } from "@/lib/google";
+import { api } from "../../../../../convex/_generated/api";
+
+const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 // Inbox panel data. Clerk-gated by proxy.ts (not in the public-route list).
 export async function GET() {
   try {
-    const emails = await getRecentEmails();
+    // The same mute list the voice path uses, read with the tool secret
+    // because this runs on the server without a Convex identity. One list, or
+    // the panel and the brief would disagree about what counts as noise.
+    const mutes = await convex
+      .query(api.mailFilters.forTools, { secret: process.env.MORPHEUS_TOOL_SECRET! })
+      .catch(() => undefined);
+    const emails = await getRecentEmails(mutes ?? undefined);
     return NextResponse.json({ ok: true, emails });
   } catch (error) {
     const message =

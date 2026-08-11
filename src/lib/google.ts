@@ -1,3 +1,4 @@
+import { buildInboxQuery, type MuteList } from "../../convex/mailFilterLib.ts";
 import { Composio } from "@composio/core";
 import {
   CHICAGO_TZ,
@@ -270,12 +271,25 @@ export type EmailSummary = {
   threadId?: string;
 };
 
-export async function getRecentEmails(): Promise<EmailSummary[]> {
+/**
+ * Recent mail, with muted senders and subjects excluded AT GMAIL.
+ *
+ * The mute list is applied in the query rather than to the results on purpose.
+ * Six messages are requested per account; four of Tarik's were automated
+ * pipeline reports, so filtering afterwards would fix the panel and still let
+ * the noise eat the whole budget. Excluded in the query, a muted message never
+ * costs a slot, never reaches the brief, and is never read out by Zola.
+ *
+ * The list is passed in rather than read here: this file has no Convex client,
+ * and both callers already have one.
+ */
+export async function getRecentEmails(mutes?: MuteList): Promise<EmailSummary[]> {
   const accounts = await connectedAccounts("gmail");
+  const query = buildInboxQuery(mutes ?? { senders: [], subjects: [] });
   const perAccount = await Promise.all(
     accounts.map(async ({ id, label }) => {
       const data = await execute("GMAIL_FETCH_EMAILS", id, {
-        query: "in:inbox category:primary newer_than:1d",
+        query,
         max_results: 6,
       });
       type Msg = {

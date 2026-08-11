@@ -479,7 +479,11 @@ async function runTool(
       };
     }
     case "get_emails": {
-      const emails = await getRecentEmails();
+      // Muted senders and subjects are excluded at Gmail, so the robots never
+      // reach Zola or the morning brief — and never spend one of the six
+      // slots this asks for.
+      const mutes = await convex.query(api.mailFilters.forTools, { secret });
+      const emails = await getRecentEmails(mutes);
       await convex.mutation(api.secondBrain.pushBriefingCards, {
         secret,
         tool: "get_emails",

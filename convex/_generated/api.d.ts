@@ -22,6 +22,8 @@ import type * as habits from "../habits.js";
 import type * as habitsCron from "../habitsCron.js";
 import type * as habitsLib from "../habitsLib.js";
 import type * as journal from "../journal.js";
+import type * as mailFilterLib from "../mailFilterLib.js";
+import type * as mailFilters from "../mailFilters.js";
 import type * as memoryOps from "../memoryOps.js";
 import type * as secondBrain from "../secondBrain.js";
 import type * as settingsLib from "../settingsLib.js";
@@ -59,6 +61,8 @@ declare const fullApi: ApiFromModules<{
   habitsCron: typeof habitsCron;
   habitsLib: typeof habitsLib;
   journal: typeof journal;
+  mailFilterLib: typeof mailFilterLib;
+  mailFilters: typeof mailFilters;
   memoryOps: typeof memoryOps;
   secondBrain: typeof secondBrain;
   settingsLib: typeof settingsLib;

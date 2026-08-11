@@ -197,6 +197,90 @@ function ControlInner() {
       </Zone>
 
       <FeedsPanel />
+      <MutedMailPanel />
     </div>
+  );
+}
+
+/**
+ * Which senders and subjects never reach the inbox panel, the brief, or Zola.
+ *
+ * Editable here rather than in code because the noise changes: the next
+ * pipeline to start mailing Tarik should cost him a line, not a deploy.
+ *
+ * One rule per line, because that is what a person pastes. The list is applied
+ * inside the GMAIL QUERY, so a muted message never spends one of the six slots
+ * the inbox asks for — which is the actual problem. Four automated reports had
+ * been filling the panel and burning the whole budget.
+ */
+function MutedMailPanel() {
+  const mutes = useQuery(api.mailFilters.list);
+  const save = useMutation(api.mailFilters.save);
+  const [senders, setSenders] = useState<string | null>(null);
+  const [subjects, setSubjects] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  // Null until edited, so a live update does not overwrite what is being typed.
+  const senderText = senders ?? (mutes?.senders ?? []).join("\n");
+  const subjectText = subjects ?? (mutes?.subjects ?? []).join("\n");
+  const dirty = senders !== null || subjects !== null;
+
+  async function handleSave() {
+    await save({
+      senders: senderText.split("\n"),
+      subjects: subjectText.split("\n"),
+    });
+    setSenders(null);
+    setSubjects(null);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  return (
+    <Zone title="Muted mail" accent="bg-lavender">
+      {mutes === undefined ? (
+        <ZoneEmpty>syncing…</ZoneEmpty>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <p className="text-xs text-steel">
+            Hidden from the inbox panel, the morning brief and Zola. One per line.
+          </p>
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] uppercase tracking-[0.3em] text-steel">Senders</span>
+            <textarea
+              value={senderText}
+              onChange={(e) => setSenders(e.target.value)}
+              rows={4}
+              placeholder="noreply@tritondigital.com"
+              className="rounded-md border border-panel-edge bg-black/20 px-2.5 py-1.5 font-[family-name:var(--font-mono-hud)] text-xs text-foreground outline-none focus:border-lavender/60"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] uppercase tracking-[0.3em] text-steel">Subjects</span>
+            <textarea
+              value={subjectText}
+              onChange={(e) => setSubjects(e.target.value)}
+              rows={4}
+              placeholder={"OK Q1-HOURLY\nOK FUNRAISE"}
+              className="rounded-md border border-panel-edge bg-black/20 px-2.5 py-1.5 font-[family-name:var(--font-mono-hud)] text-xs text-foreground outline-none focus:border-lavender/60"
+            />
+          </label>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => void handleSave()}
+              disabled={!dirty}
+              className="rounded-md border border-panel-edge px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-steel transition-colors hover:border-lavender hover:text-lavender disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-cyan-hud motion-reduce:transition-none"
+            >
+              Save
+            </button>
+            {saved ? (
+              <span className="hud-glow text-[10px] uppercase tracking-[0.3em] text-cyan-hud">
+                Saved
+              </span>
+            ) : null}
+          </div>
+        </div>
+      )}
+    </Zone>
   );
 }
