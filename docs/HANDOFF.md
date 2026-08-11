@@ -1,143 +1,190 @@
-# Handoff — Tarik OS, evening of 2026-08-10
+# Handoff — Tarik OS, 2026-08-11
 
-Two threads finished today: **Phase 5, Documents & Sharing** (closed) and
-**text-message Zola**, which turned out not to be SMS.
+Three threads today: **contacts** (MOO-499, the big one), the **morning brief on
+Telegram**, and two **eval harness** fixes that should have been one.
 
 Everything that fits in a ticket is in one. This carries what does not: the
 traps, the corrections, and the things that will mislead you if you trust a
 document over the code.
 
 **Read first**
-- [MOO-497](https://linear.app/moodyco/issue/MOO-497) — re-scoped and closed. Why SMS was abandoned, what replaced it, and what is left open.
-- [Tarik OS Phase 5](https://linear.app/moodyco/project/tarik-os-phase-5-documents-and-sharing-47637633817c) — completed, with a closing comment recording both places the design was wrong.
+- [MOO-499](https://linear.app/moodyco/issue/MOO-499) — In Progress, three long comments recording every design decision and what disproved the first version of each.
 - The commit messages. They carry the reasoning; do not re-derive it.
+- The previous handoff's traps still apply. They are not repeated here.
 
 ## State
 
-`main` in sync with origin. **420/420 tests, tsc and eslint clean.** Everything
+`main` in sync with origin. **567/567 tests, tsc and eslint clean.** Everything
 below is deployed to production and exercised there, not just in tests.
 
 Working tree carries only `.claude/`, which is not mine to decide on.
 
 ## What is live
 
-**Documents & sharing.** Save a brief, research result or journal digest as
-markdown in R2 (`tarikos-documents`); share it behind a two-call server-side
-confirm gate; serve it at `/f/<slug>` with no Clerk session; revoke it; see
-every live link at `/documents`. Voice-verified — Tarik saved and shared a
-brief by speaking.
+**Contacts.** 4,825 from Google, synced daily at 09:00 UTC. `find_contact` and
+`add_contact` on voice and text; `/contacts` (PEOPLE, salmon) for search and
+cards. Reads ride the **existing Gmail connection**; writes use a separate
+`googlecontacts` connection Tarik authorised today.
 
-**Telegram.** [@tarikos_zola_bot](https://t.me/tarikos_zola_bot). Text her and
-she answers, with 14 tools, HTML formatting, and memory of the conversation. A
-stalled browse session messages him instead of phoning him. `send_telegram`
-lets voice-Zola put something in writing. Agent provisioned: **30 tools**.
+**Morning brief on Telegram.** The 7am cron already built a brief and wrote it
+to the dashboard; it now also arrives on their phone. Off switch is the
+`send_brief_digest` toggle in the control panel — no deploy needed.
+
+**Evals.** The noise bar is honest (per-row flips, not aggregate range) and a
+3-run pass takes 3 minutes instead of 35.
+
+## The lesson that matters more than any trap
+
+**I spent three commits on the eval harness before Tarik asked "are we ever
+going to start working on new features."** They were right. Nothing in those three
+commits changed anything they could use. I picked the well-specified ticket over
+the valuable one, and then explained it twice when they had already said they did
+not care.
+
+The measuring instrument is not the product. When they say "what's next," the
+answer should be something they can *feel*, not something that makes a number
+more accurate.
+
+They also asked me to "pretend I'm a teenager." **Write plainly.** No jargon, no
+implementation nouns they never asked about.
 
 ## Traps — every one of these cost real time today
 
-- **A bare `<` rejects an entire Telegram message.** Not the tag — the
-  character. "5 < 7" in ordinary prose returns `can't parse entities` and
-  Telegram sends *nothing*, so the bot appears to go silent at random. The send
-  path falls back to plain text; `escapeHtml` runs on anything the app did not
-  author. Verified by probing the live API because the formatting doc would not
-  fetch.
-- **Guard tests that name the guard in a comment pass while guarding nothing.**
-  This bit three times. `!/reportToolError/` matched my own comment explaining
-  what the guard prevented; a proxy-route test matched the word "document" in
-  the prose above the route list. Strip comments before scanning for code.
-- **Asserting that a check is *mentioned* is not asserting that it *guards*.**
-  `if (false && !secretMatches(...))` passed a test that checked ordering of
-  mentions. Pin the guard's shape, not its presence.
-- **Slicing a fixed number of characters reads into the next thing.** A missing
-  `x-morpheus-secret` header passed because the 2400-char window reached the
-  *following* tool's entry. Bound slices on real boundaries.
-- **`convex data` has no guaranteed order.** `tail -1` to get "the row I just
-  wrote" returned a different one, and minted a share link to an object that
-  had never been uploaded. Match on the key you wrote.
-- **Four of the weak assertions above were found by the mutation sweep and none
-  by reading.** The sweep is not ceremony. Baseline must be green first — a
-  mutation "caught" by an already-red suite is not evidence.
-- **`next build` cannot run while `next dev` holds the same `.next`.** And
-  before diagnosing a stale dev server, check `lsof` for which project owns the
-  port — port 3000 here is `pm-portfolio`, not this repo.
-- **Do not run `git stash` in a repo another session is working in.** I did,
-  swallowed Tarik's uncommitted work for a minute, and got it back only by
-  luck. Two dev servers on 3000/3001 were the tell, and I did not read it.
+- **The Convex `tools` table has NO last-success timestamp.** Only
+  name/description/enabled/health/lastError. Column 2 of `convex data tools` is
+  `_creationTime` — set once, never updated. I read it as "when did this last
+  run", concluded a working feature was broken, and spent twenty minutes on it.
+  **There is no server-side signal that a tool call succeeded.** To confirm a
+  notification actually arrived, ask Tarik.
+- **`npx convex codegen` generates types; it does not deploy.** A route calling
+  a new Convex function will typecheck and then fail at runtime with "Could not
+  find public function". `npx convex dev --once` for dev, `npx convex deploy`
+  for prod.
+- **`convex logs` tails; `--history` does not replay.** If your code only logs
+  on failure, silence is evidence of success — but you cannot go back and look.
+- **Vercel sensitive env vars really cannot be pulled back.** `vercel env pull`
+  returns the literal string `"[SENSITIVE]"` for every one. Do not plan a
+  recovery around it.
+- **`.env.local` dropped lines again — third time.** It went 54 → 44 on one
+  hand-edit and took `TELEGRAM_BOT_TOKEN`, `TELEGRAM_OWNER_CHAT_ID`,
+  `SHARE_BASE_URL` and two `R2_*` vars with it. Check `wc -l` after any edit.
+- **The dev server dies between commands.** Check `lsof -ti tcp:3005`, and
+  identify a port by the process's working directory (`lsof -a -p <pid> -d cwd`),
+  never by the page title — 3000 is `pm-portfolio`.
+- **A screenshot is not a measurement.** The CALL button on `/contacts` looked
+  clipped; `document.documentElement.scrollWidth === window.innerWidth` proved
+  the page was fine and the capture was cropped.
+- **Chrome would not resize below ~1263px**, so the mobile layout of
+  `/contacts` is unverified visually. It rests on the class contract in tests.
+
+## Composio, specifically
+
+- **Check `composio_managed_auth_schemes` before assuming a toolkit is usable.**
+  `GET /api/v3/toolkits/<slug>`. `gmail` and `googlecalendar` return
+  `["OAUTH2"]`; `googlecontacts` returns `[]`, meaning bring-your-own OAuth app.
+  Composio's dashboard only shows this by demanding a Client ID.
+- **The proxy is the escape hatch.**
+  `POST /api/v3.1/tools/execute/proxy` makes arbitrary API calls with
+  credentials Composio already holds — which is how Google contacts are read
+  through the Gmail connection, whose grant already carried `contacts.readonly`.
+  **Check what an existing connection was actually granted before building a
+  new one.**
+- **API keys are scoped per route.** The default key has read on
+  `auth_configs` and *none* on `proxy_execute`. `COMPOSIO_PROXY_API_KEY` is a
+  second key with proxy write.
 
 ## Corrections I had to make out loud
 
-Each of these I stated confidently and was wrong about. They are here because
-the pattern matters more than the facts.
+Each of these I stated confidently and was wrong about.
 
-- **"Nothing pending in Tarik OS."** I had looked at one Linear *project*. The
-  Tarik OS backlog is fifteen unlabelled issues in the Moodyco team — SMS,
-  contacts, Granola, Plane, Retool, restaurants, five habits bugs, five evals
-  issues. Closing a project does not empty a backlog.
-- **Port 3000 is "a stale build of this app."** It is a different project. I
-  inferred it from a page title instead of checking the process.
-- **"MOO-587 needs nothing from you."** Its own handoff lists it as blocked on
-  Clerk keys. (They were actually already in `.env.local` — that handoff was
-  stale too. Verify both directions.)
-- **"STOP/HELP is twenty minutes of code."** It is configuration; Telnyx
-  handles opt-out keywords on the messaging profile.
-- **A Cloudflare menu path, and a Telnyx one, both from memory.** Both wrong.
-  Fetch the docs or use the API.
+- **"The workflow path did not fire."** I was reading an immutable column. There
+  was no failure. Verify that your instrument can move before trusting it.
+- **"This is the Workspace admin block."** Google's "This app is blocked — tried
+  to access sensitive info" was the **OAuth consent screen Test users list**. I
+  had named that possibility, then talked myself past it because the wording
+  sounded like the admin restriction. Tarik fixed it in a minute.
+- **"No Google Cloud project needed."** True for reading, false for writing. I
+  generalised from the Gmail and Calendar configs being Composio-managed.
+- **"A labelled phone number is speculative."** I rejected any number containing
+  a letter. The real address book had `(414) 555-1234 (IDP)` — a valid number
+  thrown away. Trailing labels are stripped now.
+
+## What only real data found
+
+Three bugs that no fixture would have produced, all from running against the
+real 4,825:
+
+- **`contactKey` keyed on the first phone collapsed two people who share a
+  household landline** — the exact pair `compatibleNames` was written to keep
+  apart, colliding one layer further down. The first sync wrote 4,823 rows for
+  4,825 people. Key on the provider id.
+- **"Reachable" is not "a person."** 4,033 of 4,825 have no phone and no email,
+  and most of the remaining 792 are addresses Gmail collected from senders.
+  Sorted by name, `/contacts` opened on `02 Asana - Mobile App Tasks`. Nothing
+  auto-collects a phone number, so phone-holders sort first.
+- **The `(IDP)` number above.**
+
+**The mutation sweep found weak tests seven times today**, and reading found
+none of them. The recurring shape: a test that passes for a reason other than
+the one you intended. A single-word query cannot tell `every()` from `some()`.
+A uniform-filler truncation test passes a naive `.slice()`. Asserting a timing
+array's length and ordering passes when every row gets the same timing. Always
+ask what *else* would make this assertion pass.
 
 ## Known gaps, deliberately left
 
-**Documents**
-- `save_document` cannot pick a brief by id — "that one" always means the
-  newest ready brief, silently. `workflows.getBrief` needs a Clerk session, so
-  the tool route cannot reach it; it needs a secret-gated query.
-- No ad hoc saves: `sourceType` allows only `brief | research | journal_digest`.
-- No PDF rendering (design open question 1).
-- `/documents` hardcodes a 7-day expiry. The voice path honours
-  `expires_in_days` and the spoken word "never"; the page does not.
+**Contacts**
+- iCloud CardDAV sync unbuilt — needs an app-specific password.
+- No dashboard tile. `contacts.stats` exists; nothing renders it.
+- `/contacts` mobile layout never seen at 375px.
+- Full pull every sync rather than incremental `syncToken`. Deliberate: a full pull
+  cannot drift, and 20 seconds a day does not justify tombstone handling.
+- Writing is create-only. No edit, no delete, no iCloud writes.
+
+**Evals**
+- The bar is ±4.0% on 107 labels. Nothing smaller is provable. **MOO-578**
+  (grow the label set) is the only thing that moves it; the band shrinks as
+  `1/n`.
+- A row came back `__truncated__` at `MAX_TOKENS=4096`, and `report()` only
+  inspects the last run, so a truncation in an earlier repeat goes unwarned.
 
 **Telegram**
-- Nine tools withheld from text, reasons in `src/lib/textTools.ts`. The blocker
-  is a confirm ritual that works over a channel with no spoken yes.
-- Morning brief digest: designed, unbuilt. It needs an off switch — an unwanted
-  brief on a phone every morning is worse than none.
-- `textTools.ts` duplicates tool names because `provision-agent.ts` throws at
-  import without `TOOL_BASE_URL`. `tests/textTools.test.ts` is the only thing
-  stopping the two lists drifting.
+- Morning brief digest ships; the weekly review deliberately does not
+  (`DIGEST_WORKFLOWS` in `convex/workflowRunner.ts` is the whole policy).
 
 ## Open, needs Tarik
 
-- **MOO-529** — thirty seconds in airplane mode: reload, confirm the shell
-  returns with no stale data. Open since the last handoff.
-- ~~Rotate the Telegram bot token.~~ **Raised and declined by Tarik (2026-08-11).**
-  It was pasted into a session transcript; they have decided not to rotate.
-  Do not raise it again.
-- **The Telnyx number** (+1 414 635 2386) now serves `call_tarik` only and
-  still costs money. Keep or drop.
-- **Studio §15.3** — does Studio v1 own new briefs or link to existing Brief
-  records. Unresolved since before today; it will bite when Studio is scoped.
-- **`pm-portfolio` has uncommitted MOO-587 work** — Clerk auth, six new files,
-  tests passing, build diff clean. Tarik was working in that repo in another
-  session; nothing was committed.
+- **`.env.local` is missing five secrets** — local dev only, production is fine,
+  but R2 uploads, share links and Telegram sends will not work locally.
+- **iCloud app-specific password**, if the iCloud half of MOO-499 is wanted.
+- **`/contacts` on a phone** — the one check I could not run.
+- **MOO-529** — thirty seconds in airplane mode. Open since two handoffs ago.
+- **The Telnyx number** (+1 414 635 2386) serves `call_tarik` only and still
+  costs money. Keep or drop.
+- **Studio §15.3** — unresolved since before yesterday.
+
+**Settled, do not raise again:** the Telegram bot token rotation. It was pasted
+into a transcript; rotation was proposed and Tarik declined.
 
 ## Tarik
 
 They/them. Decisive — picks and moves, dislikes re-litigation. Answers very
 short, so put the recommended option first and make it unambiguous.
 
-**Two things I got wrong about working with them today.** They approved
-"MOO-587" without realising it was a different repository, because I mentioned
-that in one line and kept going — when an option changes project, say so
-loudly. And when they ask "what is next", check the whole backlog, not the
-thing you were just looking at.
+Write in plain language. They asked for it explicitly today. Lead with what they can
+do now, not with what you built.
 
-They push back accurately when something is off ("what do you mean nothing
-pending", "why did you switch"). Those pushes were right every time.
+They push back accurately. Every push today was right: the eval detour, the
+"didn't you do this via cli" that exposed I had over-complicated the auth story,
+and the test-users fix I had talked myself out of.
 
 ## Suggested skills
 
 - **`superpowers:test-driven-development`** — test → RED → implement → GREEN →
   mutation sweep. Every guard that survived today went through it.
 - **`superpowers:verification-before-completion`** — before any "done".
-- **`ponytail`** — active all day; the ladder is why `checkShareAccess` has one
-  implementation instead of two.
+- **`ponytail`** — active all day.
 
 Do **not** reach for the PAI ALGORITHM ceremony for a single scoped commit.
-Everything that landed cleanly today was TDD with a mutation sweep on top.
+Everything that landed cleanly today was TDD with a mutation sweep on top, and
+then run against real data — which is where the three real bugs came from.
