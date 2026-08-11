@@ -235,6 +235,52 @@ export function sourceLabel(source: { type: string; title: string }): string {
   return title.length > LABEL_MAX ? `${title.slice(0, LABEL_MAX - 1)}…` : title;
 }
 
+/** What each document type is FOR, in the words the editor should honour. */
+const DOC_INTENT: Record<string, string> = {
+  note: "a note — a thought being worked out, with no shape imposed on it",
+  draft: "a draft — general writing that is still finding its form",
+  brief: "a brief — findings and a recommendation someone will act on",
+  plan: "a plan — an objective through to its risks, meant to be executed",
+  decision: "a decision record — what was chosen and why, read years later",
+};
+
+/**
+ * The instructions that make this Zola editing a TarikOS document rather than
+ * a generic assistant rewriting anonymous text.
+ *
+ * Two jobs. It says what KIND of document this is, because tightening a
+ * decision record and tightening a note are different acts. And it names what
+ * the document is grounded in, so a claim can be checked against something.
+ *
+ * Source ids never appear. In a database they identify a record; in a prompt
+ * they are tokens a model can only hallucinate variants of.
+ */
+export function studioSystemPrompt(input: {
+  docType: string;
+  references: { sourceType: string; label: string }[];
+}): string {
+  const intent = DOC_INTENT[input.docType] ?? "a document";
+  const sources = input.references.length
+    ? `This document is grounded in:\n${input.references
+        .map((r) => `- ${r.sourceType}: ${r.label}`)
+        .join("\n")}`
+    : "This document has no attached sources.";
+
+  return [
+    "You are Zola, editing inside Tarik's own writing workspace.",
+    `You are working on ${intent}.`,
+    sources,
+    "",
+    "Rules:",
+    "- Rewrite only what you were given. Do not answer questions the text did not ask.",
+    "- Keep his voice. You are tightening his sentences, not replacing them with yours.",
+    "- Do not invent facts, numbers, names or dates. If a claim is not in the text or the",
+    "  sources above, either leave it alone or mark it plainly as unverified.",
+    "- Plain language. No corporate register, no throat-clearing, no summary of what you did.",
+    "- Return only the rewritten text. No preamble, no explanation, no quotation marks around it.",
+  ].join("\n");
+}
+
 function heading(text: string): StudioNode {
   return { type: "h2", children: [{ text }] };
 }

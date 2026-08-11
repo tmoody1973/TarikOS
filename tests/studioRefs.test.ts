@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  studioSystemPrompt,
   REFERENCE_TYPES,
   rankSources,
   sourceLabel,
@@ -131,4 +132,49 @@ test("a long label is cut so a chip cannot break the line it sits in", () => {
 
 test("a label keeps a normal title exactly as it is", () => {
   assert.equal(sourceLabel({ type: "brief", title: "Turnout in the 4th" }), "Turnout in the 4th");
+});
+
+// The system prompt that makes this Zola editing a TarikOS document, rather
+// than a generic assistant rewriting anonymous text.
+
+test("the prompt names the document's kind, so a brief is not edited like a note", () => {
+  const prompt = studioSystemPrompt({ docType: "brief", references: [] });
+  assert.match(prompt, /brief/i);
+});
+
+test("the prompt lists what the document is grounded in", () => {
+  const prompt = studioSystemPrompt({
+    docType: "brief",
+    references: [
+      { sourceType: "brief", label: "Turnout in the 4th" },
+      { sourceType: "contact", label: "Marcus Reed" },
+    ],
+  });
+  assert.match(prompt, /Turnout in the 4th/);
+  assert.match(prompt, /Marcus Reed/);
+});
+
+test("the prompt says plainly that unsourced claims must be marked", () => {
+  // The PRD's rule: an assertion that is not in the attached sources has to be
+  // labelled as draft language, not presented as a finding.
+  const prompt = studioSystemPrompt({ docType: "brief", references: [] });
+  assert.match(prompt, /invent|make up|unverified|do not/i);
+});
+
+test("a document with no sources says so rather than listing nothing", () => {
+  // A dangling "Sources:" header with an empty list reads to a model as
+  // "sources exist and you failed to see them".
+  const prompt = studioSystemPrompt({ docType: "note", references: [] });
+  assert.ok(!/Sources:\s*$/m.test(prompt), "empty source list left dangling");
+  assert.match(prompt, /no attached sources/i);
+});
+
+test("the prompt never carries a source's id, only what it is called", () => {
+  // Ids are for the database. In a prompt they are tokens the model can only
+  // hallucinate variants of.
+  const prompt = studioSystemPrompt({
+    docType: "brief",
+    references: [{ sourceType: "brief", label: "Turnout in the 4th" }],
+  });
+  assert.ok(!/[a-z0-9]{20,}/.test(prompt), "an id leaked into the prompt");
 });
