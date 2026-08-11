@@ -154,8 +154,6 @@ ask what *else* would make this assertion pass.
 
 ## Open, needs Tarik
 
-- **`.env.local` is missing five secrets** — local dev only, production is fine,
-  but R2 uploads, share links and Telegram sends will not work locally.
 - **iCloud app-specific password**, if the iCloud half of MOO-499 is wanted.
 - **`/contacts` on a phone** — the one check I could not run.
 - **MOO-529** — thirty seconds in airplane mode. Open since two handoffs ago.
@@ -163,8 +161,17 @@ ask what *else* would make this assertion pass.
   costs money. Keep or drop.
 - **Studio §15.3** — unresolved since before yesterday.
 
-**Settled, do not raise again:** the Telegram bot token rotation. It was pasted
-into a transcript; rotation was proposed and Tarik declined.
+**Settled, do not raise again:**
+
+- The Telegram bot token rotation. It was pasted into a transcript; rotation was
+  proposed and Tarik declined.
+- **`.env.local`.** It is missing ten variables the Next code reads, not the
+  five recorded earlier. All ten are present in Vercel production — verified by
+  name, not assumed. Tarik ships straight to production and does not run `next
+  dev`, so this breaks nothing they use, and Vercel will not return a sensitive
+  value to restore them with. Do not carry it as open, and verify features
+  against production instead: create a throwaway record, exercise the tool,
+  delete it.
 
 ## Tarik
 
