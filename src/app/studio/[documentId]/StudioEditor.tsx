@@ -194,7 +194,8 @@ export function StudioEditor({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <SaveState status={status} onAsk={openAsk} />
+      <Toolbar editor={editor} onAsk={openAsk} />
+      <SaveState status={status} />
       <div
         className="min-h-0 flex-1 overflow-y-auto"
         onKeyDown={(e) => {
@@ -240,7 +241,80 @@ export function StudioEditor({
  * takes salmon and the full width, because it is the one state where carrying
  * on typing costs something.
  */
-function SaveState({ status, onAsk }: { status: Status; onAsk: () => void }) {
+function Toolbar({
+  editor,
+  onAsk,
+}: {
+  editor: NonNullable<ReturnType<typeof usePlateEditor>>;
+  onAsk: () => void;
+}) {
+  const mark = (key: string) => () => {
+    editor.tf.focus();
+    editor.tf.toggleMark(key);
+  };
+  const block = (type: string) => () => {
+    editor.tf.focus();
+    // Toggling back to a paragraph when it is already that type, so one button
+    // both applies a heading and removes it.
+    const current = editor.api.block();
+    const isSame = (current?.[0] as { type?: string } | undefined)?.type === type;
+    editor.tf.setNodes({ type: isSame ? "p" : type });
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-1 border-b border-panel-edge px-3 py-1.5">
+      <TB onClick={block("h1")}>Title</TB>
+      <TB onClick={block("h2")}>H2</TB>
+      <TB onClick={block("h3")}>H3</TB>
+      <span className="mx-1 h-4 w-px bg-panel-edge" />
+      <TB onClick={mark("bold")}>
+        <span className="font-bold">B</span>
+      </TB>
+      <TB onClick={mark("italic")}>
+        <span className="italic">I</span>
+      </TB>
+      <TB onClick={mark("strikethrough")}>
+        <span className="line-through">S</span>
+      </TB>
+      <TB onClick={mark("code")}>Code</TB>
+      <span className="mx-1 h-4 w-px bg-panel-edge" />
+      <TB onClick={block("blockquote")}>Quote</TB>
+      <button
+        onClick={onAsk}
+        title="Select text, then ask Zola to change it"
+        className="lcars-cap-left ml-auto flex items-center gap-2 bg-ochre/80 px-3 py-1 transition-opacity hover:bg-ochre focus-visible:outline-2 focus-visible:outline-cyan-hud motion-reduce:transition-none"
+      >
+        <span className="font-[family-name:var(--font-display)] text-xs uppercase tracking-[0.15em] text-black">
+          Ask Zola
+        </span>
+        <span className="text-[10px] text-black/60">⌘J</span>
+      </button>
+    </div>
+  );
+}
+
+/**
+ * One quiet toolbar button.
+ *
+ * onMouseDown with preventDefault, never onClick: a click moves focus out of
+ * the editor first, which collapses the selection the button is meant to act
+ * on — so bolding selected text would bold nothing.
+ */
+function TB({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onMouseDown={(e) => {
+        e.preventDefault();
+        onClick();
+      }}
+      className="rounded-md border border-panel-edge px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-steel transition-colors hover:border-ochre hover:text-ochre focus-visible:outline-2 focus-visible:outline-cyan-hud motion-reduce:transition-none"
+    >
+      {children}
+    </button>
+  );
+}
+
+function SaveState({ status }: { status: Status }) {
   if (status.kind === "blocked") {
     return (
       <p

@@ -119,3 +119,24 @@ test("an untitled document is still findable in the index", () => {
   // derives titles.
   assert.match(INDEX, /Untitled/);
 });
+
+test("every editor control has a visible way to reach it", () => {
+  // Found by Tarik: Ask Zola was wired into the save bar's props and never
+  // rendered as a button, so the only way in was a shortcut that was not
+  // deployed. A keyboard-only affordance is an undiscoverable one.
+  assert.match(EDITOR, /function Toolbar\(/, "the editor needs a toolbar");
+  assert.match(EDITOR, /<Toolbar editor=\{editor\} onAsk=\{openAsk\}/);
+  assert.match(EDITOR, /Ask Zola/, "the AI panel needs a button, not only ⌘J");
+  for (const control of ["bold", "italic", "h1", "h2", "blockquote"]) {
+    assert.ok(EDITOR.includes(`"${control}"`), `no visible control for ${control}`);
+  }
+});
+
+test("a formatting button does not steal the selection it acts on", () => {
+  // onClick moves focus out of the editor before the handler runs, collapsing
+  // the selection — so bolding selected text would bold nothing.
+  const tb = EDITOR.slice(EDITOR.indexOf("function TB("));
+  assert.match(tb, /onMouseDown/);
+  assert.match(tb, /preventDefault\(\)/);
+  assert.ok(!/onClick=\{\(e\)/.test(tb), "must not use onClick for a selection action");
+});
