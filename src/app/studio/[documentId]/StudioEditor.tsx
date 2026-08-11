@@ -5,6 +5,7 @@ import { Plate, usePlateEditor } from "platejs/react";
 import type { Value } from "platejs";
 import { EditorKit } from "@/components/editor/editor-kit";
 import { Editor, EditorContainer } from "@/components/ui/editor";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import type { StudioValue } from "../../../../convex/studioLib";
 
 // The writing surface: Plate's full editor.
@@ -128,11 +129,19 @@ export function StudioEditor({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <SaveState status={status} />
-      <Plate editor={editor} onValueChange={onChange}>
-        <EditorContainer variant="default" className="min-h-0 flex-1">
-          <Editor key={documentId} variant="default" placeholder="Start writing…" />
-        </EditorContainer>
-      </Plate>
+      {/* Every toolbar button Plate renders is a Radix Tooltip, and a Tooltip
+          outside a provider THROWS rather than degrading — the editor crashed
+          in production with "Tooltip must be used within TooltipProvider".
+          Scoped here rather than to the root layout: only this surface uses
+          them, and the rest of the app should not carry a provider it never
+          asks for. */}
+      <TooltipProvider>
+        <Plate editor={editor} onValueChange={onChange}>
+          <EditorContainer variant="default" className="min-h-0 flex-1">
+            <Editor key={documentId} variant="default" placeholder="Start writing…" />
+          </EditorContainer>
+        </Plate>
+      </TooltipProvider>
     </div>
   );
 }

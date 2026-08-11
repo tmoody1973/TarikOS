@@ -188,3 +188,15 @@ test("the editor's chrome inherits LCARS rather than shadcn's greys", () => {
   assert.match(CSS, /--destructive: var\(--lcars-salmon\)/);
   assert.match(CSS, /--border: var\(--panel-edge\)/);
 });
+
+test("the editor's tooltips have a provider around them", () => {
+  // Radix throws when a Tooltip renders outside its provider — it does not
+  // degrade to no tooltip. Every Plate toolbar button is one, so the missing
+  // provider took the whole editor down in production. The shadcn installer
+  // said so in its output and I did not read past the file list.
+  assert.match(EDITOR, /TooltipProvider/);
+  assert.ok(
+    EDITOR.indexOf("<TooltipProvider>") < EDITOR.indexOf("<Plate editor"),
+    "the provider must wrap the editor, not sit beside it",
+  );
+});
