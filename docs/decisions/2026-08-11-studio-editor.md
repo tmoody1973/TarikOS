@@ -96,6 +96,29 @@ and both text formats are edges. Markdown and HTML are exports, not storage.
   print stylesheet or headless Chrome, both of which work with any editor and
   neither of which should have influenced this choice.
 
+## Addendum, same day: the AI kit
+
+Tarik found `@platejs/ai` after the decision was made, and it is a bigger part
+of the answer than the choice was made on.
+
+It is MIT, and it ships the mechanism the PRD spent its longest section
+specifying: an AI menu on ⌘+J, chat mode that shows a **review panel with a
+diff before anything is applied**, `tf.aiChat.accept()` to apply and a discard
+to reject, and three scopes — cursor, text selection, block selection. That is
+the propose → review → accept contract, already built and already tested by
+other people.
+
+It does not supply the parts that make it *this* system: grounding a request in
+the sources attached to the document, recording which run produced an accepted
+change, and refusing a proposal whose document moved while the model was
+thinking. Those stay hand-built, and they are the interesting half.
+
+Worth recording that this was found by the user reading a feature page, not by
+the evaluation. The evaluation optimised for licence and export and treated the
+AI menu as a bullet — which is how the most valuable property of the winning
+option went unnoticed until after the decision. **Choosing on two requirements
+means the third is unexamined even when the choice happens to be right.**
+
 ## What I got wrong on the way here
 
 Three recommendations, in order, each reversed by evidence:
