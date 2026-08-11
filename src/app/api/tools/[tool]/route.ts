@@ -36,6 +36,7 @@ import type { Id } from "../../../../../convex/_generated/dataModel";
 import { classifyOutcome, type ToolOutcome } from "@/lib/toolOutcome";
 import { uploadBuffer } from "@/lib/r2";
 import { escapeHtml, notifyOwner } from "@/lib/telegram";
+import { briefDigest } from "@/lib/briefDigest";
 import {
   buildDocumentFromBrief,
   buildDocumentFromJournal,
@@ -1269,6 +1270,50 @@ async function runTool(
         name: "send_telegram",
       });
       return { ok: true, message: "Sent it to your Telegram." };
+    }
+
+    // The morning brief, delivered instead of merely built. Called by the
+    // workflow runner when a brief finishes, NOT by Zola — it is deliberately
+    // absent from provision-agent.ts and textTools.ts, because nothing about
+    // it needs a model's judgement.
+    //
+    // The off switch is the one every tool already has: toggling
+    // send_brief_digest off in the control panel blocks this at the gate
+    // above, before any work, and the brief still builds for the dashboard.
+    case "send_brief_digest": {
+      const title = strArg(body.title, 200);
+      const sections = Array.isArray(body.sections) ? body.sections : [];
+      if (!title || sections.length === 0) {
+        return { ok: false, message: "Nothing to send — no brief sections." };
+      }
+
+      const text = briefDigest(
+        title,
+        sections.flatMap((raw) => {
+          const s = raw as Record<string, unknown>;
+          const heading = strArg(s.heading, 120);
+          const sectionBody = strArg(s.body, 4000);
+          return heading && sectionBody ? [{ heading, body: sectionBody }] : [];
+        }),
+      );
+      // Every section failed, so there is nothing worth waking him for. The
+      // dashboard still carries the errors.
+      if (!text) {
+        return { ok: true, message: "Brief had nothing worth sending." };
+      }
+
+      const sent = await notifyOwner(text);
+      if (!sent) {
+        return {
+          ok: false,
+          message: "Telegram isn't configured, so the brief wasn't sent.",
+        };
+      }
+      await convex.mutation(api.secondBrain.markToolHealthyFromTool, {
+        secret,
+        name: "send_brief_digest",
+      });
+      return { ok: true, message: "Sent the brief to your Telegram." };
     }
 
     default:

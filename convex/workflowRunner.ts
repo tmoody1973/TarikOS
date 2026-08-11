@@ -14,9 +14,18 @@ import {
 
 const WATCHDOG_MS = 5 * 60 * 1000;
 
+/**
+ * Briefs that get texted when they finish.
+ *
+ * Only the ones a cron builds while he is asleep. memory-consolidation is not
+ * a brief anyone reads, and the weekly review lands on a Sunday morning he is
+ * already at a screen for — add it here if that turns out to be wrong.
+ */
+const DIGEST_WORKFLOWS = new Set(["morning-brief"]);
+
 async function callTool(
   tool: string,
-  args: Record<string, string>,
+  args: Record<string, unknown>,
   secret: string,
 ): Promise<ToolResult> {
   try {
@@ -100,6 +109,7 @@ export const run = internalAction({
 
     let okCount = 0;
     let firstError: string | undefined;
+    const built: { heading: string; body: string }[] = [];
     for (const step of steps) {
       const result = await callTool(step.tool, step.args, secret);
       const { section, isError } = formatSection(step, result);
@@ -108,18 +118,40 @@ export const run = internalAction({
       } else {
         okCount++;
       }
+      built.push({ heading: section.heading, body: section.body });
       await ctx.runMutation(internal.workflows.appendSection, {
         briefId: id,
         section: { ...section, updatedAt: Date.now() },
       });
     }
 
+    const ready = okCount > 0;
     await ctx.runMutation(internal.workflows.finishBrief, {
       briefId: id,
-      status: okCount > 0 ? "ready" : "error",
+      status: ready ? "ready" : "error",
       workflowName: name,
       error: firstError,
     });
+
+    // Put the finished brief on his phone. Sections are passed straight from
+    // memory rather than read back, because every tool route is secret-gated
+    // and none of them can reach a Clerk-authenticated brief query.
+    //
+    // Only the brief a cron builds before he is awake — a brief he triggered
+    // himself from the Briefs page is already on the screen he triggered it
+    // from, and texting it back is noise. DIGEST_WORKFLOWS is the whole
+    // policy; the on/off switch is the send_brief_digest tool's own toggle in
+    // the control panel.
+    if (ready && DIGEST_WORKFLOWS.has(name)) {
+      // Deliberately not awaited into the run's success: a Telegram outage
+      // must not mark a brief that built fine as a failed run.
+      const digest = await callTool(
+        "send_brief_digest",
+        { title, sections: built },
+        secret,
+      );
+      if (!digest.ok) console.log(`brief digest not sent: ${digest.message}`);
+    }
   },
 });
 
