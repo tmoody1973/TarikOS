@@ -85,5 +85,17 @@ test("only labels are accepted from the client, never ids or bodies", () => {
 
 test("a malformed body is a 400, not a crash", () => {
   assert.match(ROUTE, /catch\s*\{\s*\n?\s*return new Response\("Bad request"/);
-  assert.match(ROUTE, /Array\.isArray\(body\.messages\)/);
+  // Both halves are required. An instruction with no text has nothing to work
+  // on; text with no instruction is a bill for a model deciding what you meant.
+  assert.match(ROUTE, /if \(!instruction \|\| !text\.trim\(\)\)/);
+  assert.match(ROUTE, /400/);
+});
+
+test("the response is plain streamed text, not a chat envelope", () => {
+  // The review panel is hand-rolled to the design system, so it wants words.
+  // Plate's AI kit is NOT a dependency of this project — its menu is shadcn,
+  // which DESIGN.md forbids, and the editor API supplies what was actually
+  // needed: read the selection, replace the selection.
+  assert.match(ROUTE, /toTextStreamResponse\(\)/);
+  assert.ok(!/@platejs\/ai/.test(ROUTE));
 });

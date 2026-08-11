@@ -1,4 +1,4 @@
-import { convertToModelMessages, createUIMessageStreamResponse, streamText, toUIMessageStream } from "ai";
+import { streamText } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { auth } from "@clerk/nextjs/server";
 import { studioSystemPrompt } from "../../../../../convex/studioLib";
@@ -33,7 +33,10 @@ const MAX_CONTEXT_CHARS = 60_000;
 export const maxDuration = 60;
 
 type Body = {
-  messages?: unknown;
+  /** What Zola is asked to do: "tighten this", "what am I assuming here". */
+  instruction?: unknown;
+  /** The words to work on — the selection, or the whole document. */
+  text?: unknown;
   docType?: unknown;
   references?: unknown;
 };
@@ -57,8 +60,10 @@ export async function POST(req: Request) {
     return new Response("Bad request", { status: 400 });
   }
 
-  if (!Array.isArray(body.messages) || body.messages.length === 0) {
-    return new Response("Nothing to do — no messages.", { status: 400 });
+  const instruction = typeof body.instruction === "string" ? body.instruction.trim() : "";
+  const text = typeof body.text === "string" ? body.text : "";
+  if (!instruction || !text.trim()) {
+    return new Response("Nothing to do — no instruction or no text.", { status: 400 });
   }
 
   // References arrive from the client rather than being re-read here. The page
@@ -79,13 +84,13 @@ export async function POST(req: Request) {
     references,
   });
 
-  const messages = await convertToModelMessages(body.messages as never);
-  // Bounded rather than trusted. The document is serialized client-side, and a
-  // very long one would otherwise decide how large a request this route makes.
-  const size = JSON.stringify(messages).length;
+  // Bounded rather than trusted. The text is serialized client-side, and a
+  // very long document would otherwise decide how large a request this route
+  // makes and how much it costs.
+  const size = instruction.length + text.length;
   if (size > MAX_CONTEXT_CHARS) {
     return new Response(
-      "This document is too long to edit in one pass — select a section instead.",
+      "That's too much text to edit in one pass — select a section instead.",
       { status: 413 },
     );
   }
@@ -93,14 +98,12 @@ export async function POST(req: Request) {
   const result = streamText({
     model: anthropic(MODEL),
     system,
-    messages,
+    prompt: `${instruction}\n\nThe text:\n\n${text}`,
     maxOutputTokens: MAX_OUTPUT_TOKENS,
   });
 
-  return createUIMessageStreamResponse({
-    stream: toUIMessageStream({
-      originalMessages: body.messages as never,
-      stream: result.stream,
-    }),
-  });
+  // Plain text, streamed. Not the UIMessage protocol Plate's own chat kit
+  // speaks: the review panel here is hand-rolled to the design system, so it
+  // wants words rather than a message envelope to unwrap.
+  return result.toTextStreamResponse();
 }

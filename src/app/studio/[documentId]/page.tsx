@@ -43,6 +43,7 @@ export default function StudioDocumentPage({
 function DocumentInner({ id }: { id: Id<"studioDocs"> }) {
   const router = useRouter();
   const doc = useQuery(api.studio.get, { id });
+  const refs = useQuery(api.studioSources.references, { docId: id });
   const [showHistory, setShowHistory] = useState(false);
 
   const saveDoc = useMutation(api.studio.save);
@@ -124,6 +125,14 @@ function DocumentInner({ id }: { id: Id<"studioDocs"> }) {
             documentId={id}
             initialContent={parseContent(doc.content)}
             initialRevision={doc.revision}
+            docType={doc.docType}
+            // What this document is grounded in, by name. Passed down rather
+            // than re-read in the AI route: the page already holds them, and a
+            // second read would make every request wait on a round trip.
+            references={(refs ?? []).map((r) => ({
+              sourceType: r.sourceType,
+              label: r.label,
+            }))}
             save={save}
           />
         </section>

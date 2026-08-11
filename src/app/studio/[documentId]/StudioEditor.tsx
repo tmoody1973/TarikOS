@@ -8,6 +8,7 @@ import {
   BasicMarksPlugin,
 } from "@platejs/basic-nodes/react";
 import type { StudioValue } from "../../../../convex/studioLib";
+import { AskZola } from "./AskZola";
 
 // The writing surface.
 //
@@ -82,14 +83,20 @@ export function StudioEditor({
   documentId,
   initialContent,
   initialRevision,
+  docType,
+  references,
   save,
 }: {
   documentId: string;
   initialContent: StudioValue;
   initialRevision: number;
+  docType: string;
+  references: { sourceType: string; label: string }[];
   save: (content: string, revision: number) => Promise<SaveOutcome>;
 }) {
   const [status, setStatus] = useState<Status>({ kind: "idle" });
+  const [asking, setAsking] = useState(false);
+  const [selected, setSelected] = useState("");
 
   // The revision lives in a ref, not in state: the autosave timer closes over
   // it, and a stale closure here is the exact bug the counter exists to catch.
@@ -177,10 +184,28 @@ export function StudioEditor({
     };
   }, [flush]);
 
+  // The selection is read when the panel OPENS, not while it is open. Clicking
+  // into the panel's own input moves the browser selection out of the document,
+  // so reading it live would hand Zola an empty string the moment you typed.
+  const openAsk = useCallback(() => {
+    setSelected(editor.selection ? editor.api.string(editor.selection) : "");
+    setAsking(true);
+  }, [editor]);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <SaveState status={status} />
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <SaveState status={status} onAsk={openAsk} />
+      <div
+        className="min-h-0 flex-1 overflow-y-auto"
+        onKeyDown={(e) => {
+          // ⌘J / Ctrl+J, the shortcut Plate's own AI menu uses, so the muscle
+          // memory transfers if that menu ever lands here.
+          if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") {
+            e.preventDefault();
+            openAsk();
+          }
+        }}
+      >
         <Plate editor={editor} onValueChange={onChange}>
           <PlateContent
             key={documentId}
@@ -190,6 +215,20 @@ export function StudioEditor({
           />
         </Plate>
       </div>
+      <AskZola
+        open={asking}
+        onClose={() => setAsking(false)}
+        selectedText={selected}
+        docType={docType}
+        references={references}
+        onAccept={(text) => {
+          // Replaces exactly what was selected, and nothing else. The editor's
+          // own transform, so it lands as a normal edit — undoable with ⌘Z and
+          // picked up by the autosave like anything typed.
+          editor.tf.focus();
+          editor.tf.insertText(text);
+        }}
+      />
     </div>
   );
 }
@@ -201,7 +240,7 @@ export function StudioEditor({
  * takes salmon and the full width, because it is the one state where carrying
  * on typing costs something.
  */
-function SaveState({ status }: { status: Status }) {
+function SaveState({ status, onAsk }: { status: Status; onAsk: () => void }) {
   if (status.kind === "blocked") {
     return (
       <p
