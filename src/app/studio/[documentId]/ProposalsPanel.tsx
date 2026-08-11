@@ -49,6 +49,10 @@ export function ProposalsPanel({ id }: { id: Id<"studioDocs"> }) {
             <div className="mt-2 flex gap-2">
               <button
                 onClick={async () => {
+                  // Cleared first: a refusal from a previous card stayed on
+                  // screen while a later action succeeded, so the panel read as
+                  // broken when it had just done what it was asked.
+                  setProblem(null);
                   const res = await accept({ id: p._id });
                   if (!res.ok) {
                     setProblem(
@@ -69,7 +73,10 @@ export function ProposalsPanel({ id }: { id: Id<"studioDocs"> }) {
                 Take it
               </button>
               <button
-                onClick={() => void reject({ id: p._id })}
+                onClick={() => {
+                  setProblem(null);
+                  void reject({ id: p._id });
+                }}
                 className="rounded-md border border-panel-edge px-2 py-0.5 text-[10px] uppercase tracking-[0.3em] text-steel transition-colors hover:border-salmon hover:text-salmon focus-visible:outline-2 focus-visible:outline-cyan-hud motion-reduce:transition-none"
               >
                 Leave it

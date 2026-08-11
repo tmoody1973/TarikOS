@@ -197,6 +197,23 @@ test("the review panel only ever shows what is still pending", () => {
   assert.match(list, /"pending"/, "the panel must filter to pending proposals");
 });
 
+test("deleting a document takes everything keyed to it", () => {
+  // Found by deleting one. A pending proposal outlives its document and keeps
+  // counting toward the index badge; a reference chip claims to point at
+  // something that is gone.
+  const remove = fnIn(STUDIO, "remove");
+  assert.ok(remove, "remove mutation missing");
+  for (const table of ["studioVersions", "studioRefs", "studioProposals"]) {
+    assert.ok(remove.includes(table), `remove leaves ${table} rows behind`);
+  }
+  // And each one is actually deleted, not merely queried.
+  assert.equal(
+    (remove.match(/ctx\.db\.delete\(/g) ?? []).length,
+    4,
+    "remove must delete versions, references, proposals and the document itself",
+  );
+});
+
 // ---------------------------------------------------------- the persona
 
 test("the persona tells her she proposes and never applies", () => {

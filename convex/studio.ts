@@ -189,7 +189,14 @@ export const setArchived = mutation({
   },
 });
 
-/** Permanent deletion, with the document's history. */
+/**
+ * Permanent deletion, with everything attached to the document.
+ *
+ * Its history, its references, and its proposals — all keyed by a docId that
+ * is about to stop existing. Rows left behind here are not merely untidy: a
+ * pending proposal still counts toward the index badge, and a reference chip
+ * still claims to point at something.
+ */
 export const remove = mutation({
   args: { id: v.id("studioDocs") },
   handler: async (ctx, { id }) => {
@@ -199,6 +206,19 @@ export const remove = mutation({
       .withIndex("by_doc", (q) => q.eq("docId", id))
       .collect();
     for (const version of versions) await ctx.db.delete(version._id);
+
+    const refs = await ctx.db
+      .query("studioRefs")
+      .withIndex("by_doc", (q) => q.eq("docId", id))
+      .collect();
+    for (const ref of refs) await ctx.db.delete(ref._id);
+
+    const attached = await ctx.db
+      .query("studioProposals")
+      .withIndex("by_doc_status", (q) => q.eq("docId", id))
+      .collect();
+    for (const proposal of attached) await ctx.db.delete(proposal._id);
+
     await ctx.db.delete(id);
     return { ok: true as const };
   },
