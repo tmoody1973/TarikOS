@@ -21,10 +21,20 @@ Working tree carries only `.claude/`, which is not mine to decide on.
 
 ## What is live
 
-**Contacts.** 4,825 from Google, synced daily at 09:00 UTC. `find_contact` and
-`add_contact` on voice and text; `/contacts` (PEOPLE, salmon) for search and
-cards. Reads ride the **existing Gmail connection**; writes use a separate
-`googlecontacts` connection Tarik authorised today.
+**Contacts.** Synced daily at 09:00 UTC. `find_contact`, `add_contact`,
+`update_contact` and `delete_contact` on voice and text; `/contacts` (PEOPLE,
+salmon) for search and cards — Tarik confirmed the mobile layout on their phone.
+Reads ride the **existing Gmail connection**; writes use a separate
+`googlecontacts` connection Tarik authorised on 2026-08-11.
+
+Editing and deleting resolve to exactly ONE person or refuse — two matches is a
+question, never a guess.
+
+**The count moved and I cannot explain it.** Google returned 4,934 raw rows on
+2026-08-11 morning and 4,375 that afternoon (4,825 → 4,370 merged); the sync
+mirrored it and dropped 486 local rows. Verified against Google directly, so it
+is not a paging failure: `fetchGooglePeople` itself returns 4,375. If it moves
+again by that much, look at Google before suspecting the sync.
 
 **Morning brief on Telegram.** The 7am cron already built a brief and wrote it
 to the dashboard; it now also arrives on their phone. Off switch is the
@@ -74,8 +84,11 @@ implementation nouns they never asked about.
 - **A screenshot is not a measurement.** The CALL button on `/contacts` looked
   clipped; `document.documentElement.scrollWidth === window.innerWidth` proved
   the page was fine and the capture was cropped.
-- **Chrome would not resize below ~1263px**, so the mobile layout of
-  `/contacts` is unverified visually. It rests on the class contract in tests.
+- **Chrome would not resize below ~1263px**, so I could not see the mobile
+  layout of `/contacts` myself. Tarik checked it on their phone on 2026-08-11
+  and it reads correctly — but the tool limit is real and will bite again. When
+  a layout cannot be seen, say so and ask them to look rather than reporting the
+  class contract in tests as if it were a look.
 
 ## Composio, specifically
 
@@ -136,10 +149,13 @@ ask what *else* would make this assertion pass.
 **Contacts**
 - iCloud CardDAV sync unbuilt — needs an app-specific password.
 - No dashboard tile. `contacts.stats` exists; nothing renders it.
-- `/contacts` mobile layout never seen at 375px.
 - Full pull every sync rather than incremental `syncToken`. Deliberate: a full pull
   cannot drift, and 20 seconds a day does not justify tombstone handling.
-- Writing is create-only. No edit, no delete, no iCloud writes.
+- Create, edit and delete all ship for Google. No iCloud writes.
+- An edit REPLACES a whole field — Google's updateContact has no "change the
+  second number". `buildUpdatePayload` reports what it displaced and the spoken
+  confirmation reads it back, which is the only mitigation. Per-value editing
+  is unbuilt.
 
 **Evals**
 - The bar is ±4.0% on 107 labels. Nothing smaller is provable. **MOO-578**
@@ -155,7 +171,6 @@ ask what *else* would make this assertion pass.
 ## Open, needs Tarik
 
 - **iCloud app-specific password**, if the iCloud half of MOO-499 is wanted.
-- **`/contacts` on a phone** — the one check I could not run.
 - **MOO-529** — thirty seconds in airplane mode. Open since two handoffs ago.
 - **The Telnyx number** (+1 414 635 2386) serves `call_tarik` only and still
   costs money. Keep or drop.
