@@ -348,4 +348,46 @@ export default defineSchema({
     used: v.boolean(),
     createdAt: v.number(),
   }).index("by_token", ["token"]),
+
+  // Studio. Deliberately NOT `documents` — that table is already taken by the
+  // saved R2 files behind /documents and their share links, and two things
+  // called a document in one schema is a bug waiting for a tired evening.
+  //
+  // `content` is the editor's own JSON tree, stringified. Not markdown, not
+  // HTML: those are lossy exports of this, and every editor evaluated says so
+  // in its own API. Stringified rather than a nested validator because the tree
+  // is arbitrary depth by nature, and a schema that has to describe every node
+  // type would have to change every time a new block ships.
+  studioDocs: defineTable({
+    title: v.string(),
+    docType: v.union(
+      v.literal("note"),
+      v.literal("draft"),
+      v.literal("brief"),
+      v.literal("plan"),
+      v.literal("decision"),
+    ),
+    content: v.string(),
+    // How many times this document has changed. Every write carries the
+    // revision it was written from, and one that no longer matches is refused.
+    // Without it a slow save silently overwrites a newer one — one person, one
+    // tab, no collaboration required — and the screen still shows the text that
+    // was just deleted.
+    revision: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    archivedAt: v.optional(v.number()),
+  }).index("by_updated", ["updatedAt"]),
+
+  // A snapshot of one document at one moment. Separate from the revision
+  // counter and doing a different job: the counter prevents a lost update, the
+  // snapshots are the way back to last Tuesday.
+  studioVersions: defineTable({
+    docId: v.id("studioDocs"),
+    title: v.string(),
+    content: v.string(),
+    revision: v.number(),
+    label: v.optional(v.string()),
+    createdAt: v.number(),
+  }).index("by_doc", ["docId", "createdAt"]),
 });
