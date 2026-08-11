@@ -69,11 +69,15 @@ earlier revision.
 - **An ordering assertion can read source position when it means evaluation
   order.** `rankSources(` is written BEFORE `archivedAt` on the page and
   evaluated AFTER it. The right assertion reaches inside the call's arguments.
-- **`git push` does not deploy this project.** There is no Vercel git
-  integration — deployments are `npx vercel deploy --prod`. A push that "worked"
-  leaves production on the old build while Convex is already on the new schema.
+- **`git push` did not deploy this project** for the whole of today, which left
+  production on the old build while Convex was already on the new schema. Fixed
+  at the end of the session: the GitHub repo is now connected
+  (`vercel git connect`), so **a push to `main` deploys the Next app**.
+  **Convex still does not.** See "Open, needs Tarik" — until the deploy key
+  exists, a schema change is still two steps, and the drift can now run the
+  other way: Vercel ahead of the schema.
 - **`npx vercel --prod` no longer deploys; it builds and tells you to promote.**
-  Use `npx vercel deploy --prod`.
+  Use `npx vercel deploy --prod` for a manual one.
 - **Every Clerk-gated Convex function is unreachable from `npx convex run`.**
   Anything you want to verify from a terminal has to be on the secret-gated
   surface, or verified in the browser.
@@ -106,6 +110,18 @@ earlier revision.
 
 ## Open, needs Tarik
 
+- **A Convex production deploy key**, to finish the deploy story. It can only be
+  minted from the Convex dashboard — Settings → Deploy Keys → Generate
+  Production Deploy Key (needs `deployment:deploy`). Then, in this repo:
+
+  ```
+  npx vercel env add CONVEX_DEPLOY_KEY production      # paste the key
+  ```
+
+  Once it exists, set the Vercel build command to
+  `npx convex deploy --cmd 'npm run build'` and a push ships the schema and the
+  app together, in that order. **Do not set the build command before the key
+  exists** — every deploy would fail at the Convex step.
 - **Two archived test documents** — "Zebra pledge drive test" and "Zebra
   ambiguity test". Archived, so they are out of the picker, out of recall and
   out of the embedder. There is no delete button in the UI (`studio.remove`
@@ -147,4 +163,6 @@ mid-verification, which is how the accept path got exercised at all.
 - **`superpowers:verification-before-completion`** — before any "done".
 - **`ponytail`** — active all day.
 
-`npx next build` before saying done, and `npx vercel deploy --prod` after.
+`npx next build` before saying done. Pushing `main` now deploys the app —
+but run `npx convex deploy` yourself whenever the schema or a Convex function
+changed, until the deploy key lands.
