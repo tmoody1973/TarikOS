@@ -243,6 +243,28 @@ export const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
   },
   {
     type: "webhook" as const,
+    name: "find_contact",
+    description:
+      "Look someone up in Tarik's contacts by name, phone number or email. Returns ranked matches. If more than one comes back the name is ambiguous — read the options out and ask which one he means, never pick for him.",
+    responseTimeoutSecs: 15,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/find_contact`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["query"],
+        description: "Contact lookup",
+        properties: {
+          query: bodyProp(
+            "The name Tarik said, or a phone number or email address to look up",
+          ),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
     name: "browse",
     description:
       "Open a real browser and work through the live web step by step while Tarik watches and can take over. Use this when the answer needs digging rather than a search: comparing places or options, exploring a particular site, or following a trail across several pages. If one round of searching would settle it, use web_research instead. Reading and research only — never enter a password, never purchase. Findings become a brief. Sessions are signed out unless Tarik explicitly asks you to use his saved logins.",

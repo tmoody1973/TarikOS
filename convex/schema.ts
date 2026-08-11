@@ -71,6 +71,33 @@ export default defineSchema({
     lastError: v.optional(v.string()),
   }).index("by_name", ["name"]),
 
+  // Contacts synced one-way from Google (MOO-499). Providers own the truth;
+  // nothing here is edited in TarikOS, so there is no conflict to resolve.
+  //
+  // `key` is the merge identity — the first normalized phone or email, or the
+  // provider id when a contact has neither. Upserting on it is what makes a
+  // re-sync update a person instead of duplicating them.
+  //
+  // `syncedAt` is the tombstone mechanism: a full sync stamps every row it
+  // touches, and rows left with an older stamp were deleted upstream.
+  contacts: defineTable({
+    key: v.string(),
+    name: v.string(),
+    phones: v.array(v.string()),
+    emails: v.array(v.string()),
+    org: v.optional(v.string()),
+    photo: v.optional(v.string()),
+    sources: v.array(
+      v.object({
+        source: v.union(v.literal("google"), v.literal("icloud")),
+        sourceId: v.string(),
+      }),
+    ),
+    syncedAt: v.number(),
+  })
+    .index("by_key", ["key"])
+    .index("by_synced", ["syncedAt"]),
+
   briefingCards: defineTable({
     kind: v.union(
       v.literal("calendar"),

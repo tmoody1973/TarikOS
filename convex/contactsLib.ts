@@ -368,3 +368,25 @@ export function rankContacts<T extends SearchableContact>(
     .slice(0, limit)
     .map((r) => r.contact);
 }
+
+/**
+ * The value an upsert matches on, so a re-sync updates a person rather than
+ * duplicating them.
+ *
+ * Provider id, NOT a phone or email. Keying on the first identity value looks
+ * tidier and is wrong: two people sharing a household landline are correctly
+ * kept apart as contacts by compatibleNames, and then collapse right back
+ * together at the key. Running the real book proved it — 4,825 merged contacts
+ * wrote 4,823 rows, and the two lost people were exactly that case.
+ *
+ * A provider id belongs to one person by construction, so every merged record
+ * gets a distinct key, and a provider reformatting a number leaves it
+ * untouched. Sources are sorted so a merge group spanning two providers picks
+ * the same id every run rather than depending on arrival order.
+ */
+export function contactKey(contact: MergedContact): string {
+  const ids = contact.sources
+    .map((s) => `${s.source}:${s.sourceId}`)
+    .sort();
+  return ids[0] ? `src:${ids[0]}` : "";
+}

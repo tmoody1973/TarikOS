@@ -38,4 +38,18 @@ crons.cron(
   {},
 );
 
+// Contact sync. 09:00 UTC = 4:00 AM CDT — before the morning brief, so a name
+// added yesterday resolves today, and well clear of the 12:00 brief run.
+//
+// A full pull rather than an incremental one: the observable requirement (edit
+// a contact, see it next sync) is met either way, and a full pull cannot
+// drift, whereas an incremental one has to apply tombstones correctly forever
+// or the store silently diverges from Google.
+crons.cron(
+  "contact sync",
+  "0 9 * * *",
+  internal.contactsCron.sync,
+  {},
+);
+
 export default crons;

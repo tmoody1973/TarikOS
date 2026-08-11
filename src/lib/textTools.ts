@@ -153,6 +153,16 @@ export const TEXT_TOOLS: TextTool[] = [
     },
   },
   {
+    name: "find_contact",
+    description:
+      "Look someone up in his contacts by name, phone number or email. If more than one match comes back the name is ambiguous — list them and ask which he means, never pick for him.",
+    input_schema: {
+      type: "object",
+      properties: { query: str("The name, number or email to look up") },
+      required: ["query"],
+    },
+  },
+  {
     name: "get_telos",
     description:
       "Read his goals, mission, problems and challenges in full, with status and deadlines.",

@@ -9,6 +9,9 @@
  */
 
 import type * as browserSessions from "../browserSessions.js";
+import type * as contacts from "../contacts.js";
+import type * as contactsCron from "../contactsCron.js";
+import type * as contactsLib from "../contactsLib.js";
 import type * as crons from "../crons.js";
 import type * as dashboard from "../dashboard.js";
 import type * as documents from "../documents.js";
@@ -40,6 +43,9 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   browserSessions: typeof browserSessions;
+  contacts: typeof contacts;
+  contactsCron: typeof contactsCron;
+  contactsLib: typeof contactsLib;
   crons: typeof crons;
   dashboard: typeof dashboard;
   documents: typeof documents;

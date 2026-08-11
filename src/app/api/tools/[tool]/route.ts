@@ -37,6 +37,12 @@ import { classifyOutcome, type ToolOutcome } from "@/lib/toolOutcome";
 import { uploadBuffer } from "@/lib/r2";
 import { escapeHtml, notifyOwner } from "@/lib/telegram";
 import { briefDigest } from "@/lib/briefDigest";
+import { fetchGooglePeople } from "@/lib/googlePeople";
+import {
+  contactKey,
+  googlePeopleToContacts,
+  mergeContacts,
+} from "../../../../../convex/contactsLib";
 import {
   buildDocumentFromBrief,
   buildDocumentFromJournal,
@@ -50,6 +56,12 @@ import { getTracer, safeSetAttrs, safeEndSpan } from "@/lib/tracing";
 // a shared secret header (configured on the agent), not a browser session —
 // proxy.ts exempts /api/tools from Clerk.
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+
+// Rows per contact mutation. A full sync is ~4,800 and one mutation cannot
+// carry them; this also bounds each stale-sweep pass.
+const CONTACT_BATCH = 200;
+// Enough passes to clear a full book, so a purge cannot silently half-finish.
+const MAX_SWEEP_PASSES = 40;
 
 // `outcome` is telemetry only — it records what actually happened, which `ok`
 // cannot, because several sites answer `ok: true` with a non-result so Zola
@@ -1270,6 +1282,108 @@ async function runTool(
         name: "send_telegram",
       });
       return { ok: true, message: "Sent it to your Telegram." };
+    }
+
+    // Name -> phone/email, so "what's Marcus's number" and eventually "text
+    // Marcus" resolve. The server ranks and Zola picks, the same shape as
+    // find_brief: every candidate for an ambiguous name comes back so she can
+    // ask which one, because silently choosing is how she texts the wrong
+    // person.
+    case "find_contact": {
+      const q = strArg(body.query, 120);
+      if (!q) return { ok: false, message: "Who are you looking for?" };
+
+      const { total, matches } = await convex.query(api.contacts.search, {
+        secret,
+        query: q,
+        limit: 5,
+      });
+      if (matches.length === 0) {
+        return { ok: true, message: `I don't have anyone matching ${q}.`, data: { matches: [] } };
+      }
+
+      const describe = (m: (typeof matches)[number]) =>
+        [m.name || "unnamed", m.phones[0], m.emails[0]].filter(Boolean).join(", ");
+      const message =
+        matches.length === 1
+          ? describe(matches[0])
+          : `I have ${total} matches for ${q}${total > matches.length ? `, here are ${matches.length}` : ""}: ${matches.map(describe).join("; ")}. Which one?`;
+
+      await convex.mutation(api.secondBrain.markToolHealthyFromTool, {
+        secret,
+        name: "find_contact",
+      });
+      return { ok: true, message, data: { total, matches } };
+    }
+
+    // Pull the address book from Google. Called by the cron, not by Zola —
+    // nothing about a scheduled sync needs a model's judgement.
+    //
+    // Reads through the EXISTING Gmail connection, which was already granted
+    // contacts.readonly: Composio's own googlecontacts toolkit reports no
+    // managed auth schemes, so using it would mean a bring-your-own OAuth app
+    // for access this connection already has.
+    case "sync_contacts": {
+      const startedAt = Date.now();
+      let rows: unknown[] = [];
+      try {
+        rows = await fetchGooglePeople();
+      } catch (error) {
+        return {
+          ok: false,
+          message: `Contact sync failed: ${error instanceof Error ? error.message : "unknown"}`,
+        };
+      }
+
+      const merged = mergeContacts(googlePeopleToContacts(rows as never));
+      // A provider returning nothing is far more likely to be an outage than a
+      // genuinely emptied address book, and sweepStale would delete everything.
+      if (merged.length === 0) {
+        return { ok: false, message: "Google returned no contacts; leaving the existing ones alone." };
+      }
+
+      let created = 0;
+      let updated = 0;
+      for (let i = 0; i < merged.length; i += CONTACT_BATCH) {
+        const batch = merged.slice(i, i + CONTACT_BATCH).map((c) => ({
+          key: contactKey(c),
+          name: c.name,
+          phones: c.phones,
+          emails: c.emails,
+          org: c.org,
+          photo: c.photo,
+          sources: c.sources,
+        }));
+        const res = await convex.mutation(api.contacts.upsertBatch, {
+          secret,
+          syncedAt: startedAt,
+          contacts: batch,
+        });
+        created += res.created;
+        updated += res.updated;
+      }
+
+      // Anything still carrying an older stamp was removed upstream.
+      let deleted = 0;
+      for (let pass = 0; pass < MAX_SWEEP_PASSES; pass++) {
+        const res = await convex.mutation(api.contacts.sweepStale, {
+          secret,
+          syncedAt: startedAt,
+          limit: CONTACT_BATCH,
+        });
+        deleted += res.deleted;
+        if (!res.more) break;
+      }
+
+      await convex.mutation(api.secondBrain.markToolHealthyFromTool, {
+        secret,
+        name: "sync_contacts",
+      });
+      return {
+        ok: true,
+        message: `Synced ${merged.length} contacts (${created} new, ${updated} updated, ${deleted} removed).`,
+        data: { total: merged.length, created, updated, deleted },
+      };
     }
 
     // The morning brief, delivered instead of merely built. Called by the

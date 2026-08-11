@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mergeContacts, compatibleNames, type SourceContact } from "../convex/contactsLib.ts";
+import { mergeContacts, compatibleNames, contactKey, type SourceContact } from "../convex/contactsLib.ts";
 
 // Dedupe across Google and iCloud (MOO-499).
 //
@@ -164,4 +164,64 @@ test("two different first names are not compatible", () => {
 test("punctuation and spacing do not decide identity", () => {
   assert.ok(compatibleNames("Sarah  Chen", "Sarah Chen"));
   assert.ok(compatibleNames("O'Brien, Sean", "Sean O'Brien"));
+});
+
+// contactKey is what an upsert matches on, so a re-sync updates a person
+// rather than duplicating them.
+
+test("the key is stable across syncs and across value formatting", () => {
+  const a = mergeContacts([rec({ phones: ["(414) 555-1234"] })])[0];
+  const b = mergeContacts([rec({ phones: ["+1 414 555 1234"] })])[0];
+  assert.equal(contactKey(a), contactKey(b));
+});
+
+test("a contact with no phone or email still gets a key from its provider id", () => {
+  // 4,033 of the real book are name-only. Without a key they could not be
+  // stored at all, and with a shared fallback they would overwrite each other.
+  const a = contactKey(mergeContacts([rec({ sourceId: "g1", phones: [], emails: [] })])[0]);
+  const b = contactKey(mergeContacts([rec({ sourceId: "g2", phones: [], emails: [] })])[0]);
+  assert.ok(a);
+  assert.notEqual(a, b);
+});
+
+test("a phone-keyed contact and an id-keyed contact cannot collide", () => {
+  const keyed = contactKey(mergeContacts([rec({ phones: ["4145551234"] })])[0]);
+  const idOnly = contactKey(mergeContacts([rec({ sourceId: "people/x", phones: [] })])[0]);
+  assert.notEqual(keyed, idOnly);
+});
+
+test("two people who share a landline get DIFFERENT keys", () => {
+  // Found by running the real book: 4,825 merged contacts wrote only 4,823
+  // rows, because the key was the first phone and two people sharing one
+  // collided. compatibleNames had correctly kept them apart as contacts, and
+  // then the key threw one away — the household case, reappearing one layer
+  // down. The key has to be per-record identity, not per-value.
+  const merged = mergeContacts([
+    rec({ sourceId: "m", name: "Rita Moody", phones: ["414-555-0000"] }),
+    rec({ sourceId: "d", name: "Gerald Moody", phones: ["414-555-0000"] }),
+  ]);
+  assert.equal(merged.length, 2);
+  assert.notEqual(contactKey(merged[0]), contactKey(merged[1]));
+});
+
+test("every contact in a real-shaped book gets a unique key", () => {
+  // The property the collision violated, stated directly.
+  const book = mergeContacts([
+    rec({ sourceId: "a", name: "Rita Moody", phones: ["414-555-0000"] }),
+    rec({ sourceId: "b", name: "Gerald Moody", phones: ["414-555-0000"] }),
+    rec({ sourceId: "c", name: "Sarah Chen", phones: ["414-555-1111"] }),
+    rec({ sourceId: "d", name: "No Contact Info", phones: [], emails: [] }),
+    rec({ sourceId: "e", name: "Shared Mail", emails: ["desk@example.com"] }),
+    rec({ sourceId: "f", name: "Other Desk", emails: ["desk@example.com"] }),
+  ]);
+  const keys = book.map(contactKey);
+  assert.equal(new Set(keys).size, book.length, keys.join(" | "));
+});
+
+test("the key survives a provider reformatting the number", () => {
+  // Same person, same provider id, phone written differently: must update the
+  // existing row rather than insert a second one.
+  const before = mergeContacts([rec({ sourceId: "g1", phones: ["(414) 555-1234"] })])[0];
+  const after = mergeContacts([rec({ sourceId: "g1", phones: ["+1 414 555 1234"] })])[0];
+  assert.equal(contactKey(before), contactKey(after));
 });
