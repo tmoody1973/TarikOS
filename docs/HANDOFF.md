@@ -71,13 +71,27 @@ earlier revision.
   evaluated AFTER it. The right assertion reaches inside the call's arguments.
 - **`git push` did not deploy this project** for the whole of today, which left
   production on the old build while Convex was already on the new schema. Fixed
-  at the end of the session: the GitHub repo is now connected
-  (`vercel git connect`), so **a push to `main` deploys the Next app**.
-  **Convex still does not.** See "Open, needs Tarik" — until the deploy key
-  exists, a schema change is still two steps, and the drift can now run the
-  other way: Vercel ahead of the schema.
+  at the end of the session, both halves: the repo is connected to Vercel, and
+  `vercel.json` runs `npx convex deploy --cmd 'npm run build'` in the production
+  build. **A push to `main` now ships the schema and the app together**, in that
+  order, and `tests/deployConfig.test.ts` guards it.
+  - `--cmd` rather than two commands is the load-bearing part: Convex deploys,
+    then the frontend builds with `NEXT_PUBLIC_CONVEX_URL` pointing at what was
+    just deployed.
+  - The `VERCEL_ENV` guard is the other one. `convex deploy` targets whatever
+    deployment the KEY belongs to, branch be damned, and `CONVEX_DEPLOY_KEY` is
+    a production key — so without the guard any preview build would overwrite
+    the production schema. Previews build the app only.
 - **`npx vercel --prod` no longer deploys; it builds and tells you to promote.**
   Use `npx vercel deploy --prod` for a manual one.
+- **A Convex deploy key pasted into `vercel env add` can land malformed and the
+  error does not say so.** The build said "set CONVEX_DEPLOY_KEY to a new key",
+  which reads like the key is the wrong TYPE. It was the right type; the stored
+  bytes were wrong. The way to tell them apart: run the key against a read —
+  `CONVEX_DEPLOY_KEY=… npx convex env list` — and a *permission* error
+  ("you do not have permission … deployment:env:view") proves the key is valid
+  and correctly scoped. Re-added by piping from `.env.local` rather than
+  pasting.
 - **Every Clerk-gated Convex function is unreachable from `npx convex run`.**
   Anything you want to verify from a terminal has to be on the secret-gated
   surface, or verified in the browser.
@@ -110,18 +124,6 @@ earlier revision.
 
 ## Open, needs Tarik
 
-- **A Convex production deploy key**, to finish the deploy story. It can only be
-  minted from the Convex dashboard — Settings → Deploy Keys → Generate
-  Production Deploy Key (needs `deployment:deploy`). Then, in this repo:
-
-  ```
-  npx vercel env add CONVEX_DEPLOY_KEY production      # paste the key
-  ```
-
-  Once it exists, set the Vercel build command to
-  `npx convex deploy --cmd 'npm run build'` and a push ships the schema and the
-  app together, in that order. **Do not set the build command before the key
-  exists** — every deploy would fail at the Convex step.
 - **Two archived test documents** — "Zebra pledge drive test" and "Zebra
   ambiguity test". Archived, so they are out of the picker, out of recall and
   out of the embedder. There is no delete button in the UI (`studio.remove`
@@ -163,6 +165,5 @@ mid-verification, which is how the accept path got exercised at all.
 - **`superpowers:verification-before-completion`** — before any "done".
 - **`ponytail`** — active all day.
 
-`npx next build` before saying done. Pushing `main` now deploys the app —
-but run `npx convex deploy` yourself whenever the schema or a Convex function
-changed, until the deploy key lands.
+`npx next build` before saying done. Pushing `main` deploys everything —
+schema then app — so a green local build is the last gate before it is live.
