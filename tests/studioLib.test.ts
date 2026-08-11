@@ -83,6 +83,30 @@ test("leading empty blocks are skipped when deriving a title", () => {
   assert.equal(deriveTitle(started), "started in the body");
 });
 
+test("a template's section heading is never mistaken for the title", () => {
+  // Found by using it. The brief template's first line with words in it is
+  // "Summary", so every brief in the index was called Summary — five documents
+  // that look identical in the one place they have to be told apart.
+  const brief = templateFor("brief");
+  assert.equal(deriveTitle(brief), "", "an untouched template has no title yet");
+
+  const written: StudioValue = [
+    { type: "h1", children: [{ text: "" }] },
+    { type: "h2", children: [{ text: "Summary" }] },
+    { type: "p", children: [{ text: "Turnout held up against the early numbers." }] },
+  ];
+  assert.equal(deriveTitle(written), "Turnout held up against the early numbers.");
+});
+
+test("a typed h1 beats the body it sits above", () => {
+  const titled: StudioValue = [
+    { type: "h1", children: [{ text: "Turnout in the 4th" }] },
+    { type: "h2", children: [{ text: "Summary" }] },
+    { type: "p", children: [{ text: "the body" }] },
+  ];
+  assert.equal(deriveTitle(titled), "Turnout in the 4th");
+});
+
 test("a document with no words has no derived title", () => {
   assert.equal(deriveTitle([{ type: "p", children: [{ text: "  " }] }]), "");
 });

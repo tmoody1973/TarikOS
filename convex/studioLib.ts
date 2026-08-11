@@ -77,17 +77,39 @@ export function plainText(value: StudioValue): string {
 }
 
 /**
- * The document's title, taken from its first line with words in it.
+ * Section headings a template supplies. Never a title.
  *
- * Skips leading blanks rather than stopping at them: every template opens with
- * an empty heading, so the first block is blank exactly when someone started
- * typing in the body instead — which is the case where a derived title matters
- * most.
+ * Found by using it: the brief template's first line with words in it is
+ * "Summary", so every brief in the index was called Summary — five documents
+ * that look identical in the one place they have to be told apart.
+ */
+const SECTION_HEADINGS = new Set(["h2", "h3", "h4", "h5", "h6"]);
+
+function textOf(node: StudioNode): string {
+  const kids = Array.isArray(node.children) ? node.children : [];
+  return kids
+    .map((k) => (isText(k) ? k.text : textOf(k)))
+    .join("")
+    .trim();
+}
+
+/**
+ * The document's title: what its author wrote, never what the template did.
+ *
+ * The first block with words in it wins, skipping the section headings a
+ * template supplied — those are identical across every document of that type,
+ * so using one names every brief "Summary".
+ *
+ * There is no special case for the h1. There was one, and the mutation sweep
+ * showed it never changed an answer: the h1 leads every template, so it is
+ * already the first non-section block this loop reaches. A branch that cannot
+ * be observed is a branch to delete.
  */
 export function deriveTitle(value: StudioValue): string {
-  for (const line of plainText(value).split("\n")) {
-    const trimmed = line.trim();
-    if (trimmed) return trimmed.slice(0, TITLE_MAX);
+  for (const block of Array.isArray(value) ? value : []) {
+    if (!block || SECTION_HEADINGS.has(block.type ?? "")) continue;
+    const text = textOf(block);
+    if (text) return text.slice(0, TITLE_MAX);
   }
   return "";
 }

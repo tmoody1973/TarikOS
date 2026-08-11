@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { NAV_LINKS, isActiveRoute } from "../src/lib/navLinks.ts";
 
 test("every destination has a label, href and channel colour", () => {
-  assert.equal(NAV_LINKS.length, 10);
+  assert.equal(NAV_LINKS.length, 11);
   for (const l of NAV_LINKS) {
     assert.ok(l.label.length > 0, "label");
     assert.ok(l.href.startsWith("/"), `href: ${l.href}`);

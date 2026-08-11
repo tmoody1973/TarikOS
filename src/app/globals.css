@@ -9,6 +9,10 @@
   --lcars-blue: #99ccff;
   --lcars-steel: #6688aa;
   --lcars-sage: #99cc99;
+  /* STUDIO. Built on the same 99/cc construction as sage and blue, so it takes
+     black cap type like its siblings, and far enough from amber that HOME and
+     STUDIO never read as the same channel in the rail. */
+  --lcars-ochre: #cccc99;
   --hud-cyan: #35e0ff;
   --panel: #0b0e14;
   --panel-edge: #1a2233;
@@ -23,6 +27,7 @@
   --color-hudblue: var(--lcars-blue);
   --color-steel: var(--lcars-steel);
   --color-sage: var(--lcars-sage);
+  --color-ochre: var(--lcars-ochre);
   --color-cyan-hud: var(--hud-cyan);
   --color-panel: var(--panel);
   --color-panel-edge: var(--panel-edge);

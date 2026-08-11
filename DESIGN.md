@@ -90,6 +90,11 @@ A near-black stage where a small LCARS family does the talking; every hue has a 
 - **LCARS Blue** (#99ccff): Channel color for BRAIN.
 - **LCARS Sage** (#99cc99): Channel colour for HABITS. Follows the palette's
   `99`/`cc` construction, so it takes black cap type like its siblings.
+- **LCARS Ochre** (#cccc99): Channel colour for STUDIO. Same `99`/`cc`
+  construction, and deliberately not amber — HOME and STUDIO sit four caps apart
+  in the rail and a near-amber would read as a second masthead. Writing earns
+  its own hue rather than joining the lavender BRIEFS/MAIL/DOCS family, which
+  was already carrying three surfaces and had stopped routing anywhere.
 
 ### Neutral
 - **Space Black** (#050608): The page background — the dark bridge behind every instrument.
@@ -99,7 +104,7 @@ A near-black stage where a small LCARS family does the talking; every hue has a 
 - **LCARS Steel** (#6688aa): Secondary text, labels, blockquotes, and the CTRL channel — the voice of dormant systems.
 
 ### Named Rules
-**The Channel Color Rule.** Every surface owns an LCARS hue (amber HOME, lavender BRIEFS/MAIL, blue BRAIN, cyan TELOS/VIEW, salmon COMMS, steel CTRL). Color assignments route and identify; they never express mood, and new surfaces claim a channel color before shipping.
+**The Channel Color Rule.** Every surface owns an LCARS hue (amber HOME, lavender BRIEFS/MAIL/DOCS, blue BRAIN, cyan TELOS/VIEW, salmon COMMS/PEOPLE, sage HABITS, ochre STUDIO, steel CTRL). Color assignments route and identify; they never express mood, and new surfaces claim a channel color before shipping.
 
 **The Glow Means Live Rule.** `hud-glow` (soft currentColor text-shadow) appears only on data that is live right now — an open session, streaming state, fresh telemetry. Glowing static text is a defect.
 
