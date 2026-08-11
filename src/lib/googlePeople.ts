@@ -92,3 +92,52 @@ export async function fetchGooglePeople(): Promise<PeopleRow[]> {
 
   return rows;
 }
+
+/**
+ * The connection that may WRITE contacts.
+ *
+ * Separate from the read path on purpose. Reads ride the Gmail connection,
+ * whose grant happens to include contacts.readonly. Writing needs
+ * .../auth/contacts, which only the dedicated googlecontacts connection has —
+ * and that one required its own Google Cloud OAuth app.
+ */
+function writeAccountId(): string {
+  const id = process.env.GOOGLE_CONTACTS_ACCOUNT_ID;
+  if (!id) {
+    throw new Error(
+      "GOOGLE_CONTACTS_ACCOUNT_ID is not set — adding contacts needs the googlecontacts connection",
+    );
+  }
+  return id;
+}
+
+/**
+ * Create one contact in Google, returning the row Google stored.
+ *
+ * The response is fed straight back through the same mapper the sync uses, so
+ * what gets stored locally is exactly what tomorrow's sync would have read —
+ * there is no second shape to keep in step.
+ */
+export async function createGoogleContact(person: unknown): Promise<PeopleRow> {
+  const abort = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+  const res = await fetch("https://backend.composio.dev/api/v3.1/tools/execute/proxy", {
+    method: "POST",
+    headers: { "x-api-key": proxyKey(), "content-type": "application/json" },
+    body: JSON.stringify({
+      endpoint: "https://people.googleapis.com/v1/people:createContact",
+      method: "POST",
+      connected_account_id: writeAccountId(),
+      body: person,
+    }),
+    signal: abort,
+  });
+  if (!res.ok) {
+    throw new Error(`Composio proxy ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  }
+  const body = (await res.json()) as { data?: PeopleRow };
+  const row = body.data ?? (body as PeopleRow);
+  if (!row?.resourceName) {
+    throw new Error("Google accepted the write but returned no contact");
+  }
+  return row;
+}

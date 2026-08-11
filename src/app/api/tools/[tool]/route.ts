@@ -37,8 +37,9 @@ import { classifyOutcome, type ToolOutcome } from "@/lib/toolOutcome";
 import { uploadBuffer } from "@/lib/r2";
 import { escapeHtml, notifyOwner } from "@/lib/telegram";
 import { briefDigest } from "@/lib/briefDigest";
-import { fetchGooglePeople } from "@/lib/googlePeople";
+import { createGoogleContact, fetchGooglePeople } from "@/lib/googlePeople";
 import {
+  buildPersonPayload,
   contactKey,
   googlePeopleToContacts,
   mergeContacts,
@@ -1314,6 +1315,78 @@ async function runTool(
         name: "find_contact",
       });
       return { ok: true, message, data: { total, matches } };
+    }
+
+    // Write a new contact straight into Google. Write-through, not two-way
+    // sync: Google stays the single source of truth and the next sync simply
+    // reads it back, so there is no conflict to resolve and nothing can
+    // diverge. It is stored locally too, so find_contact works immediately
+    // rather than after tomorrow's cron.
+    //
+    // The persona requires a spoken confirmation before this is called, the
+    // same ritual as create_calendar_event. Unlike a read, nothing undoes a
+    // wrong write on the next sync — the sync will faithfully carry the
+    // mistake back every day.
+    case "add_contact": {
+      const built = buildPersonPayload({
+        name: strArg(body.name, 120) ?? "",
+        phone: strArg(body.phone, 60),
+        email: strArg(body.email, 200),
+        org: strArg(body.org, 120),
+      });
+      if (!built.ok || !built.person) {
+        return { ok: false, message: built.error ?? "I can't save that contact." };
+      }
+
+      // Refuse to create a second row for someone already in the book. A
+      // duplicate is not a failed write, it is a slow corruption of the thing
+      // find_contact reads.
+      const identifier = strArg(body.phone, 60) ?? strArg(body.email, 200);
+      if (identifier) {
+        const existing = await convex.query(api.contacts.search, {
+          secret,
+          query: identifier,
+          limit: 1,
+        });
+        if (existing.matches.length > 0) {
+          return {
+            ok: true,
+            message: `You already have that number saved under ${existing.matches[0].name || "an unnamed contact"}.`,
+            data: { duplicate: true, existing: existing.matches[0] },
+          };
+        }
+      }
+
+      const created = await createGoogleContact(built.person);
+      // Store it now so a lookup a moment later finds it, rather than after
+      // the next scheduled sync.
+      const merged = mergeContacts(googlePeopleToContacts([created]));
+      if (merged.length > 0) {
+        await convex.mutation(api.contacts.upsertBatch, {
+          secret,
+          syncedAt: Date.now(),
+          contacts: merged.map((c) => ({
+            key: contactKey(c),
+            name: c.name,
+            phones: c.phones,
+            emails: c.emails,
+            org: c.org,
+            photo: c.photo,
+            sources: c.sources,
+          })),
+        });
+      }
+
+      await convex.mutation(api.secondBrain.markToolHealthyFromTool, {
+        secret,
+        name: "add_contact",
+      });
+      const saved = merged[0];
+      return {
+        ok: true,
+        message: `Saved ${saved?.name || "the contact"}${saved?.phones[0] ? ` at ${saved.phones[0]}` : ""} to your Google contacts.`,
+        data: { name: saved?.name, phones: saved?.phones, emails: saved?.emails },
+      };
     }
 
     // Pull the address book from Google. Called by the cron, not by Zola —

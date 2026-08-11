@@ -153,6 +153,21 @@ export const TEXT_TOOLS: TextTool[] = [
     },
   },
   {
+    name: "add_contact",
+    description:
+      "Save a NEW person to his Google contacts. Read the name and number back and get an explicit yes before calling this — nothing later corrects a wrong number. Needs a name plus a number or an email.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: str("The person's full name"),
+        phone: str("Their phone number"),
+        email: str("Their email address"),
+        org: str("Where they work"),
+      },
+      required: ["name"],
+    },
+  },
+  {
     name: "find_contact",
     description:
       "Look someone up in his contacts by name, phone number or email. If more than one match comes back the name is ambiguous — list them and ask which he means, never pick for him.",

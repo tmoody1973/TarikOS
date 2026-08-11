@@ -102,3 +102,57 @@ test("paging is bounded so a bad token cannot loop", () => {
   assert.match(people, /MAX_PAGES/);
   assert.match(people, /pages < MAX_PAGES/);
 });
+
+// add_contact writes into a real address book and nothing undoes it.
+
+test("add_contact is offered to Zola, since only she hears the request", () => {
+  assert.match(AGENT, /add_contact/);
+  assert.match(TEXT, /add_contact/);
+});
+
+test("the tool description demands a spoken confirmation first", () => {
+  // Same ritual as create_calendar_event. A read can be re-read; a wrong
+  // number saved under a right name looks correct and will be dialled.
+  const def = AGENT.split('name: "add_contact"')[1]?.split("apiSchema")[0] ?? "";
+  assert.match(def, /BEFORE calling this/);
+});
+
+test("a refused payload can never reach Google", () => {
+  const fn = arm("add_contact");
+  assert.ok(fn, "add_contact arm missing");
+  assert.match(fn, /!built\.ok \|\| !built\.person/);
+  assert.ok(
+    fn.indexOf("built.person") < fn.indexOf("createGoogleContact"),
+    "the validity check must come before the write",
+  );
+});
+
+test("an existing number is reported rather than duplicated", () => {
+  // A duplicate is not a failed write, it is a slow corruption of the book
+  // find_contact reads.
+  const fn = arm("add_contact");
+  assert.match(fn, /duplicate: true/);
+  assert.ok(
+    fn.indexOf("duplicate: true") < fn.indexOf("createGoogleContact"),
+    "the duplicate check must come before the write",
+  );
+});
+
+test("what is stored locally comes from Google's own response", () => {
+  // Not from the request. Storing what we asked for rather than what Google
+  // saved would let the two drift on the very first write.
+  const fn = arm("add_contact");
+  assert.match(fn, /googlePeopleToContacts\(\[created\]\)/);
+});
+
+test("writing uses the write connection, never the read one", () => {
+  const people = CODE("src/lib/googlePeople.ts");
+  const create = people.split("export async function createGoogleContact")[1] ?? "";
+  assert.match(create, /writeAccountId\(\)/);
+  assert.ok(!/connectedAccounts\("gmail"\)/.test(create), "must not write via the Gmail connection");
+});
+
+test("a write that returns no contact is an error, not a silent success", () => {
+  const people = CODE("src/lib/googlePeople.ts");
+  assert.match(people, /returned no contact/);
+});

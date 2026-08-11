@@ -243,6 +243,29 @@ export const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
   },
   {
     type: "webhook" as const,
+    name: "add_contact",
+    description:
+      "Save a NEW person to Tarik's Google contacts. ALWAYS read the name and the number or email back to him and get an explicit yes BEFORE calling this — a wrong number saved under a right name looks correct and will be dialled, and nothing later corrects it. Needs a name plus at least a number or an email.",
+    responseTimeoutSecs: 20,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/add_contact`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["name"],
+        description: "New contact",
+        properties: {
+          name: bodyProp("The person's full name as Tarik said it"),
+          phone: bodyProp("Their phone number, digits as spoken"),
+          email: bodyProp("Their email address"),
+          org: bodyProp("Where they work, if he mentioned it"),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
     name: "find_contact",
     description:
       "Look someone up in Tarik's contacts by name, phone number or email. Returns ranked matches. If more than one comes back the name is ambiguous — read the options out and ask which one he means, never pick for him.",

@@ -390,3 +390,78 @@ export function contactKey(contact: MergedContact): string {
     .sort();
   return ids[0] ? `src:${ids[0]}` : "";
 }
+
+// ----------------------------------------------------------------- writing
+
+export type NewContact = {
+  name: string;
+  phone?: string;
+  email?: string;
+  org?: string;
+};
+
+export type PersonPayload = {
+  names: { givenName: string; familyName?: string }[];
+  phoneNumbers?: { value: string }[];
+  emailAddresses?: { value: string }[];
+  organizations?: { name: string }[];
+};
+
+/**
+ * A Google People createContact body, or a refusal with the reason.
+ *
+ * Refuses far more than it accepts, because this writes into a real address
+ * book from a spoken instruction relayed through a transcript. A wrong number
+ * saved under a right name is worse than no contact at all: it looks correct,
+ * it will be dialled, and nothing downstream will ever flag it — the sync only
+ * reads, so it will faithfully carry the mistake back every day.
+ *
+ * The number is normalized with the same function dedupe uses, so what gets
+ * written is what a later read would have matched on.
+ */
+export function buildPersonPayload(
+  input: NewContact,
+): { ok: boolean; person?: PersonPayload; error?: string } {
+  const name = (input.name ?? "").trim().replace(/\s+/g, " ");
+  if (!name) return { ok: false, error: "I need a name for the contact." };
+
+  if (!input.phone && !input.email) {
+    return {
+      ok: false,
+      error: "I need a number or an email — a name on its own can't be called or written to.",
+    };
+  }
+
+  let phoneNumbers: { value: string }[] | undefined;
+  if (input.phone) {
+    const normalized = normalizePhone(input.phone);
+    if (!normalized) {
+      return { ok: false, error: `${input.phone} isn't a number I can dial. Say it again?` };
+    }
+    phoneNumbers = [{ value: normalized }];
+  }
+
+  let emailAddresses: { value: string }[] | undefined;
+  if (input.email) {
+    const normalized = normalizeEmail(input.email);
+    if (!normalized) {
+      return { ok: false, error: `${input.email} isn't an email address I can use.` };
+    }
+    emailAddresses = [{ value: normalized }];
+  }
+
+  // Everything after the first word is the family name: "Sarah A Chen" keeps
+  // its middle initial rather than losing it to a three-way split.
+  const [givenName, ...rest] = name.split(" ");
+  const names = [rest.length ? { givenName, familyName: rest.join(" ") } : { givenName }];
+
+  return {
+    ok: true,
+    person: {
+      names,
+      ...(phoneNumbers ? { phoneNumbers } : {}),
+      ...(emailAddresses ? { emailAddresses } : {}),
+      ...(input.org?.trim() ? { organizations: [{ name: input.org.trim() }] } : {}),
+    },
+  };
+}
