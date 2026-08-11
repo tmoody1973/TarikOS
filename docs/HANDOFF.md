@@ -99,6 +99,25 @@ earlier revision.
   no `.npmrc`, read past the shadcn installer's file list, screenshots are
   upscaled, Grammarly blocks synthetic typing, localhost Clerk loops.
 
+## Next — Plane projects and tasks
+
+Approved and specified: `docs/superpowers/specs/2026-08-11-tarik-os-plane-projects-design.md`.
+**Read it before writing anything**, including its Reconnaissance section — those
+are the shapes the live API actually returns, not what the docs say.
+
+The point, in Tarik's words: *"I don't want to go to plane.so to create a
+project and then come back to Zola to ask about them."* Any design where
+creation happens elsewhere fails the requirement. Creation and the board ship
+together; read-only first was proposed and rejected.
+
+The spec supersedes the research doc in three places — no MCP server, no mirror
+tables, creation before reads — each with its reason. Do not re-derive them from
+`new-feat-research/`.
+
+Ready: `PLANE_API_TOKEN` is in Vercel production **and** `.env.local`, workspace
+slug is `moody-and-co`, and the API was exercised tonight. Open question 1 (the
+channel colour) blocks the UI and nothing else.
+
 ## Known gaps, deliberately left
 
 **Studio**
