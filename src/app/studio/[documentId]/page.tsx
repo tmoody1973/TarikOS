@@ -124,6 +124,7 @@ function DocumentInner({ id }: { id: Id<"studioDocs"> }) {
             documentId={id}
             initialContent={parseContent(doc.content)}
             initialRevision={doc.revision}
+            title={doc.title}
             save={save}
           />
         </section>

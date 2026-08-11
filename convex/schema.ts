@@ -289,10 +289,15 @@ export default defineSchema({
   // so there is no ownerId — the same as every table above.
   documents: defineTable({
     title: v.string(),
+    // "studio" is a Studio document exported to .docx. It joins this table
+    // rather than getting its own, so an export inherits the share links,
+    // expiry, download caps and revocation that already live here — one
+    // canonical store for "an artifact I can hand to someone".
     sourceType: v.union(
       v.literal("brief"),
       v.literal("research"),
       v.literal("journal_digest"),
+      v.literal("studio"),
     ),
     sourceId: v.optional(v.string()),
     objectKey: v.string(),

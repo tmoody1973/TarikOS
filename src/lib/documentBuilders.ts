@@ -146,3 +146,28 @@ export function shareExpiryFrom(
   }
   return now + Math.min(days, MAX_SHARE_DAYS) * DAY_MS;
 }
+
+/**
+ * The content type Word actually expects for a .docx.
+ *
+ * NOT application/msword — that is the old binary .doc type, and sending it
+ * with a .docx makes Word report the file as corrupt.
+ */
+export const DOCX_CONTENT_TYPE =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+/**
+ * What a Studio export is called on disk.
+ *
+ * The revision is in the name deliberately. An export is a snapshot, and
+ * exporting the same document twice is normal — without the revision, a
+ * downloads folder holds several files with one name and no way to tell which
+ * is current.
+ */
+export function studioExportName(
+  title: string,
+  revision: number,
+  now: number,
+): string {
+  return `${isoDate(now)}-${slugify(title)}-r${revision}.docx`;
+}

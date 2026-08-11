@@ -6,6 +6,7 @@ import type { Value } from "platejs";
 import { EditorKit } from "@/components/editor/editor-kit";
 import { Editor, EditorContainer } from "@/components/ui/editor";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ExportButton } from "./ExportButton";
 import type { StudioValue } from "../../../../convex/studioLib";
 
 // The writing surface: Plate's full editor.
@@ -45,14 +46,20 @@ export function StudioEditor({
   documentId,
   initialContent,
   initialRevision,
+  title,
   save,
 }: {
   documentId: string;
   initialContent: StudioValue;
   initialRevision: number;
+  title: string;
   save: (content: string, revision: number) => Promise<SaveOutcome>;
 }) {
   const [status, setStatus] = useState<Status>({ kind: "idle" });
+  // Mirrors the ref, only so the export filename carries the revision that is
+  // actually on screen. The REF stays the source of truth for saving — the
+  // autosave timer closes over it, and state would be stale there.
+  const [revisionShown, setRevisionShown] = useState(initialRevision);
 
   // The revision lives in a ref, not in state: the autosave timer closes over
   // it, and a stale closure here is the exact bug the counter exists to catch.
@@ -81,6 +88,7 @@ export function StudioEditor({
     const result = await save(content, revision.current);
     if (result.ok) {
       revision.current = result.revision;
+      setRevisionShown(result.revision);
       setStatus({ kind: "saved", at: Date.now() });
       return;
     }
@@ -128,7 +136,6 @@ export function StudioEditor({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <SaveState status={status} />
       {/* Every toolbar button Plate renders is a Radix Tooltip, and a Tooltip
           outside a provider THROWS rather than degrading — the editor crashed
           in production with "Tooltip must be used within TooltipProvider".
@@ -137,6 +144,18 @@ export function StudioEditor({
           asks for. */}
       <TooltipProvider>
         <Plate editor={editor} onValueChange={onChange}>
+          {/* Inside <Plate> because the export button reads the live editor
+              through useEditorRef, which only resolves within the provider. */}
+          <div className="flex flex-wrap items-center gap-3 px-4 py-1.5">
+            <SaveState status={status} />
+            <span className="ml-auto">
+              <ExportButton
+                documentId={documentId}
+                title={title}
+                revision={revisionShown}
+              />
+            </span>
+          </div>
           <EditorContainer variant="default" className="min-h-0 flex-1">
             <Editor key={documentId} variant="default" placeholder="Start writing…" />
           </EditorContainer>
@@ -176,7 +195,7 @@ function SaveState({ status }: { status: Status }) {
 
   return (
     <p
-      className={`px-4 py-1.5 text-[10px] uppercase tracking-[0.3em] ${
+      className={`text-[10px] uppercase tracking-[0.3em] ${
         status.kind === "saved" ? "hud-glow text-cyan-hud" : "text-steel"
       }`}
       aria-live="polite"

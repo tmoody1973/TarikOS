@@ -88,6 +88,7 @@ export const saveDocument = mutation({
       v.literal("brief"),
       v.literal("research"),
       v.literal("journal_digest"),
+      v.literal("studio"),
     ),
     sourceId: v.optional(v.string()),
     objectKey: v.string(),
