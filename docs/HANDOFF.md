@@ -106,8 +106,9 @@ the pattern matters more than the facts.
 
 - **MOO-529** — thirty seconds in airplane mode: reload, confirm the shell
   returns with no stale data. Open since the last handoff.
-- **Rotate the Telegram bot token.** It was pasted into a session transcript.
-  `/revoke` to @BotFather, then swap it in Vercel.
+- ~~Rotate the Telegram bot token.~~ **Raised and declined by Tarik (2026-08-11).**
+  It was pasted into a session transcript; they have decided not to rotate.
+  Do not raise it again.
 - **The Telnyx number** (+1 414 635 2386) now serves `call_tarik` only and
   still costs money. Keep or drop.
 - **Studio §15.3** — does Studio v1 own new briefs or link to existing Brief

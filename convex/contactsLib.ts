@@ -282,3 +282,89 @@ export function mergeContacts(records: SourceContact[]): MergedContact[] {
       };
     });
 }
+
+// ---------------------------------------------------------------- searching
+
+export type SearchableContact = {
+  name: string;
+  phones: string[];
+  emails: string[];
+  org?: string;
+};
+
+/** Comparable form: lowercase, punctuation gone, spacing collapsed. */
+function searchable(text: string): string {
+  return (text ?? "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Score one contact against a spoken query. 0 means no match.
+ *
+ * Weighted so the strongest evidence wins outright: an identifier the caller
+ * read out (a number, an address) is unambiguous, a whole-name match is next,
+ * and an org match is a weak last resort so "Radio Milwaukee" still finds the
+ * front desk without burying a person of that name.
+ */
+function scoreContact(contact: SearchableContact, query: string): number {
+  const q = searchable(query);
+  if (!q) return 0;
+
+  // An identifier read aloud is exact evidence — match it in normalized form
+  // so "414-555-1234" finds the contact stored as "+14145551234".
+  const asPhone = normalizePhone(query);
+  if (asPhone && contact.phones.includes(asPhone)) return 100;
+  const asEmail = normalizeEmail(query);
+  if (asEmail && contact.emails.includes(asEmail)) return 100;
+
+  const name = searchable(contact.name);
+  let score = 0;
+  {
+    // No guard on an empty name: it scores 0 through these branches anyway,
+    // and a guard a mutation cannot kill is a guard that is not doing work.
+    if (name === q) score = 60;
+    else if (name.startsWith(q)) score = 45;
+    else {
+      const words = name.split(" ");
+      const terms = q.split(" ");
+      // Every spoken word has to land somewhere in the name, or "Sarah Chen"
+      // would match "Sarah Okonkwo" on one word out of two.
+      // terms.length is a property of the QUERY, so it is identical for every
+      // contact in one call and cannot change an ordering. One constant.
+      const all = terms.every((t) => words.some((w) => w.startsWith(t)));
+      if (all) score = 30;
+    }
+  }
+
+  // Weak, and only when the name did not match at all.
+  if (!score && contact.org && searchable(contact.org).includes(q)) score = 10;
+  if (!score) return 0;
+
+  // A contact with no phone and no email cannot be called or texted, and
+  // 4,033 of the real book are exactly that. Reachable wins the tie.
+  return score + (contact.phones.length || contact.emails.length ? 1 : 0);
+}
+
+/**
+ * The contacts worth offering for a spoken name, best first.
+ *
+ * Non-matches are excluded rather than ranked low: handing Zola a list padded
+ * with weak matches invites her to guess, and every ambiguous name must come
+ * back in full so she can ask which one he meant. Ties break on name so a
+ * spoken "the first one" means the same thing twice.
+ */
+export function rankContacts<T extends SearchableContact>(
+  contacts: T[],
+  query: string,
+  limit: number,
+): T[] {
+  return contacts
+    .map((contact) => ({ contact, score: scoreContact(contact, query) }))
+    .filter((r) => r.score > 0)
+    .sort((a, z) => z.score - a.score || a.contact.name.localeCompare(z.contact.name))
+    .slice(0, limit)
+    .map((r) => r.contact);
+}
