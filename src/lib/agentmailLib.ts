@@ -260,6 +260,37 @@ export function threadKey(message: MailMessage): string {
 /** The authentication results AgentMail reports for an inbound message. */
 export type AuthResults = { dkim?: string; spf?: string };
 
+/**
+ * The DKIM and SPF verdicts, read off the wire.
+ *
+ * AgentMail reports no `dkim` field of its own: the verdict lives inside the
+ * `Authentication-Results` header, as free text, among the client IP and the
+ * helo name. Reading it from a field that does not exist would have failed
+ * every sender silently and the letter would never have gone to anybody —
+ * which is exactly what the first version of this did, until a real message
+ * was looked at.
+ *
+ * A missing header yields nothing rather than a pass. Absence of a verdict is
+ * not a verdict.
+ */
+export function authResults(
+  headers: Record<string, string> | undefined,
+): AuthResults {
+  const key = Object.keys(headers ?? {}).find(
+    (k) => k.toLowerCase() === "authentication-results",
+  );
+  const line = key ? (headers ?? {})[key] : "";
+  if (!line) return {};
+  const read = (what: string) =>
+    line.match(new RegExp(`\\b${what}=([a-z]+)`, "i"))?.[1]?.toLowerCase();
+  const out: AuthResults = {};
+  const dkim = read("dkim");
+  const spf = read("spf");
+  if (dkim) out.dkim = dkim;
+  if (spf) out.spf = spf;
+  return out;
+}
+
 /** Why she did or did not write back. */
 export type ReplyDecision = { ok: true } | { ok: false; reason: string };
 

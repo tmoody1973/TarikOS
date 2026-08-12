@@ -232,6 +232,13 @@ The first two are worth reading as a **class**, not as incidents.
   checking rather than assuming. Verified out loud on production: Zola says
   goodbye, the transport closes, `onDisconnect` fires and the dock returns to
   STANDBY on its own. No client-side listener needed.
+- **AgentMail reports NO `dkim` field.** The verdict lives inside the
+  `Authentication-Results` header as free text, among the client IP and the helo
+  name — `"…; dkim=pass header.i=@gmail.com; dmarc=pass…"`. The first version of
+  the auto-reply read `message.dkim`, which does not exist, so every sender
+  failed the gate and the letter would simply never have been sent to anybody.
+  It would have looked like a working feature nobody happened to trigger. Caught
+  by reading one real message before shipping, not by a test.
 - **An ElevenLabs system tool goes in `tools`, NOT in `built_in_tools`.** The
   agent config has a `built_in_tools` map with an `end_call` slot, and writing
   to it does nothing whatsoever: the API returns **200**, reports success, and
@@ -316,14 +323,17 @@ The first two are worth reading as a **class**, not as incidents.
 
 ## What is left of the inbox spec
 
-- **`email_tarik` and `draft_reply`** — the sending half. She writes to him
-  freely (the privileged-recipient rule, which `emailOwner` already implements)
-  and drafts to everyone else. A forwarded thread must draft through GMAIL as
-  him, not from `zola@`, because the correspondent knows him and not her.
-- **The webhook and `zolaMail`** — `/api/agentmail/inbound`, signature verified
-  before parsing. Everything today is a live poll, which is fine at one message
-  and wrong at a hundred.
+- **`email_tarik` and `draft_reply`** — the sending half she calls herself. She
+  writes to him freely (the privileged-recipient rule, which `emailOwner`
+  already implements) and drafts to everyone else. A forwarded thread must draft
+  through GMAIL as him, not from `zola@`, because the correspondent knows him
+  and not her.
 - **Attachments** are stored by AgentMail and ignored here, by choice.
+
+The webhook is built. `/api/agentmail/inbound`, Svix-verified against the raw
+body, idempotent on the message id, exempt from Clerk. Webhook
+`ep_3Hp8TMxBnfIoY4HXQ1zkJdtcdNr` is scoped to `zola@tarikos.app` only — the
+account has two others for different inboxes and they were left alone.
 
 ## The wake word
 

@@ -4,7 +4,13 @@ import Anthropic from "@anthropic-ai/sdk";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import { getMessage, replyToSender } from "@/lib/agentmail";
-import { inboxAllowlist, shouldAutoReply, summarize, threadKey } from "@/lib/agentmailLib";
+import {
+  authResults,
+  inboxAllowlist,
+  shouldAutoReply,
+  summarize,
+  threadKey,
+} from "@/lib/agentmailLib";
 import {
   MAX_REPLY_CHARS,
   WRITER_BRIEF,
@@ -102,10 +108,7 @@ export async function POST(req: NextRequest) {
 
   const decision = shouldAutoReply(
     message,
-    {
-      dkim: String((m.dkim ?? (m.auth_results as Record<string, unknown>)?.dkim) ?? ""),
-      spf: String((m.spf ?? (m.auth_results as Record<string, unknown>)?.spf) ?? ""),
-    },
+    authResults(message.headers),
     inboxAllowlist(process.env.OWNER_EMAIL, process.env.ZOLA_MAIL_ALLOWLIST),
     answered,
   );

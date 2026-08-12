@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   allowedSender,
+  authResults,
   describeInbox,
   countInbox,
   inboxAllowlist,
@@ -377,4 +378,47 @@ test("an automated message is left alone even from a normal address", () => {
 test("her own address never triggers a reply to itself", () => {
   const self = { ...STRANGER, from: "Zola <zola@tarikos.app>" };
   assert.equal(shouldAutoReply(self, VERIFIED, TARIK, false).ok, false);
+});
+
+// -------------------------------------------- reading the verdict off the wire
+
+test("DKIM and SPF are parsed out of the Authentication-Results header", () => {
+  // AgentMail reports no dkim field of its own — the verdict is buried in a
+  // header string. Reading it from a field that does not exist would have made
+  // every stranger fail the gate, and the letter would simply never have been
+  // sent by anybody. Found before shipping, from a real message.
+  const real =
+    "amazonses.com; spf=pass (spfCheck: domain of _spf.google.com designates " +
+    "209.85.208.42 as permitted sender) client-ip=209.85.208.42; " +
+    "envelope-from=tarikjmoody@gmail.com; helo=mail-ed1-f42.google.com; " +
+    "dkim=pass header.i=@gmail.com; dmarc=pass header.from=gmail.com;";
+  assert.deepEqual(authResults({ "Authentication-Results": real }), {
+    dkim: "pass",
+    spf: "pass",
+  });
+});
+
+test("a failing verdict is read as failing", () => {
+  const failed = "amazonses.com; spf=softfail; dkim=fail header.i=@spoof.com;";
+  assert.deepEqual(authResults({ "Authentication-Results": failed }), {
+    dkim: "fail",
+    spf: "softfail",
+  });
+});
+
+test("a header that is missing entirely yields nothing, not a pass", () => {
+  assert.deepEqual(authResults({}), {});
+  assert.deepEqual(authResults(undefined), {});
+});
+
+test("the header name is matched whatever its casing", () => {
+  const r = authResults({ "authentication-results": "x; dkim=pass; spf=pass;" });
+  assert.equal(r.dkim, "pass");
+});
+
+test("a verified real message would earn the letter", () => {
+  // The whole gate, end to end, against the header a real Gmail actually sent.
+  const real = "amazonses.com; spf=pass; dkim=pass header.i=@gmail.com; dmarc=pass;";
+  const decision = shouldAutoReply(STRANGER, authResults({ "Authentication-Results": real }), TARIK, false);
+  assert.equal(decision.ok, true);
 });
