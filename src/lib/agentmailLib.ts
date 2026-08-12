@@ -17,6 +17,7 @@ export type MailMessage = {
   preview?: string;
   text?: string;
   labels?: string[];
+  headers?: Record<string, string>;
   thread_id?: string;
   message_id?: string;
   timestamp?: string;
@@ -252,4 +253,69 @@ export function threadKey(message: MailMessage): string {
     .trim()
     .toLowerCase();
   return subject || address(message.from) || "unknown";
+}
+
+// ---------------------------------------------------- the letter to a stranger
+
+/** The authentication results AgentMail reports for an inbound message. */
+export type AuthResults = { dkim?: string; spf?: string };
+
+/** Why she did or did not write back. */
+export type ReplyDecision = { ok: true } | { ok: false; reason: string };
+
+/** Addresses that are machines, not people. */
+const AUTOMATED_LOCAL = /^(no-?reply|do-?not-?reply|bounce|mailer-daemon|postmaster|listserv)\b/i;
+
+/** Headers that say "this was sent by a program; do not answer it". */
+const AUTOMATED_HEADERS = ["auto-submitted", "precedence", "list-unsubscribe", "list-id"];
+
+/**
+ * Whether a stranger's mail earns the one automatic reply.
+ *
+ * The reply exists to explain what this address is and to demonstrate the
+ * containment by being contained. Everything here is about NOT becoming a
+ * nuisance while doing that.
+ *
+ * The one people miss: **a From header is forgeable.** Without the DKIM gate,
+ * anyone could spoof a victim's address and have Tarik's own domain mail them
+ * unsolicited AI text, on demand, as often as they liked. That turns a nice
+ * idea into a spam cannon pointed at strangers, so an unverified sender — or a
+ * missing verdict, which is the same thing — gets nothing.
+ */
+export function shouldAutoReply(
+  message: MailMessage,
+  auth: AuthResults,
+  allowlist: string[],
+  alreadyReplied: boolean,
+): ReplyDecision {
+  const sender = address(message.from);
+  if (!sender) return { ok: false, reason: "no sender address" };
+
+  // Her own address, and any address on the instance. A mailbox answering
+  // itself is the shortest possible loop.
+  if (sender.endsWith("@tarikos.app")) return { ok: false, reason: "her own domain" };
+
+  if (allowedSender(message.from, allowlist)) {
+    return { ok: false, reason: "on the allowlist — he does not need the explainer" };
+  }
+
+  // Once per SENDER, not per message. Two auto-responders pointed at each other
+  // stop only when somebody's provider blocks somebody.
+  if (alreadyReplied) return { ok: false, reason: "already written to this sender once" };
+
+  if ((auth.dkim ?? "").toLowerCase() !== "pass") {
+    return { ok: false, reason: "DKIM did not pass — the sender is not verified" };
+  }
+
+  const local = sender.split("@")[0] ?? "";
+  if (AUTOMATED_LOCAL.test(local)) return { ok: false, reason: "an automated address" };
+
+  const headers = message.headers ?? {};
+  for (const name of AUTOMATED_HEADERS) {
+    if (Object.keys(headers).some((k) => k.toLowerCase() === name)) {
+      return { ok: false, reason: `${name} says this is machine mail` };
+    }
+  }
+
+  return { ok: true };
 }

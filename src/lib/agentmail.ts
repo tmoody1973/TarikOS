@@ -141,3 +141,49 @@ export async function emailOwner(
   }
   return { ok: true };
 }
+
+/**
+ * The one automatic letter, back to whoever wrote in.
+ *
+ * Note what is NOT a parameter here and never will be: a choice of recipient.
+ * `to` is the envelope of the message being answered, lifted straight off the
+ * inbound mail — it is not a decision, and no model touches it. That is the
+ * same rule `emailOwner` above obeys from the other direction, and together
+ * they are the whole of what can leave this address: a notification to Tarik,
+ * and a reply to someone who wrote first.
+ *
+ * There is deliberately no function on this client that sends to an address
+ * somebody picked.
+ */
+export async function replyToSender(
+  to: string,
+  subject: string,
+  body: string,
+  inReplyTo?: string,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const key = process.env.AGENTMAIL_API_KEY?.trim();
+  if (!key) return { ok: false, reason: "AGENTMAIL_API_KEY is not set" };
+  if (!to.includes("@")) return { ok: false, reason: "no recipient on the message" };
+
+  const res = await fetch(
+    `${BASE}/inboxes/${encodeURIComponent(ZOLA_INBOX)}/messages/send`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json", Authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        to: [to],
+        subject,
+        text: body,
+        ...(inReplyTo ? { in_reply_to: inReplyTo } : {}),
+      }),
+    },
+  );
+
+  if (!res.ok) {
+    return {
+      ok: false,
+      reason: `AgentMail ${res.status}: ${(await res.text()).slice(0, 160)}`,
+    };
+  }
+  return { ok: true };
+}

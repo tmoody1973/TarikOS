@@ -485,4 +485,26 @@ export default defineSchema({
     label: v.optional(v.string()),
     createdAt: v.number(),
   }).index("by_doc", ["docId", "createdAt"]),
+
+  // One row per message accepted into Zola's own inbox.
+  //
+  // The body is NOT copied — AgentMail owns it and it is fetched on demand.
+  // What this table is really for is the two things a webhook needs and a poll
+  // cannot give: idempotency on the message id, because a delivery can arrive
+  // twice, and a record of who has already had the one automatic reply,
+  // because once per SENDER is the whole loop protection.
+  zolaMail: defineTable({
+    messageId: v.string(),
+    threadId: v.optional(v.string()),
+    from: v.string(),
+    subject: v.string(),
+    summary: v.string(),
+    receivedAt: v.number(),
+    autoRepliedAt: v.optional(v.number()),
+    // Why she did not write back, kept so a silent inbox can be explained.
+    autoReplySkipped: v.optional(v.string()),
+  })
+    .index("by_message", ["messageId"])
+    .index("by_sender", ["from"])
+    .index("by_received", ["receivedAt"]),
 });

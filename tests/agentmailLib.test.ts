@@ -9,6 +9,7 @@ import {
   isForwarded,
   parseAllowlist,
   received,
+  shouldAutoReply,
   summarize,
   threadKey,
 } from "../src/lib/agentmailLib.ts";
@@ -314,4 +315,66 @@ test("a message with no labels at all is treated as arrived", () => {
   // Fails open in the harmless direction: showing something that turns out to
   // be sent is a cosmetic wrong, hiding something that arrived is a lost email.
   assert.equal(received([{ from: "a@b.com", subject: "s" }]).length, 1);
+});
+
+// ------------------------------------------------ the letter to a stranger
+
+const STRANGER = {
+  from: "Curious Person <curious@example.com>",
+  subject: "what is this",
+  preview: "Saw your address in a talk. What is Zola?",
+  labels: ["received"],
+};
+const VERIFIED = { dkim: "pass", spf: "pass" };
+
+test("a verified stranger gets one reply", () => {
+  assert.equal(shouldAutoReply(STRANGER, VERIFIED, TARIK, false).ok, true);
+});
+
+test("a sender who has already had one never gets another", () => {
+  // Once per SENDER, not per message. Two auto-responders pointed at each other
+  // is a mail loop that only stops when someone's provider blocks someone.
+  const said = shouldAutoReply(STRANGER, VERIFIED, TARIK, true);
+  assert.equal(said.ok, false);
+  assert.match(said.reason, /already/i);
+});
+
+test("an unverified sender gets nothing", () => {
+  // A From header is forgeable. Replying to a spoofed sender means mailing a
+  // stranger unsolicited AI text from Tarik's own domain, on demand, as often
+  // as the attacker likes. DKIM is what stops this being a spam cannon.
+  const said = shouldAutoReply(STRANGER, { dkim: "fail", spf: "pass" }, TARIK, false);
+  assert.equal(said.ok, false);
+  assert.match(said.reason, /dkim|verif/i);
+});
+
+test("a missing DKIM result is treated as a failure", () => {
+  assert.equal(shouldAutoReply(STRANGER, {}, TARIK, false).ok, false);
+});
+
+test("nobody on the allowlist gets the explainer", () => {
+  const said = shouldAutoReply({ ...STRANGER, from: TARIK[0] }, VERIFIED, TARIK, false);
+  assert.equal(said.ok, false);
+  assert.match(said.reason, /allowlist/i);
+});
+
+test("no-reply and bulk senders are left alone", () => {
+  // Replying to a mailing list is how a domain gets blocked.
+  for (const from of ["no-reply@x.com", "noreply@x.com", "bounce+1@x.com", "mailer-daemon@x.com"]) {
+    assert.equal(shouldAutoReply({ ...STRANGER, from }, VERIFIED, TARIK, false).ok, false, from);
+  }
+});
+
+test("an automated message is left alone even from a normal address", () => {
+  const auto = { ...STRANGER, headers: { "auto-submitted": "auto-generated" } };
+  assert.equal(shouldAutoReply(auto, VERIFIED, TARIK, false).ok, false);
+  const bulk = { ...STRANGER, headers: { precedence: "bulk" } };
+  assert.equal(shouldAutoReply(bulk, VERIFIED, TARIK, false).ok, false);
+  const list = { ...STRANGER, headers: { "list-unsubscribe": "<mailto:x@y.com>" } };
+  assert.equal(shouldAutoReply(list, VERIFIED, TARIK, false).ok, false);
+});
+
+test("her own address never triggers a reply to itself", () => {
+  const self = { ...STRANGER, from: "Zola <zola@tarikos.app>" };
+  assert.equal(shouldAutoReply(self, VERIFIED, TARIK, false).ok, false);
 });

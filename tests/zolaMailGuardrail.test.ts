@@ -80,16 +80,18 @@ test("checking her mail cannot write anything", () => {
   }
 });
 
-test("the only thing she can send is a notification to Tarik", () => {
-  // There is exactly one send in this client, it is called emailOwner, and its
-  // recipient comes from the environment. Drafting to the world comes later,
-  // per the spec; until then no tool offers anywhere to send anything.
+test("no send anywhere chooses its own recipient", () => {
+  // THE rule, and it had to survive the auto-reply. Every send in this client
+  // takes its recipient from somewhere that is not a decision: emailOwner reads
+  // OWNER_EMAIL off the server, replyToSender lifts the envelope from the mail
+  // being answered. There is no function here that sends to an address somebody
+  // picked, and drafting to the world still does not exist.
   const sends = CLIENT.match(/export async function \w+/g) ?? [];
   assert.deepEqual(
-    sends.filter((s) => /send|email|draft|reply/i.test(s)),
-    ["export async function emailOwner"],
-    "one send path, named for the one person it can reach",
+    sends.filter((s) => /send|email|draft|reply/i.test(s)).sort(),
+    ["export async function emailOwner", "export async function replyToSender"],
   );
+  assert.match(CLIENT, /process\.env\.OWNER_EMAIL/, "the owner comes from the server");
   assert.doesNotMatch(PROVISION, /name: "email_tarik"|name: "draft_reply"/);
 });
 

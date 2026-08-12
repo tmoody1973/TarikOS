@@ -20,6 +20,10 @@ const isPublicRoute = createRouteMatcher([
   "/api/sms(.*)",
   // Telegram bot webhook: same shape, authenticated by a shared secret header.
   "/api/telegram(.*)",
+  // Mail arriving at zola@tarikos.app: the caller is AgentMail, not a browser.
+  // Authenticated by a Svix signature checked against the raw body inside the
+  // route, before anything is parsed.
+  "/api/agentmail(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
