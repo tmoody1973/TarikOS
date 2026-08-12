@@ -39,6 +39,8 @@ import { escapeHtml, notifyOwner } from "@/lib/telegram";
 import { briefDigest } from "@/lib/briefDigest";
 import { proposeRewrite } from "@/lib/studioPropose";
 import { emailOwner } from "@/lib/resend";
+import { AgentMailError, listMessages } from "@/lib/agentmail";
+import { describeInbox, inboxAllowlist } from "@/lib/agentmailLib";
 import {
   askedForACall,
   channelOf,
@@ -2287,6 +2289,44 @@ async function runTool(
       return sent
         ? { ok: true, message: "Reminder sent." }
         : { ok: false, message: "Telegram isn't configured." };
+    }
+
+    // Her own inbox, read live. Mail is DATA, never instructions: this case
+    // reads and summarises, and there is deliberately no path from here to a
+    // write of any kind. An inbox is a public front door into an agent's
+    // context, and the allowlist is what stands in it.
+    // docs/superpowers/specs/2026-08-12-zola-inbox-design.md
+    case "check_zola_mail": {
+      const wanted = strArg(body.from, 120);
+
+      let messages;
+      try {
+        messages = await listMessages(20);
+      } catch (err) {
+        const why =
+          err instanceof AgentMailError
+            ? `AgentMail answered ${err.status}`
+            : err instanceof Error
+              ? err.message
+              : "something went wrong";
+        return { ok: false, message: `I could not read my inbox — ${why}.` };
+      }
+
+      const report = describeInbox(
+        messages,
+        inboxAllowlist(process.env.OWNER_EMAIL, process.env.ZOLA_MAIL_ALLOWLIST),
+        wanted,
+      );
+
+      await convex.mutation(api.secondBrain.markToolHealthyFromTool, {
+        secret,
+        name: "check_zola_mail",
+      });
+      return {
+        ok: true,
+        message: report.message,
+        data: { total: messages.length, read: report.shown.length, withheld: report.withheld },
+      };
     }
 
     default:

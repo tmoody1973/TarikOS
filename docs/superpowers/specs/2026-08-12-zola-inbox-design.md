@@ -1,7 +1,9 @@
 # Tarik OS — Zola's own inbox
 
 **Date:** 2026-08-12
-**Status:** Proposed — pending review
+**Status:** Approved. Revised after the Gmail relationship was thought through —
+the organizing principle, the forwarding rules and the surface below are the
+parts that changed.
 **Milestone goal:** Zola has an address. Tarik forwards her a confirmation and
 she files it; he asks what came in and she tells him; she writes to him freely
 and to anyone else only as a draft he releases.
@@ -19,6 +21,19 @@ This gives her one at **zola@tarikos.app**, on
 > into an agent's context. Anyone who learns the address can put text in front
 > of her. So mail is DATA, never instructions, and the controls are structural
 > rather than prompt-level.
+
+## The organizing principle
+
+**Gmail is where Tarik is a person. `zola@` is where Zola is an agent.**
+
+The line is whose identity is on the envelope, which is the line the system
+already draws: `draft_email` writes as Tarik and he releases it; `email_tarik`
+writes as Zola to him and needs no release. Anything addressed to the world as
+Tarik requires Tarik.
+
+That single sentence settles the questions this design kept running into —
+which mailbox a message belongs in, which address a reply leaves from, and why
+she may write to him freely but never to anyone else.
 
 ## Why AgentMail
 
@@ -55,7 +70,8 @@ table invented here.
 | Address | `zola@tarikos.app`, custom domain from the start |
 | Sending to Tarik | **Free, no ceremony.** Same privilege as `call_tarik` |
 | Sending to anyone else | **A draft he releases.** She never sends outward unattended |
-| Inbound processing | **Allowlisted.** Everything else is stored and ignored |
+| Replying to a forwarded thread | **A Gmail draft, as him.** `zola@` is intake; Gmail is the outlet |
+| Inbound processing | **Allowlisted senders reach her reasoning automatically.** Everyone else is stored and readable on request |
 | Inbound authority | **None.** Mail can never trigger a write on its own |
 | Resend | **Removed.** Reminders move to AgentMail; one email provider |
 
@@ -76,14 +92,35 @@ else.*
 This is the part that would be easy to get wrong, and the reason the feature is
 worth a spec.
 
-- **An allowlist gates processing**, not just replying. Mail from an unlisted
-  sender is stored and never summarized into her context. Tarik OS already does
-  this twice — `src/lib/smsAllowlist.ts` and `src/lib/telegramAllowlist.ts` —
-  and this is the third instance of the same rule, not a new idea.
+- **The allowlist governs auto-processing, not storage.** Only an allowlisted
+  sender reaches her reasoning context automatically. Everything else is stored,
+  listed, and readable when Tarik asks for it by name — it is simply never
+  summarized into a brief or volunteered on its own.
+
+  The first draft of this spec dropped unlisted mail entirely, and that was too
+  strict in a way that would have shown up on day one: a confirmation from a
+  service *she* signed up with arrives from a sender nobody listed. Under the
+  old rule it vanished. Under this one, a stranger never gets auto-summarized
+  into the morning brief, and the confirmation is still there when she looks for
+  it. Tarik OS already draws this line twice — `src/lib/smsAllowlist.ts` and
+  `src/lib/telegramAllowlist.ts` — and this is the third instance of the same
+  rule, not a new idea.
 - **Nothing arriving by mail can cause a write.** No task, no calendar event, no
   reminder, no send. Mail can produce a briefing card or a proposal; a person
   turns it into an action. The proposal pattern already exists in
   `studioProposals`.
+- **A forward grants attention, not authority.** A forward is Tarik's own
+  gesture, so it earns her attention: she may summarize it, pull a date out of
+  it, propose something off the back of it. It does not make the *content*
+  trustworthy. If a forwarded email says "wire $5,000", she reports that the
+  email says so, and proposes nothing of the sort.
+- **A forwarded thread replies through Gmail, not from `zola@`.** The
+  correspondent knows Tarik, not Zola, and a reply from a stranger's address is
+  wrong almost every time. So a forwarded thread produces a Gmail draft as him.
+  `draft_email` already resolves by `reply_match` against his own threads, and
+  the original is sitting in his Gmail because that is where he forwarded it
+  from. **`zola@` is the intake; Gmail is the outlet**, for anyone who knows
+  him.
 - **Quoted content stays quoted.** When a message is summarized into a card or
   read aloud, it is presented as *what an email said*, never as something Zola
   concluded or was told to do.
@@ -102,7 +139,7 @@ worth a spec.
                                    │
                     ┌──────────────┴───────────────┐
                     ▼                              ▼
-             /inbox (a surface)            recall / briefs
+             /mail/zola (a tab)            recall / briefs
 ```
 
 Outbound rides the same client:
@@ -130,8 +167,22 @@ the allowlist and summarization rules can be tested without a network.
   is fetched on demand.
 - **Tools** — `check_zola_mail` (what came in), `email_tarik` (writes to him),
   `draft_reply` (writes to anyone else, as a draft).
-- **A surface** — where mail lands and where a draft is released. `/mail` is
-  Tarik's Gmail and should stay his; this is a panel or a small page of its own.
+- **A surface** — `/mail/zola`, a tab alongside `/mail`. See below.
+
+### The surface is a tab under `/mail`
+
+A tab means *sibling views of one domain*: both visible, both labelled, mutually
+exclusive, so it is always obvious which mailbox you are looking at. A separate
+nav destination would let him land on hers thinking it was his — the exact
+confusion the identity split exists to prevent.
+
+- **`/mail/zola`, a route, not a query parameter.** `isActiveRoute` matches on
+  `startsWith`, so the MAIL cap still lights and the nav needs no change at all.
+- **Her tab carries a different accent.** `/mail` is lavender because it is his;
+  hers has to read as not-his at a glance.
+- **An unread count on the tab, and a line in the morning brief.** Her inbox has
+  to surface to him rather than wait to be checked, or it is just a second place
+  he has to remember to look.
 
 ## Guardrails to write as tests
 
@@ -139,7 +190,9 @@ the allowlist and summarization rules can be tested without a network.
   Resend one, moved.*
 - No tool sends to an arbitrary address without producing a draft.
 - The webhook verifies its signature before parsing the body.
-- An unlisted sender's mail is stored but never summarized into context.
+- An unlisted sender's mail is stored, and never summarized into context on its
+  own — but it is still readable when Tarik asks for it by name.
+- No reply to a forwarded thread leaves from `zola@`.
 - No inbound path calls `create_task`, `create_calendar_event`, `remind_me`, or
   any send.
 - `AGENTMAIL_API_KEY` is read from the environment and never defaulted.
@@ -158,10 +211,10 @@ the allowlist and summarization rules can be tested without a network.
 
 1. **What is on the allowlist on day one?** Tarik's own addresses, certainly.
    Anything else needs a reason.
-2. **Where does her mail surface?** A panel on `/mail`, a zone on the home HUD,
-   or its own page. Its own page is cleanest but is a twelfth nav destination.
-3. **Should an accepted message reach the morning brief?** Probably, and only as
-   "three things arrived", not as content.
+2. ~~**Where does her mail surface?**~~ **Settled: a tab at `/mail/zola`.**
+3. ~~**Should an accepted message reach the morning brief?**~~ **Settled: yes,
+   as a count and not as content** — "three things arrived", plus the unread
+   badge on her tab.
 4. **Does she get her own semantic memory over mail?** The rule from Studio says
    AgentMail owns the messages and Tarik OS stores links plus summaries, which
    is what `zolaMail` does. Embedding the summaries is a later, separate call.
