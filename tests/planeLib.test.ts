@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   boardColumns,
   describeStatus,
+  isConfirmed,
   rankProjects,
   workItemPayload,
   type PlaneState,
@@ -86,6 +87,34 @@ test("a priority Plane does not know is dropped, not sent", () => {
   // a spoken sentence would lose the task entirely.
   const built = workItemPayload({ title: "x", priority: "super urgent" });
   assert.ok(built.ok && !("priority" in built.payload));
+});
+
+// ------------------------------------------------------- confirmation
+
+test("the string 'true' confirms, because that is what the agent sends", () => {
+  // THE BUG, found by Tarik saying yes and being handed the blueprint again.
+  // Every tool property is declared as a string in the agent's schema, so the
+  // flag arrives as "true" and a `=== true` test can never pass. She could not
+  // confirm at all, no matter what he said.
+  assert.equal(isConfirmed("true"), true);
+});
+
+test("a real boolean still confirms", () => {
+  // The board and any HTTP caller send JSON, where it is a boolean.
+  assert.equal(isConfirmed(true), true);
+});
+
+test("the words a person actually says confirm", () => {
+  for (const said of ["yes", "YES", "go ahead", " true "]) {
+    assert.equal(isConfirmed(said), true, `${said} should confirm`);
+  }
+});
+
+test("absence is not confirmation", () => {
+  // The whole point of the blueprint. Anything ambiguous must NOT write.
+  for (const value of [undefined, null, "", false, "false", "no", "maybe", 0, {}]) {
+    assert.equal(isConfirmed(value), false, `${JSON.stringify(value)} must not confirm`);
+  }
 });
 
 // ------------------------------------------------------------ the board

@@ -84,6 +84,33 @@ export function workItemPayload(input: {
   return { ok: true, payload };
 }
 
+/** The words that mean yes. Everything else, including silence, means no. */
+const AFFIRMATIVE = new Set(["true", "yes", "y", "go ahead", "confirmed", "do it"]);
+
+/**
+ * Did the caller actually confirm?
+ *
+ * Written after this shipped broken. The route tested `body.confirmed !== true`
+ * and every property in the agent's tool schema is declared as a STRING, so the
+ * flag arrived as `"true"` and the test could never pass. Tarik said yes, Zola
+ * sent the flag, and the server handed back the blueprint again — forever. She
+ * could not confirm at all.
+ *
+ * So the check is by VALUE rather than by type, since the transport decides the
+ * type and this code does not control the transport. A boolean still works, for
+ * the board and anything else speaking real JSON.
+ *
+ * Deliberately narrow on the other side: absence, empty, "false", "no" and
+ * anything unrecognised are NOT confirmation. The blueprint exists to stop a
+ * project being created by accident, and a loose truthiness test would let
+ * `confirmed: "not yet"` create one.
+ */
+export function isConfirmed(value: unknown): boolean {
+  if (value === true) return true;
+  if (typeof value !== "string") return false;
+  return AFFIRMATIVE.has(value.trim().toLowerCase());
+}
+
 export type BoardColumn = {
   group: StateGroup;
   /** The project's own name for this group, e.g. "Todo" or "Next up". */

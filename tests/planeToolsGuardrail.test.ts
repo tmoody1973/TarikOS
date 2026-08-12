@@ -78,8 +78,12 @@ test("creating a task does not ask permission first", () => {
 
 test("creating a project returns a blueprint before it writes", () => {
   const body = routeCase("create_plane_project");
-  assert.match(body, /confirmed !== true/, "the first call must be a blueprint");
-  const blueprint = body.split("confirmed !== true")[1]?.split("\n      }")[0] ?? "";
+  // Checked through isConfirmed rather than against a literal `true`. The
+  // literal version shipped and was unusable: every property in the agent's
+  // schema is a string, so the flag arrived as "true", `=== true` never passed,
+  // and Tarik was handed the blueprint again no matter what he said.
+  assert.match(body, /!isConfirmed\(body\.confirmed\)/, "the first call must be a blueprint");
+  const blueprint = body.split("!isConfirmed(body.confirmed)")[1]?.split("\n      }")[0] ?? "";
   assert.ok(blueprint, "there is no blueprint branch");
   assert.doesNotMatch(
     blueprint,

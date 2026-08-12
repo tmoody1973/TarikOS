@@ -47,7 +47,7 @@ import {
   listWorkItems,
   updateWorkItem,
 } from "@/lib/plane";
-import { describeStatus, rankProjects, workItemPayload } from "@/lib/planeLib";
+import { describeStatus, isConfirmed, rankProjects, workItemPayload } from "@/lib/planeLib";
 import {
   createGoogleContact,
   deleteGoogleContact,
@@ -2124,7 +2124,7 @@ async function runTool(
           }).slice(0, MAX_BLUEPRINT_TASKS)
         : [];
 
-      if (body.confirmed !== true) {
+      if (!isConfirmed(body.confirmed)) {
         return {
           ok: true,
           message: `I'd create ${name}, code ${identifier}${tasks.length ? `, with ${tasks.length} task${tasks.length === 1 ? "" : "s"}: ${tasks.join("; ")}` : ", with no tasks yet"}. Say go ahead and I'll make it.`,

@@ -87,6 +87,21 @@ function bodyProp(description: string) {
   return { type: "string" as const, description };
 }
 
+/**
+ * A yes/no flag, declared as a real boolean.
+ *
+ * `bodyProp` types everything as a string, which is right for almost every
+ * argument here and was wrong for exactly one: `create_plane_project`'s
+ * confirmation. Declared as a string, the agent sent "true", the route tested
+ * `=== true`, and no amount of Tarik saying yes could ever create a project.
+ *
+ * The route now checks by value, so this is belt and braces — but the schema
+ * should say what it means.
+ */
+function boolProp(description: string) {
+  return { type: "boolean" as const, description };
+}
+
 // Exported so evals/export_tools.ts can dump the live definitions for the
 // replay harness. The harness reads them; it never rewrites them.
 export const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
@@ -1120,7 +1135,7 @@ export const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
           identifier: bodyProp("A short uppercase code, if he said one. Otherwise omit."),
           description: bodyProp("What the project is for, in a sentence or two"),
           tasks: bodyProp("The first tasks he described, one per entry. Omit if he named none."),
-          confirmed: bodyProp(
+          confirmed: boolProp(
             "Leave this out on the first call. Send true ONLY after Tarik has said yes to the blueprint you read back.",
           ),
         },
