@@ -328,7 +328,7 @@ export function VoiceDock() {
           )}
         </div>
 
-        {!connected && wake.state !== "unsupported" && (
+        {!connected && (
           <button
             type="button"
             onClick={wake.armed ? wake.disarm : wake.arm}

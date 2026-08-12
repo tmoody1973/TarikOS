@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 // The wake word holds an open microphone on Tarik's machine. These are the
 // rules that keep that from being a bad idea.
@@ -9,28 +9,25 @@ const strip = (s: string) =>
   s.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
 
 const HOOK = strip(readFileSync("src/components/useWakeWord.ts", "utf8"));
-const KEY_ROUTE = strip(readFileSync("src/app/api/wake/key/route.ts", "utf8"));
 const DOCK = strip(readFileSync("src/components/VoiceDock.tsx", "utf8"));
+const PKG = readFileSync("package.json", "utf8");
 
-test("the access key never reaches the JS bundle", () => {
-  // NEXT_PUBLIC_ would inline it into the bundle of a public landing page,
-  // where anyone could read it and spend his quota.
-  const src = [HOOK, KEY_ROUTE, DOCK].join("\n");
-  assert.doesNotMatch(src, /NEXT_PUBLIC_PICOVOICE/);
-  assert.match(KEY_ROUTE, /process\.env\.PICOVOICE_ACCESS_KEY/);
+test("the wake word needs no account and no key", () => {
+  // This is why openWakeWord replaced Picovoice, whose Console gates signup
+  // behind company approval and charges a monthly slot to train a phrase. A
+  // personal assistant must not need someone else's permission to hear its
+  // owner.
+  assert.match(PKG, /"openwakeword-web"/);
+  assert.doesNotMatch(PKG, /@picovoice/);
+  assert.doesNotMatch(HOOK, /ACCESS_KEY|accessKey/i);
 });
 
-test("the key endpoint refuses anyone who is not signed in", () => {
-  assert.match(KEY_ROUTE, /isAuthenticated/);
-  assert.match(KEY_ROUTE, /401/);
-});
-
-test("an unset key is an absent feature, not a broken one", () => {
-  // 404 rather than a 500 or an empty string: the dock reads it and never
-  // offers to arm, instead of offering something that throws on click.
-  assert.match(KEY_ROUTE, /404/);
-  assert.match(HOOK, /404/);
-  assert.match(HOOK, /"unsupported"/);
+test("nothing is left of the key endpoint", () => {
+  assert.equal(
+    existsSync("src/app/api/wake/key/route.ts"),
+    false,
+    "the key route must be deleted, not merely unused",
+  );
 });
 
 test("the microphone is released while a session is live", () => {
@@ -55,7 +52,7 @@ test("disarming mid-load does not leave a hot microphone behind", () => {
   // hand the worker a microphone nobody is watching.
   assert.match(HOOK, /wantsArmRef\.current/);
   const guard = HOOK.split("if (!wantsArmRef.current) {")[1]?.split("}")[0] ?? "";
-  assert.match(guard, /release/);
+  assert.match(guard, /mic\.stop\(\)/, "the microphone must be stopped, not just forgotten");
 });
 
 test("the wake word answers before the session can", () => {
@@ -64,9 +61,44 @@ test("the wake word answers before the session can", () => {
   assert.match(HOOK, /earcon\(\)/);
 });
 
-test("the model is served from the app, not from a CDN", () => {
-  // A wake word that phones a third party on every arm is not the private
-  // on-device thing it was chosen for.
-  assert.match(HOOK, /"\/wake\/porcupine_params\.pv"/);
-  assert.doesNotMatch(HOOK, /https?:\/\/[^"']*\.pv/);
+test("the models are served from the app, not from a third party", () => {
+  // What he SAYS never leaves the browser, and the three models it is matched
+  // against do not come from anyone else's server either.
+  assert.match(HOOK, /baseUrl: "\/wake\/models\/"/);
+  assert.doesNotMatch(HOOK, /https?:\/\/[^"']*\.onnx/);
+  for (const model of [
+    "public/wake/models/melspectrogram.onnx",
+    "public/wake/models/embedding_model.onnx",
+    "public/wake/models/hey_jarvis_v0.1.onnx",
+    "public/wake/mic-worklet.js",
+  ]) {
+    assert.ok(existsSync(model), `${model} must be served from public/`);
+  }
+});
+
+test("the audio worklet is served from public, not left to the bundler", () => {
+  // A worklet the bundler does not emit 404s, and a 404 worklet fails silently:
+  // armed, listening to nothing, forever.
+  assert.match(HOOK, /workletUrl: "\/wake\/mic-worklet\.js"/);
+});
+
+test("frames are dropped rather than queued when inference lags", () => {
+  // Inference is async and frames arrive every 80ms. Without a guard a slow
+  // machine queues them and detection drifts further behind the longer it runs.
+  assert.match(HOOK, /busy/);
+});
+
+test("multithreaded wasm is not switched on quietly", () => {
+  // It needs SharedArrayBuffer, which needs COOP/COEP on every response — a
+  // page-wide change to buy speed on a model that already fits its frame.
+  assert.match(HOOK, /numThreads: 1/);
+});
+
+test("the threshold is set for a room with a radio in it", () => {
+  // openWakeWord defaults to 0.5. Tarik is a radio host — his office has voices
+  // and music in it most of the day, and every false fire opens a live mic.
+  // 0.7 is the value ElevenLabs' own guide uses, and it is a starting point to
+  // tune in the actual room rather than a setting to trust.
+  const threshold = Number(HOOK.match(/threshold: ([\d.]+)/)?.[1]);
+  assert.ok(threshold >= 0.7, `threshold is ${threshold}; a busy room needs 0.7 or higher`);
 });

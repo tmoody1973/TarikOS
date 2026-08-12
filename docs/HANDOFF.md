@@ -331,12 +331,15 @@ Built and shipped dark. `/api/wake/key` returns 404 while `PICOVOICE_ACCESS_KEY`
 is unset, and the dock reads that and never offers to arm — an absent key is an
 absent feature rather than a button that throws.
 
-- **Porcupine, on-device.** The Web Speech API is free and zero-dependency and
-  streams the room to Google, which is the wrong trade for the assistant
-  holding his calendar and mail.
-- **`BuiltInKeyword.Jarvis` by default**, so the whole path works before anyone
-  opens the Picovoice Console. A trained "Hey Zola" is a `.ppn` dropped in
-  `public/wake/` and `PICOVOICE_KEYWORD=hey-zola.ppn`.
+- **openWakeWord, on-device, Apache-2.0 code AND models.** No account, no key,
+  no approval. Three ONNX models in `public/wake/models` — melspectrogram,
+  speech embedding, phrase classifier — chained in the browser.
+- **`hey_jarvis` by default**, one of the pretrained models, so the whole path
+  works with nothing from anybody. "Hey Zola" is a file: train it, drop
+  `hey_zola.onnx` in `public/wake/models`, change `KEYWORD` in `useWakeWord.ts`.
+- **Threshold 0.7**, not openWakeWord's default 0.5. Tarik is a radio host and
+  his office has voices in it most of the day; every false fire opens a live
+  microphone. A starting point to tune in the real room, not a setting to trust.
 - **The detector is released while a session is live.** ElevenLabs' own guide
   stops its mic stream before `start_session` "to avoid conflicts", and there is
   a second reason it does not give: a detector left running hears Zola through
@@ -352,13 +355,20 @@ you*, never an Echo on the counter. Counter-top is a Raspberry Pi and
 [ElevenLabs' own guide](https://elevenlabs.io/docs/eleven-agents/guides/integrations/raspberry-pi-voice-assistant),
 which is a different device and a different project.
 
+**Two engines were rejected, both for the same reason and both worth not
+re-litigating.** Picovoice: Console signup gated behind company approval, and a
+monthly slot to train a phrase. DaVoice (`web-wake-word`): MIT code, but the
+runtime is licence-key gated and their own README's example key decodes to an
+expiry of 2025-07-14 with the comment "Check for the latest License"; custom
+words are an email to a person at an unpublished price, and the licence on the
+MODELS is never stated — which matters in a public MIT repo. An assistant that
+stops hearing its owner on a date somebody else picks is not the thing being
+built here.
+
 Still unmeasured: how often it false-fires in a room with a radio on.
 
 ## Open, needs Tarik
 
-- **`PICOVOICE_ACCESS_KEY` in Vercel**, from
-  [console.picovoice.ai](https://console.picovoice.ai/). Free tier covers three
-  users a month; he is one. Nothing about the wake word appears until it is set.
 - **Say "check your mail" to her out loud.** Everything below the voice layer
   is verified in production; the spoken path is not.
 
