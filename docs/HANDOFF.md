@@ -232,6 +232,14 @@ The first two are worth reading as a **class**, not as incidents.
   checking rather than assuming. Verified out loud on production: Zola says
   goodbye, the transport closes, `onDisconnect` fires and the dock returns to
   STANDBY on its own. No client-side listener needed.
+- **AgentMail enforces its OWN allow list on outbound RECIPIENTS**, and an
+  empty list denies everyone except the human's address. This is why reminders
+  to Tarik always worked and the first letter to a stranger came back
+  `MessageRejectedError: Recipient(s) blocked: … (not in allow list)`. Nothing
+  in this codebase was wrong; the provider had a second gate nobody had opened.
+  The route now calls `allowRecipient()` after the reply decision passes, and a
+  guardrail asserts that ordering. Read the `fix` field on an AgentMail error —
+  it names the exact endpoint, and it is how this was found.
 - **AgentMail reports NO `dkim` field.** The verdict lives inside the
   `Authentication-Results` header as free text, among the client IP and the helo
   name — `"…; dkim=pass header.i=@gmail.com; dmarc=pass…"`. The first version of
@@ -379,6 +387,9 @@ Still unmeasured: how often it false-fires in a room with a radio on.
 
 ## Open, needs Tarik
 
+- **Send another email to `zola@tarikos.app` from a third address.** The first
+  one is stored with its failure reason and will not be retried — deliveries are
+  idempotent on the message id, so it needs a fresh message.
 - **Say "check your mail" to her out loud.** Everything below the voice layer
   is verified in production; the spoken path is not.
 

@@ -143,6 +143,37 @@ export async function emailOwner(
 }
 
 /**
+ * Permit one address to be written to.
+ *
+ * AgentMail enforces its OWN allow list on outbound recipients, and on this
+ * account an empty list denies everyone except the human's address — which is
+ * exactly why reminders always worked and the first letter to a stranger came
+ * back "Recipient(s) blocked: … (not in allow list)". Nothing in this codebase
+ * was wrong; the provider had a second gate nobody had opened.
+ *
+ * Called ONLY after every gate in shouldAutoReply has passed, so the address
+ * being permitted is one that wrote in first, cleared DKIM, and is not a
+ * machine. It grants nothing dangerous on its own either: no tool can reach
+ * replyToSender, and replyToSender cannot be pointed anywhere but at the
+ * envelope of a message that already arrived.
+ */
+export async function allowRecipient(
+  address: string,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const key = process.env.AGENTMAIL_API_KEY?.trim();
+  if (!key) return { ok: false, reason: "AGENTMAIL_API_KEY is not set" };
+  const res = await fetch(`${BASE}/lists/send/allow`, {
+    method: "POST",
+    headers: { "content-type": "application/json", Authorization: `Bearer ${key}` },
+    body: JSON.stringify({ entry: address }),
+  });
+  if (!res.ok) {
+    return { ok: false, reason: `AgentMail ${res.status}: ${(await res.text()).slice(0, 160)}` };
+  }
+  return { ok: true };
+}
+
+/**
  * The one automatic letter, back to whoever wrote in.
  *
  * Note what is NOT a parameter here and never will be: a choice of recipient.

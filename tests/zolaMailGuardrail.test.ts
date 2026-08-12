@@ -95,6 +95,17 @@ test("no send anywhere chooses its own recipient", () => {
   assert.doesNotMatch(PROVISION, /name: "email_tarik"|name: "draft_reply"/);
 });
 
+test("a recipient is permitted only after every gate has passed", () => {
+  // allowRecipient writes to AgentMail's own outbound allow list. It must sit
+  // AFTER the shouldAutoReply decision, never before — permitting first and
+  // deciding second would hand the provider's gate away to anyone who wrote in.
+  const route = readFileSync("src/app/api/agentmail/inbound/route.ts", "utf8");
+  const decided = route.indexOf("if (!decision.ok)");
+  const permitted = route.indexOf("await allowRecipient(");
+  assert.ok(decided > 0 && permitted > 0, "both steps must exist");
+  assert.ok(permitted > decided, "permission must come after the decision, not before");
+});
+
 test("unlisted senders are separated from allowlisted ones", () => {
   const body = routeCase("check_zola_mail");
   assert.match(body, /inboxAllowlist/, "the route must build the allowlist");

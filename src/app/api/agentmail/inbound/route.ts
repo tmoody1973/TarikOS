@@ -3,7 +3,7 @@ import { Webhook } from "svix";
 import Anthropic from "@anthropic-ai/sdk";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
-import { getMessage, replyToSender } from "@/lib/agentmail";
+import { allowRecipient, getMessage, replyToSender } from "@/lib/agentmail";
 import {
   authResults,
   inboxAllowlist,
@@ -132,6 +132,20 @@ export async function POST(req: NextRequest) {
     } catch {
       // A letter with no quoted body is still worth sending.
     }
+  }
+
+  // AgentMail keeps its own allow list on outbound recipients, and on this
+  // account an empty one denies everybody but Tarik. Permission is granted here
+  // and nowhere else — after every gate has passed, for the one address that
+  // wrote in.
+  const permitted = await allowRecipient(from.match(/<([^>]+)>/)?.[1] ?? from);
+  if (!permitted.ok) {
+    await convex.mutation(api.zolaMailDb.markAnswered, {
+      secret: toolSecret,
+      messageId,
+      skipped: permitted.reason,
+    });
+    return NextResponse.json({ ok: true, replied: false, why: permitted.reason });
   }
 
   const middle = await writeMiddle({ from, subject, body });
