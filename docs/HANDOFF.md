@@ -227,6 +227,11 @@ The first two are worth reading as a **class**, not as incidents.
   duplicate as "the tool hit an internal error". Real names do it too: "Pledge
   Drive 2026" and "2027" both give `PLEDGEDR`. Derive against what already
   exists, and surface the provider's own refusal instead of a generic error.
+- **`end_call` DOES close a browser WebRTC session.** Undocumented — the docs
+  cover it for phone calls and say nothing about WebRTC — so it was worth
+  checking rather than assuming. Verified out loud on production: Zola says
+  goodbye, the transport closes, `onDisconnect` fires and the dock returns to
+  STANDBY on its own. No client-side listener needed.
 - **An ElevenLabs system tool goes in `tools`, NOT in `built_in_tools`.** The
   agent config has a `built_in_tools` map with an `end_call` slot, and writing
   to it does nothing whatsoever: the API returns **200**, reports success, and
@@ -324,12 +329,7 @@ The first two are worth reading as a **class**, not as incidents.
 
 - **Say "check your mail" to her out loud.** Everything below the voice layer
   is verified in production; the spoken path is not.
-- **Say "that's all, thanks Zola" out loud and watch the dock.** She now has
-  `end_call` and the simulation proves she reaches for it on a goodbye and not
-  on four turns of "okay"/"sure"/"got it". What the simulation cannot prove is
-  that ending the call actually closes the **WebRTC transport** so `onDisconnect`
-  fires and the dock returns to STANDBY. That is undocumented for browser
-  sessions and is the one thing left to check.
+
 - **Watch tomorrow's morning brief** for the inbox line. The step is deployed
   but has never run on a schedule.
 - **Open an exported .docx in Word** and confirm it is not corrupt. Open since
