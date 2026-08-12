@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Authenticated, AuthLoading, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { ZoneEmpty } from "@/components/hud/Zone";
-import type { BoardColumn, PlaneProject, StateGroup } from "@/lib/planeLib";
+import { TaskPanel } from "./TaskPanel";
+import type { BoardColumn, PlaneProject, PlaneWorkItem, StateGroup } from "@/lib/planeLib";
 
 // Projects. The board Tarik works in, so he never opens plane.so.
 //
@@ -55,6 +56,7 @@ function ProjectsInner() {
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const [only, setOnly] = useState<StateGroup | "all">("all");
+  const [open, setOpen] = useState<PlaneWorkItem | null>(null);
 
   const load = useCallback(async (id: string | null) => {
     setProblem(null);
@@ -188,14 +190,19 @@ function ProjectsInner() {
               </h2>
               <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2">
                 {column.items.map((workItem) => (
-                  <li
-                    key={workItem.id}
-                    className="rounded-md border border-panel-edge bg-black/20 px-2.5 py-2"
-                  >
-                    <p className="text-xs text-foreground">{workItem.name}</p>
-                    <p className="mt-1 text-[10px] tracking-[0.2em] text-steel">
-                      {workItem.priority !== "none" ? workItem.priority.toUpperCase() : ""}
-                    </p>
+                  <li key={workItem.id}>
+                    {/* A button, not a div with onClick. A card is an action,
+                        so it has to be reachable and operable from a keyboard
+                        like every other action on this page. */}
+                    <button
+                      onClick={() => setOpen(workItem)}
+                      className="w-full rounded-md border border-panel-edge bg-black/20 px-2.5 py-2 text-left transition-colors hover:border-hopbush/60 focus-visible:outline-2 focus-visible:outline-cyan-hud motion-reduce:transition-none"
+                    >
+                      <p className="text-xs text-foreground">{workItem.name}</p>
+                      <p className="mt-1 text-[10px] tracking-[0.2em] text-steel">
+                        {workItem.priority !== "none" ? workItem.priority.toUpperCase() : ""}
+                      </p>
+                    </button>
                   </li>
                 ))}
                 {column.items.length === 0 ? (
@@ -206,6 +213,16 @@ function ProjectsInner() {
           ))}
         </div>
       )}
+      <TaskPanel
+        workItem={open}
+        projectId={projectId ?? ""}
+        projectIdentifier={
+          (board?.projects ?? []).find((p) => p.id === projectId)?.identifier ?? ""
+        }
+        columns={columns}
+        onClose={() => setOpen(null)}
+        onChanged={() => load(projectId)}
+      />
     </div>
   );
 }

@@ -184,6 +184,22 @@ test("a work item lands in the column for its group, not its state name", () => 
   assert.equal(unstarted?.items.length, 1, "the renamed column lost its work item");
 });
 
+test("every column carries the state id to move work INTO it", () => {
+  // Without this you can only move a task to a column that already has one,
+  // and the commonest move of all — the first task from Backlog into an empty
+  // Todo — is the one that cannot be made.
+  const columns = boardColumns(STATES, []);
+  assert.equal(columns.find((c) => c.group === "unstarted")?.stateId, "todo");
+  assert.equal(columns.find((c) => c.group === "started")?.stateId, "prog");
+});
+
+test("a group the project defines no state for carries no id", () => {
+  // Rendered as a column that cannot be a destination, rather than one that
+  // silently fails when clicked.
+  const columns = boardColumns([state({ id: "back", group: "backlog" })], []);
+  assert.equal(columns.find((c) => c.group === "completed")?.stateId, undefined);
+});
+
 test("a state with no work items is still a column", () => {
   // Otherwise the board's shape changes as work moves through it, and a column
   // you could drop something into disappears when it empties.

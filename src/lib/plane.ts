@@ -21,7 +21,8 @@ const BASE = "https://api.plane.so/api/v1";
  * per-environment, and a slug that can differ between dev and production is a
  * way to write test data into the wrong workspace.
  */
-export const WORKSPACE = "moody-and-co";
+import { WORKSPACE_SLUG as WORKSPACE } from "./planeLib";
+export { WORKSPACE };
 
 /** A Plane request that failed, carrying enough to say WHY out loud. */
 export class PlaneError extends Error {

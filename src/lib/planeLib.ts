@@ -44,7 +44,45 @@ export type PlaneWorkItem = {
   priority: string;
   sequence_id: number;
   target_date: string | null;
+  /**
+   * Plane returns three description fields on the list endpoint —
+   * `description_html`, `description_stripped` and a binary one. The stripped
+   * form is the one to READ: the HTML is Plane's own editor output and this app
+   * does not render untrusted HTML anywhere it has not already had to.
+   */
+  description_stripped?: string;
 };
+
+/**
+ * The workspace, defined once, here.
+ *
+ * In the PURE module rather than beside the API client, because the client
+ * reads `process.env` and anything importing it stops being testable without a
+ * token — so a link builder living there would drag the whole environment into
+ * a unit test. plane.ts imports this; nothing defines it twice.
+ *
+ * A constant rather than an environment variable: it is not a secret, it is not
+ * per-environment, and a slug that can differ between dev and production is a
+ * way to write test data into the wrong workspace.
+ */
+export const WORKSPACE_SLUG = "moody-and-co";
+
+/** A work item's human name, e.g. MOODY-12. Built, not returned. */
+export function workItemCode(identifier: string, sequenceId: number): string {
+  return `${identifier}-${sequenceId}`;
+}
+
+/**
+ * Where this work item lives in Plane.
+ *
+ * A link out, on the one surface built so Tarik does not go there — because
+ * "never has to" is not "cannot", and the things this board deliberately does
+ * not do (cycles, modules, comments, attachments) all live behind it.
+ */
+export function workItemUrl(projectId: string, workItemId: string): string {
+  return `https://app.plane.so/${WORKSPACE_SLUG}/projects/${projectId}/issues/${workItemId}`;
+}
+
 
 export type PlaneProject = { id: string; name: string; identifier: string };
 
@@ -160,6 +198,15 @@ export type BoardColumn = {
   group: StateGroup;
   /** The project's own name for this group, e.g. "Todo" or "Next up". */
   name: string;
+  /**
+   * The state to move work INTO this column, or undefined if the project
+   * defines no state in this group.
+   *
+   * Carried on the column rather than read off a card, because the commonest
+   * move of all is the first task from Backlog into an empty Todo — and a
+   * column with no cards has no card to read a state from.
+   */
+  stateId?: string;
   items: PlaneWorkItem[];
 };
 
@@ -182,13 +229,20 @@ export function boardColumns(
   states: PlaneState[],
   items: PlaneWorkItem[],
 ): BoardColumn[] {
-  const columns: BoardColumn[] = STATE_GROUPS.map((group) => ({
-    group,
-    // The project's own vocabulary, so the board reads the way Plane does.
-    // Falls back to the group when a project has no state in it at all.
-    name: states.find((s) => s.group === group)?.name ?? group,
-    items: [],
-  }));
+  const columns: BoardColumn[] = STATE_GROUPS.map((group) => {
+    // The FIRST state in the group is the destination. A project with both
+    // "In Progress" and "In Review" collapses to one column, and moving a card
+    // there should mean the earlier of the two.
+    const state = states.find((s) => s.group === group);
+    return {
+      group,
+      // The project's own vocabulary, so the board reads the way Plane does.
+      // Falls back to the group when a project has no state in it at all.
+      name: state?.name ?? group,
+      stateId: state?.id,
+      items: [],
+    };
+  });
 
   const byGroup = new Map(columns.map((c) => [c.group, c]));
   for (const workItem of items) {
