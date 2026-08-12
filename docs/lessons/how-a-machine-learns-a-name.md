@@ -330,4 +330,4 @@ mistake was worse, and being able to see what was happening.
 ---
 
 *Written while the training ran. Part of the [Tarik OS](https://github.com/tmoody1973/TarikOS)
-build diary.*
+build diary.*	
