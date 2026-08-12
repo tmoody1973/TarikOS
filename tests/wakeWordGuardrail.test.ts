@@ -102,3 +102,13 @@ test("the threshold is set for a room with a radio in it", () => {
   const threshold = Number(HOOK.match(/threshold: ([\d.]+)/)?.[1]);
   assert.ok(threshold >= 0.7, `threshold is ${threshold}; a busy room needs 0.7 or higher`);
 });
+
+test("the model files are not run through Clerk middleware", () => {
+  // Found on production: the worklet served (200) and the models did not (404).
+  // The matcher excludes a list of static extensions and .onnx was not on it,
+  // so 3.5MB of public model weights took a middleware hop and came back as an
+  // auth redirect. They carry no secret; they are weights.
+  const proxy = readFileSync("src/proxy.ts", "utf8");
+  const matcher = proxy.split("matcher:")[1]?.split("]")[0] ?? "";
+  assert.match(matcher, /onnx/, ".onnx must be excluded from the middleware matcher");
+});

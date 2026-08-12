@@ -28,7 +28,11 @@ export default clerkMiddleware(async (auth, req) => {
 
 export const config = {
   matcher: [
-    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    // `onnx` is the wake-word models in public/wake. They are weights, not
+    // secrets, and without the exclusion 3.5MB of static asset takes a
+    // middleware hop and comes back as an auth redirect — which is exactly how
+    // it was found: the worklet served, the models 404'd.
+    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|onnx|webmanifest)).*)",
     "/(api|trpc)(.*)",
   ],
 };
