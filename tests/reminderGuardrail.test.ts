@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 // Reminders reach Tarik by email, which brushes against the oldest guardrail in
 // this system: "Zola drafts; only a human sends."
@@ -10,6 +10,9 @@ import { readFileSync } from "node:fs";
 // in the shape call_tarik established — the recipient is not a parameter of
 // anything, it comes from the server, and it never touches Gmail.
 //
+// It now leaves from zola@tarikos.app rather than Resend's shared address. One
+// email provider; the rule above is unchanged by the move.
+//
 // Comments are stripped before every scan.
 
 const CODE = (path: string) =>
@@ -18,7 +21,7 @@ const CODE = (path: string) =>
     .replace(/\/\*[\s\S]*?\*\//g, "");
 
 const ROUTE = CODE("src/app/api/tools/[tool]/route.ts");
-const RESEND = CODE("src/lib/resend.ts");
+const SENDER = CODE("src/lib/agentmail.ts");
 const DB = CODE("convex/remindersDb.ts");
 const PROVISION = readFileSync("scripts/provision-agent.ts", "utf8");
 
@@ -36,8 +39,8 @@ test("the tool route still has no Gmail send path", () => {
 test("the reminder email recipient is not a parameter of anything", () => {
   // THE rule that makes an email channel safe. Same shape as call_tarik: there
   // is no argument to pass, so there is nothing to talk her into.
-  assert.match(RESEND, /process\.env\.OWNER_EMAIL/);
-  const fn = RESEND.split("export async function emailOwner")[1] ?? "";
+  assert.match(SENDER, /process\.env\.OWNER_EMAIL/);
+  const fn = SENDER.split("export async function emailOwner")[1] ?? "";
   assert.ok(fn, "emailOwner is missing");
   assert.doesNotMatch(
     fn,
@@ -45,7 +48,7 @@ test("the reminder email recipient is not a parameter of anything", () => {
     "the recipient must come from the environment, never an argument",
   );
   // And its signature takes a subject and a body. Nothing else.
-  const sig = RESEND.split("export async function emailOwner")[1]?.split(")")[0] ?? "";
+  const sig = SENDER.split("export async function emailOwner")[1]?.split(")")[0] ?? "";
   assert.doesNotMatch(sig, /to|recipient|address/i, "emailOwner must not accept a recipient");
 });
 
@@ -77,11 +80,22 @@ test("delivery is secret-gated like every other tool route", () => {
 
 // ------------------------------------------------- reminders behave
 
-test("a missing Resend key is reported, not swallowed", () => {
+test("a missing AgentMail key is reported, not swallowed", () => {
   // An unconfigured channel that reports success is a reminder he never gets
   // and never learns he never got.
-  assert.match(RESEND, /RESEND_API_KEY is not set/);
-  assert.match(RESEND, /OWNER_EMAIL is not set/);
+  assert.match(SENDER, /AGENTMAIL_API_KEY is not set/);
+  assert.match(SENDER, /OWNER_EMAIL is not set/);
+});
+
+test("Resend is gone rather than merely unused", () => {
+  // One email provider. A dead client with a live key in someone's dashboard is
+  // a second way to send that nothing tests.
+  assert.equal(existsSync("src/lib/resend.ts"), false, "src/lib/resend.ts must be deleted");
+  assert.doesNotMatch(ROUTE, /resend|RESEND/i);
+});
+
+test("a reminder leaves from her own address", () => {
+  assert.match(SENDER, /ZOLA_INBOX/);
 });
 
 test("scheduling writes the row before it schedules the fire", () => {

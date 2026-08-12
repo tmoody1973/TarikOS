@@ -38,8 +38,7 @@ import { uploadBuffer } from "@/lib/r2";
 import { escapeHtml, notifyOwner } from "@/lib/telegram";
 import { briefDigest } from "@/lib/briefDigest";
 import { proposeRewrite } from "@/lib/studioPropose";
-import { emailOwner } from "@/lib/resend";
-import { AgentMailError, listMessages } from "@/lib/agentmail";
+import { AgentMailError, emailOwner, listMessages } from "@/lib/agentmail";
 import { describeInbox, inboxAllowlist } from "@/lib/agentmailLib";
 import {
   askedForACall,

@@ -203,9 +203,10 @@ than `text`, or every summary of a real email is mostly a signature.
 earn its existence, and it needs no sending at all. Sending to Tarik and
 drafting to the world come after, per the spec.
 
-When reminders move to AgentMail, delete `src/lib/resend.ts` in the same change
-and `RESEND_API_KEY` stops being needed. Reminders then arrive from
-`zola@tarikos.app` rather than `onboarding@resend.dev`. One email provider.
+Done. `src/lib/resend.ts` is deleted, `emailOwner` moved into
+`src/lib/agentmail.ts`, and reminders arrive from `zola@tarikos.app`. One email
+provider. The rule is unchanged by the move: the recipient comes from
+`OWNER_EMAIL` on the server and is not a parameter of anything.
 
 ---
 
@@ -254,8 +255,6 @@ The first two are worth reading as a **class**, not as incidents.
   tests assert exactly one dialling site whose destination is not a parameter
   anywhere. A reminder was not worth a second one. "Call me" sets a Telegram
   reminder and **says so**.
-- **`RESEND_API_KEY` is unset**, so an email reminder fails loudly rather than
-  silently. Moot once reminders move to AgentMail.
 - **The board's due-date badge has never been seen on screen.** Built; no task
   in the workspace has a due date yet.
 - **`planeLinks` was specified and not built.** Nothing populates it, and a

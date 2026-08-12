@@ -74,10 +74,16 @@ test("checking her mail cannot write anything", () => {
   }
 });
 
-test("she has no way to send from her own address", () => {
-  // Sending to Tarik and drafting to the world come later, per the spec. Until
-  // then there must be no send path at all, rather than an unguarded one.
-  assert.doesNotMatch(CLIENT, /export async function send/);
+test("the only thing she can send is a notification to Tarik", () => {
+  // There is exactly one send in this client, it is called emailOwner, and its
+  // recipient comes from the environment. Drafting to the world comes later,
+  // per the spec; until then no tool offers anywhere to send anything.
+  const sends = CLIENT.match(/export async function \w+/g) ?? [];
+  assert.deepEqual(
+    sends.filter((s) => /send|email|draft|reply/i.test(s)),
+    ["export async function emailOwner"],
+    "one send path, named for the one person it can reach",
+  );
   assert.doesNotMatch(PROVISION, /name: "email_tarik"|name: "draft_reply"/);
 });
 

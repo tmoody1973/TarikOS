@@ -92,3 +92,52 @@ export async function getMessage(
   const path = `/inboxes/${encodeURIComponent(inbox)}/messages/${encodeURIComponent(messageId)}`;
   return request<MailMessage>(path);
 }
+
+/**
+ * Email to exactly one person: Tarik.
+ *
+ * This is NOT a send path for Zola, and the difference is the whole design.
+ * "Zola drafts; only a human sends" governs CORRESPONDENCE — mail that goes to
+ * other people, as him. A reminder is a notification to himself, built in the
+ * shape `call_tarik` established: the recipient is not a parameter of
+ * anything, it comes from OWNER_EMAIL on the server, so there is no argument
+ * to pass and nothing to talk her into.
+ *
+ * It never touches Gmail. The Gmail guardrail stays literally intact: there is
+ * still no send path in the tool route, and this could not become one without
+ * someone adding a recipient argument that does not exist.
+ *
+ * It reports its failures rather than throwing, unlike the reads above,
+ * because the caller is a scheduled reminder: an unconfigured channel that
+ * reports success is a reminder he never gets and never learns he never got.
+ */
+export async function emailOwner(
+  subject: string,
+  body: string,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const key = process.env.AGENTMAIL_API_KEY?.trim();
+  const owner = process.env.OWNER_EMAIL?.trim();
+  if (!key) return { ok: false, reason: "AGENTMAIL_API_KEY is not set" };
+  if (!owner) return { ok: false, reason: "OWNER_EMAIL is not set" };
+
+  // POST /inboxes/{inbox}/messages/send, confirmed against the live API: `to`
+  // is the only required field, and it is validated as an array of addresses.
+  const res = await fetch(
+    `${BASE}/inboxes/${encodeURIComponent(ZOLA_INBOX)}/messages/send`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json", Authorization: `Bearer ${key}` },
+      // An array of exactly one, always the owner. There is no code path that
+      // puts anything else in here.
+      body: JSON.stringify({ to: [owner], subject, text: body }),
+    },
+  );
+
+  if (!res.ok) {
+    return {
+      ok: false,
+      reason: `AgentMail ${res.status}: ${(await res.text()).slice(0, 160)}`,
+    };
+  }
+  return { ok: true };
+}
