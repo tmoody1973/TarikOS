@@ -201,6 +201,11 @@ function ProjectsInner() {
                       <p className="text-xs text-foreground">{workItem.name}</p>
                       <p className="mt-1 text-[10px] tracking-[0.2em] text-steel">
                         {workItem.priority !== "none" ? workItem.priority.toUpperCase() : ""}
+                        {workItem.target_date ? (
+                          <span className="ml-2 text-hopbush/80">
+                            DUE {workItem.target_date.slice(5)}
+                          </span>
+                        ) : null}
                       </p>
                     </button>
                   </li>

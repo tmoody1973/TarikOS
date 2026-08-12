@@ -11,6 +11,7 @@ import {
 import { api } from "../../../convex/_generated/api";
 import { Zone, ZoneEmpty } from "@/components/hud/Zone";
 import { FeedsPanel } from "./FeedsPanel";
+import { spokenTime } from "../../../convex/remindersLib";
 
 // Control Panel page (MOO-483): tool registry toggles + workflows section
 // (enabled toggle, last run, last error, Run now).
@@ -199,6 +200,7 @@ function ControlInner() {
       <FeedsPanel />
       <MutedMailPanel />
       <DefaultProjectPanel />
+      <RemindersPanel />
     </div>
   );
 }
@@ -338,6 +340,50 @@ function MutedMailPanel() {
             ) : null}
           </div>
         </div>
+      )}
+    </Zone>
+  );
+}
+
+/**
+ * What Zola has been asked to interrupt him about, and a way to call it off.
+ *
+ * A reminder set by voice is otherwise invisible until it fires. Something set
+ * for next Tuesday that he cannot see, check or cancel is a thing he has to
+ * remember about his reminder system, which is the opposite of the point.
+ */
+function RemindersPanel() {
+  const pending = useQuery(api.remindersDb.pendingForOwner, {});
+  const cancel = useMutation(api.remindersDb.cancelForOwner);
+
+  return (
+    <Zone title="Reminders" accent="bg-cyan-hud">
+      {pending === undefined ? (
+        <ZoneEmpty>syncing…</ZoneEmpty>
+      ) : pending.length === 0 ? (
+        <ZoneEmpty>Nothing pending.</ZoneEmpty>
+      ) : (
+        <ul className="space-y-1.5 overflow-y-auto">
+          {pending.map((r) => (
+            <li
+              key={r._id}
+              className="flex items-center gap-3 rounded-md border border-panel-edge bg-black/30 px-3 py-2"
+            >
+              <div className="min-w-0">
+                <span className="block truncate text-sm text-foreground/90">{r.text}</span>
+                <span className="block text-[10px] uppercase tracking-wider text-steel">
+                  {spokenTime(r.dueAt)} · {r.channel}
+                </span>
+              </div>
+              <button
+                onClick={() => void cancel({ id: r._id })}
+                className="ml-auto shrink-0 rounded-md border border-panel-edge px-2 py-0.5 text-[10px] uppercase tracking-[0.3em] text-steel transition-colors hover:border-salmon hover:text-salmon focus-visible:outline-2 focus-visible:outline-cyan-hud motion-reduce:transition-none"
+              >
+                Cancel
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
     </Zone>
   );

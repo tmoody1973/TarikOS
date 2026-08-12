@@ -40,7 +40,7 @@ const BEATS = [
 
 // Real tools from scripts/provision-agent.ts — never invent entries here.
 // TOOL_COUNT is the true total defined there; the remainder line derives.
-const TOOL_COUNT = 43;
+const TOOL_COUNT = 46;
 const REGISTRY: [string, string][] = [
   ["get_emails", "mail"],
   ["draft_email", "mail"],

@@ -288,3 +288,41 @@ test("a project is findable by its identifier", () => {
   const ranked = rankProjects([{ id: "a", name: "Moody and Co", identifier: "MOODY" }], "moody");
   assert.equal(ranked.length, 1);
 });
+
+// ------------------------------------------------------------ due dates
+
+test("a due date is sent as Plane's target_date", () => {
+  const built = workItemPayload({ title: "Call the bank", due: "2026-08-14" });
+  assert.ok(built.ok);
+  assert.equal(built.ok ? built.payload.target_date : "", "2026-08-14");
+});
+
+test("a due date Plane cannot read is dropped, not sent", () => {
+  // Same rule as an unknown priority: Plane rejects the whole request, so one
+  // mis-heard word would lose the task rather than the date.
+  for (const due of ["friday", "14/08/2026", "2026-13-45", ""]) {
+    const built = workItemPayload({ title: "x", due });
+    assert.ok(built.ok, due);
+    assert.ok(built.ok && !("target_date" in built.payload), `${due} was sent`);
+  }
+});
+
+test("a task with no due date is still a task", () => {
+  const built = workItemPayload({ title: "Call the bank" });
+  assert.ok(built.ok && !("target_date" in built.payload));
+});
+
+test("the status names what is past due, not just the counts", () => {
+  const said = describeStatus("Pledge drive", [
+    item({ id: "a", state_group: "started", name: "Book the venue", target_date: "2020-01-01" }),
+  ]);
+  assert.match(said, /past due/i);
+  assert.match(said, /Book the venue/);
+});
+
+test("work that is finished is never called past due", () => {
+  const said = describeStatus("Pledge drive", [
+    item({ id: "a", state_group: "completed", name: "Pick a date", target_date: "2020-01-01" }),
+  ]);
+  assert.doesNotMatch(said, /past due/i);
+});

@@ -38,6 +38,15 @@ import { uploadBuffer } from "@/lib/r2";
 import { escapeHtml, notifyOwner } from "@/lib/telegram";
 import { briefDigest } from "@/lib/briefDigest";
 import { proposeRewrite } from "@/lib/studioPropose";
+import { emailOwner } from "@/lib/resend";
+import {
+  askedForACall,
+  channelOf,
+  describeReminders,
+  matchReminders,
+  reminderAt,
+  spokenTime,
+} from "../../../../../convex/remindersLib";
 import { DOC_TYPES } from "../../../../../convex/studioLib";
 import {
   createProject,
@@ -2015,6 +2024,7 @@ async function runTool(
         title: strArg(body.title, 400) ?? "",
         description: strArg(body.description, 2000),
         priority: strArg(body.priority, 20),
+        due: strArg(body.due, 10),
       });
       if (!built.ok) return { ok: false, message: built.error };
 
@@ -2183,6 +2193,100 @@ async function runTool(
         message: `Created ${project.name}${tasks.length ? ` with ${tasks.length} task${tasks.length === 1 ? "" : "s"}` : ""}. It's on your Projects page.`,
         data: { id: project.id, identifier: project.identifier },
       };
+    }
+
+    // ---------------------------------------------------------- reminders
+
+    case "remind_me": {
+      const built = reminderAt(
+        strArg(body.text, 400) ?? "",
+        strArg(body.when, 40) ?? "",
+        Date.now(),
+      );
+      if (!built.ok) return { ok: false, message: built.error };
+
+      const how = channelOf(strArg(body.channel, 30));
+      const stored = await convex.mutation(api.remindersDb.schedule, {
+        secret,
+        text: built.text,
+        dueAt: built.dueAt,
+        channel: how,
+      });
+      if (!stored.ok) {
+        return { ok: false, message: "You have a lot of reminders pending. Clear some first." };
+      }
+      // Read back the TIME as well as the thing. A reminder set for the wrong
+      // day is only catchable here, before it goes quiet for a week.
+      return {
+        ok: true,
+        // The degradation is SAID. Asking to be phoned and being texted
+        // without being told is how someone misses the reminder they set.
+        message:
+          `I'll remind you to ${built.text} on ${spokenTime(built.dueAt)}` +
+          (how === "email" ? " by email." : ".") +
+          (askedForACall(strArg(body.channel, 30))
+            ? " I'll text it rather than call — I can only phone you when you ask me directly."
+            : ""),
+        data: { id: stored.id, dueAt: built.dueAt, channel: how },
+      };
+    }
+
+    case "list_reminders": {
+      const rows = await convex.query(api.remindersDb.pending, { secret });
+      await convex.mutation(api.secondBrain.markToolHealthyFromTool, {
+        secret,
+        name: "list_reminders",
+      });
+      return {
+        ok: true,
+        message: describeReminders(rows),
+        data: { total: rows.length },
+      };
+    }
+
+    case "cancel_reminder": {
+      const quote = strArg(body.reminder, 300);
+      if (!quote) return { ok: false, message: "Which reminder?" };
+
+      const rows = await convex.query(api.remindersDb.pending, { secret });
+      const matches = matchReminders(rows, quote);
+      if (matches.length === 0) {
+        return { ok: true, message: `You have no reminder about ${quote}.` };
+      }
+      if (matches.length > 1) {
+        return {
+          ok: true,
+          message: `Two match: ${matches.map((m) => m.text).join("; ")}. Which one?`,
+          data: { matches },
+        };
+      }
+      await convex.mutation(api.remindersDb.cancel, {
+        secret,
+        id: matches[0].id as Id<"reminders">,
+      });
+      return { ok: true, message: `Cancelled ${matches[0].text}.` };
+    }
+
+    // Called by the Convex scheduler when a reminder comes due, never by Zola.
+    // Deliberately absent from provision-agent.ts, like send_brief_digest:
+    // nothing about delivering a reminder needs a model's judgement, and a tool
+    // she can call is a tool she can call at the wrong moment.
+    case "deliver_reminder": {
+      const text = strArg(body.text, 400);
+      if (!text) return { ok: false, message: "Nothing to deliver." };
+      const how = channelOf(strArg(body.channel, 30));
+
+      if (how === "email") {
+        const sent = await emailOwner("Reminder", text);
+        return sent.ok
+          ? { ok: true, message: "Reminder emailed." }
+          : { ok: false, message: `Email failed: ${sent.reason}` };
+      }
+
+      const sent = await notifyOwner(escapeHtml(`⏰ ${text}`));
+      return sent
+        ? { ok: true, message: "Reminder sent." }
+        : { ok: false, message: "Telegram isn't configured." };
     }
 
     default:

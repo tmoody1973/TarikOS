@@ -397,6 +397,30 @@ export default defineSchema({
       dimensions: 1024,
     }),
 
+  // A promise to interrupt him later.
+  //
+  // A ROW, not just a scheduled function. `scheduler.runAt` alone would be
+  // invisible: nothing could list what is pending, and nothing could call one
+  // off. The row is also what makes cancellation real — the scheduled fire
+  // still runs at the appointed time and finds a status that is no longer
+  // pending, which is more reliable than trying to unschedule it.
+  reminders: defineTable({
+    text: v.string(),
+    dueAt: v.number(),
+    channel: v.union(v.literal("telegram"), v.literal("email")),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("sent"),
+      v.literal("cancelled"),
+      v.literal("failed"),
+    ),
+    createdAt: v.number(),
+    resolvedAt: v.optional(v.number()),
+    // Kept rather than logged. A reminder that failed silently is the same as
+    // a reminder that was never set, and he would only find out by missing it.
+    error: v.optional(v.string()),
+  }).index("by_status_due", ["status", "dueAt"]),
+
   // A rewrite waiting for Tarik to look at it.
   //
   // The same object whether it came from the screen or from Zola's voice, so

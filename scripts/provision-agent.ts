@@ -48,7 +48,10 @@ Your tools:
 - journal_entry: Tarik's journal. When he says "journal this", "note for the journal", or is clearly reflecting on his day rather than capturing an idea, save it with journal_entry (mode "capture"). Distinct from capture_thought: thoughts are ideas to build on; journal is lived experience. EVENING REFLECTION: when Tarik says "evening reflection", "let's reflect", or similar, guide a short spoken ritual — ask three questions ONE AT A TIME, saving each answer with journal_entry mode "reflection" before asking the next: 1) What moved today? 2) What stuck or got in the way? 3) What's tomorrow's one thing? Then close with a one-sentence encouraging summary tied to his goals. His journal is mined nightly into memory and telos progress, so tell him it's captured, not lost.
 
 Projects — where Tarik's work actually lives, backed by Plane. He should never have to open Plane himself; if he does, you have failed.
-- create_task: anything he has to DO. "Add calling the bank to my list", "remind me to book the venue." Pass his words as the title, do not tidy them. No project named means his default list. Just do it and confirm in a few words — do NOT ask permission for a task; it is one click to undo. Distinct from capture_thought: a thought is an idea to keep, a task is a thing to finish.
+- remind_me: when he wants to be interrupted LATER. "Remind me at three to call the bank." Work out the actual day and time first and pass it as YYYY-MM-DDTHH:MM in his timezone, the same way you compute a calendar time. Always read the day and time back. Reminders arrive on Telegram; say email if he asks for email. You cannot phone him a reminder, so if he asks to be called, set it and tell him it will come as a text. list_reminders says what is pending; cancel_reminder calls one off by quoting it.
+- A TASK and a REMINDER are different things and he will use both words loosely. A task is a thing to finish and lives on his board; a reminder is an interruption at a moment and then it is gone. "Add X to my list" is a task. "Remind me to X at 3" is a reminder. If he wants both, do both and say so.
+- BLOCKING TIME FOR A TASK is two calls, not one. Create the task first with create_task, then run the calendar ritual with create_calendar_event: read back the title, date, time and duration, and wait for his yes. Never skip the ritual because the task half already succeeded.
+- create_task: anything he has to DO. "Add calling the bank to my list", "remind me to book the venue." Pass his words as the title, do not tidy them. If he gave a deadline, compute it and pass due as YYYY-MM-DD. No project named means his default list. Just do it and confirm in a few words — do NOT ask permission for a task; it is one click to undo. Distinct from capture_thought: a thought is an idea to keep, a task is a thing to finish.
 - get_project_status: "where are we on the pledge drive", "what am I working on". The reply comes back as a spoken sentence — say it, do not turn it into a list.
 - find_plane_project: when he names a project and you need to be sure which. Several matches means you read them out and ask.
 - update_task_state: "mark booking the venue done", "I've started the script". QUOTE a few words of the task title — he has no cursor on a phone call. Say the column in his words (todo, in progress, done); the server maps it. Two matches means you ask.
@@ -1049,6 +1052,7 @@ export const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
           title: bodyProp("What has to be done, in Tarik's own words"),
           project: bodyProp("Which project, if he named one. Omit for his default list."),
           priority: bodyProp("Only if he said so: urgent, high, medium or low"),
+          due: bodyProp("A due date, if he gave one, as YYYY-MM-DD. Compute it; do not pass 'Friday'."),
           description: bodyProp("Any extra detail he gave beyond the title"),
         },
       },
@@ -1138,6 +1142,66 @@ export const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
           confirmed: boolProp(
             "Leave this out on the first call. Send true ONLY after Tarik has said yes to the blueprint you read back.",
           ),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "remind_me",
+    description:
+      "Set a reminder for later. 'Remind me at three to call the bank', 'remind me Friday morning to send the invoice.' Compute the concrete time first and pass it as when, in YYYY-MM-DDTHH:MM, in Tarik's own timezone. Reminders arrive on Telegram by default; say email for email. You CANNOT phone him with a reminder — if he asks to be called, set it anyway and tell him it will arrive as a text. Always read back the day and time you set, because a reminder set for the wrong day goes quiet for a week.",
+    responseTimeoutSecs: 20,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/remind_me`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["text", "when"],
+        description: "A reminder",
+        properties: {
+          text: bodyProp("What to remind him about, in his own words"),
+          when: bodyProp("The concrete local time, as YYYY-MM-DDTHH:MM"),
+          channel: bodyProp("telegram (default) or email, if he said which"),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "list_reminders",
+    description:
+      "What reminders are still coming. Use for 'what am I being reminded about', or before setting one that might duplicate another. The reply is already a spoken sentence.",
+    responseTimeoutSecs: 15,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/list_reminders`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: [],
+        description: "Pending reminders",
+        properties: {},
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "cancel_reminder",
+    description:
+      "Call off a reminder he no longer wants. Identify it by QUOTING a few words of it. If two match, read both out and ask which.",
+    responseTimeoutSecs: 15,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/cancel_reminder`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["reminder"],
+        description: "Cancel a reminder",
+        properties: {
+          reminder: bodyProp("A few words FROM the reminder, not a description of it"),
         },
       },
     },

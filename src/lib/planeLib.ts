@@ -97,8 +97,17 @@ export function workItemPayload(input: {
   title: string;
   description?: string;
   priority?: string;
+  due?: string;
 }):
-  | { ok: true; payload: { name: string; description?: string; priority?: string } }
+  | {
+      ok: true;
+      payload: {
+        name: string;
+        description?: string;
+        priority?: string;
+        target_date?: string;
+      };
+    }
   | { ok: false; error: string } {
   const name = (input.title ?? "").trim().slice(0, TITLE_MAX);
   // Everything else about a work item is optional to Plane. A name is not
@@ -106,7 +115,12 @@ export function workItemPayload(input: {
   // spoken or on screen.
   if (!name) return { ok: false, error: "A task needs to say what it is." };
 
-  const payload: { name: string; description?: string; priority?: string } = { name };
+  const payload: {
+    name: string;
+    description?: string;
+    priority?: string;
+    target_date?: string;
+  } = { name };
 
   const description = (input.description ?? "").trim();
   if (description) payload.description = description;
@@ -116,6 +130,15 @@ export function workItemPayload(input: {
   // in a spoken sentence would lose the task instead of the priority.
   const priority = (input.priority ?? "").trim().toLowerCase();
   if (PRIORITIES.includes(priority) && priority !== "none") payload.priority = priority;
+
+  // A due date Plane cannot read is DROPPED rather than sent, for the reason an
+  // unknown priority is: Plane rejects the whole request, so one mis-heard word
+  // would lose the task instead of the date. A task with no due date is still a
+  // task; a task that was never created is nothing.
+  const due = (input.due ?? "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(due) && !Number.isNaN(Date.parse(due))) {
+    payload.target_date = due;
+  }
 
   // No `state`. Omitting it lands the item in the project's default, which
   // saves resolving a state id mid-sentence. Verified against the live API.
@@ -285,7 +308,15 @@ export function describeStatus(projectName: string, items: PlaneWorkItem[]): str
   if (waiting.length) parts.push(countPhrase(waiting.length, "waiting"));
   if (done.length) parts.push(countPhrase(done.length, "done"));
 
-  const lead = `${projectName}: ${parts.join(", ")}.`;
+  // What is overdue is worth saying before what is merely counted. A due date
+  // that passes in silence is the same as no due date at all.
+  const today = new Date().toISOString().slice(0, 10);
+  const overdue = [...started, ...waiting].filter(
+    (i) => i.target_date && i.target_date < today,
+  );
+  const lead =
+    `${projectName}: ${parts.join(", ")}.` +
+    (overdue.length ? ` ${overdue.length} past due, including ${overdue[0].name}.` : "");
   // Name what is actually moving. A count alone tells him nothing he can act
   // on; the titles are the reason he asked.
   const naming = started.slice(0, 3).map((i) => i.name).join(", ");
