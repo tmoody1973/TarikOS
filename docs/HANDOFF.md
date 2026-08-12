@@ -137,6 +137,33 @@ PROJECTS claims **hopbush `#cc6699`**. Every other LCARS hue was taken; executio
 is not a document, so it does not join the lavender family. One token in
 `globals.css` if you want it changed.
 
+### Two bugs it shipped with, both fixed the same evening
+
+Worth reading before adding a sixth tool, because the first will happen again.
+
+- **Zola could not confirm anything.** `create_plane_project` tested
+  `body.confirmed !== true`, and every property in the agent's tool schema is
+  declared through `bodyProp`, which types everything as a **string**. So she
+  sent `"true"`, the string never equalled the boolean, and Tarik was handed
+  the blueprint again no matter what he said. Reproduced against production
+  before touching anything: boolean `true` created, string `"true"` did not.
+
+  Confirmation is checked by VALUE now (`isConfirmed`), because the transport
+  decides the type and this code does not control the transport. **Any future
+  boolean flag in a tool argument has this problem** — use `boolProp` in the
+  schema and never compare against `true` in the route.
+
+  The guardrail that should have caught it asserted a blueprint branch existed.
+  It did exist; it was simply unreachable from the only caller that matters.
+
+- **Project codes collide.** `zzz Fix Check One` and `Two` both derived
+  `ZZZFIXCH` at Plane's eight-character cap, and Plane refuses a duplicate —
+  which surfaced as "the tool hit an internal error". Real names do this too:
+  "Pledge Drive 2026" and "2027" both give `PLEDGEDR`. The code is now derived
+  against the codes already in use, on both calls, so the blueprint reads back
+  the code that will actually be created. Plane's own refusals now reach Zola's
+  mouth instead of a generic error.
+
 ### Left undone, on purpose
 
 - **`planeLinks` was specified and not built.** Nothing would populate it yet,
