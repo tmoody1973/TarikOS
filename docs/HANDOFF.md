@@ -280,15 +280,43 @@ The first two are worth reading as a **class**, not as incidents.
    inside the harness's own noise. **Selection held. 8,533 characters gone.**
 2. **Spec corrected.** All four decisions plus the `/mail/zola` tab. Open
    questions 2 and 3 are struck through and answered rather than deleted.
-3. **`check_zola_mail` built.** `agentmailLib.ts` (pure, 29 tests),
-   `agentmail.ts` (the boundary, Bearer auth), a route case, and a tool
-   definition. It reads and summarises; it cannot write anything, and
-   `tests/zolaMailGuardrail.test.ts` asserts that by name.
+3. **The inbox is built, live and on screen.** `agentmailLib.ts` (pure, 43
+   tests), `agentmail.ts` (the boundary), `check_zola_mail`, and the surface at
+   **`/mail/zola`** — a tab beside his, hopbush against lavender, with an
+   unread badge taken from AgentMail's own label. The reader fetches the body
+   on demand and renders it as plain text, never a stranger's HTML.
+
+   Reminders moved too: `resend.ts` is deleted and `emailOwner` lives in
+   `agentmail.ts`, so reminders arrive from `zola@tarikos.app`. One provider.
+
+   The morning brief gained a step — `check_zola_mail` with `as: count`, an
+   argument deliberately absent from the published schema. A brief is built
+   unattended and read aloud, so it says how much arrived and never what a
+   stranger wrote. `workflows:seedPhase2` has been re-run, so the deployed
+   workflow carries it.
+
+   Two bugs the screenshots caught that the tests had not: her own outgoing
+   reminder came back in the inbox list and would have counted as an arrival,
+   and the "forwarded" / "not on your list" tags were being clipped by the
+   truncating summary line. Both fixed; the first has a test.
+
+## What is left of the inbox spec
+
+- **`email_tarik` and `draft_reply`** — the sending half. She writes to him
+  freely (the privileged-recipient rule, which `emailOwner` already implements)
+  and drafts to everyone else. A forwarded thread must draft through GMAIL as
+  him, not from `zola@`, because the correspondent knows him and not her.
+- **The webhook and `zolaMail`** — `/api/agentmail/inbound`, signature verified
+  before parsing. Everything today is a live poll, which is fine at one message
+  and wrong at a hundred.
+- **Attachments** are stored by AgentMail and ignored here, by choice.
 
 ## Open, needs Tarik
 
 - **Say "check your mail" to her out loud.** Everything below the voice layer
   is verified in production; the spoken path is not.
+- **Watch tomorrow's morning brief** for the inbox line. The step is deployed
+  but has never run on a schedule.
 - **Open an exported .docx in Word** and confirm it is not corrupt. Open since
   three handoffs.
 - **MOO-529** — thirty seconds in airplane mode. Open since five.
