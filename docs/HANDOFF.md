@@ -1,317 +1,307 @@
-# Handoff — Tarik OS, 2026-08-11 (late)
+# Handoff — Tarik OS, 2026-08-12 (morning)
 
-Studio is no longer an island. All three gaps from this morning's handoff are
-closed, deployed, and exercised against production.
+Three things, in this order. The first two are cheap and make the third
+cleaner, so resist doing the third first.
+
+1. **Reshape the prompt**, with the eval as before/after.
+2. **Update the inbox spec** with four decisions made after it was written.
+3. **Build Zola's inbox**, starting with reading what arrives.
 
 **Read first**
-- Today's commits. They carry the reasoning; do not re-derive it.
-- `docs/decisions/2026-08-11-studio-in-the-brain.md` — why Studio kept its own
-  store, and why there is deliberately NO search index.
-- `docs/decisions/2026-08-11-studio-editor.md` — why Plate.
-- The previous handoff's traps still apply. They are not repeated here.
+- `docs/superpowers/specs/2026-08-12-zola-inbox-design.md` — the inbox design.
+  It is missing the four decisions in §2 below; make those edits before building.
+- The commit messages from 11–12 August. They carry the reasoning.
+- Traps, at the bottom. Each one cost real time.
 
 ## State
 
-`main` in sync with origin. **744/744 tests, tsc clean, `next build` green.**
-Convex deployed, agent provisioned, Vercel deployed. Everything below was called
-against production, not read.
+`main` in sync with origin. **827/827 tests, tsc clean, `next build` green.**
+Convex deployed, agent provisioned, Vercel deployed. A push to `main` ships the
+Convex schema and the app together.
 
-Working tree carries only `.claude/`, which is not yours to decide on.
+46 tools published. Working tree carries only `.claude/`, which is not yours to
+decide on.
 
-## What is live
+Shipped since the last handoff: Plane projects and a board, a task detail panel,
+scheduled reminders with due dates, and two bug fixes worth reading as a class
+rather than as incidents (see Traps).
 
-**Studio in the picker.** `studioSources.search` reads a seventh table and
-`studio` is a reference type, so a document can cite another document. `search`
-takes an optional `excludeDocId` so a document never offers itself.
+---
 
-**Studio in the brain.** `recall` returns Studio documents; `hybridRecall`
-vector-searches `studioDocs` as a fifth table. Both verified with a query that
-shares no word with the document — text recall returned nothing, the vector path
-returned it.
+## 1. Reshape the prompt, measured
 
-**Four tools.** `find_studio_document`, `read_studio_document`,
-`write_studio_document`, `propose_studio_edit`. She resolves to exactly one
-document or asks; she quotes a passage to address it; she proposes and never
-applies. A proposal appears in the open document while she is still talking, and
-the index shows a count when it is closed.
+### The problem, in numbers
 
-## Two decisions worth not re-opening
+```
+persona                12,724 chars   (2,199 words)
+103 tool descriptions  12,381 chars
+habit guardrails          650 chars
+                     ─────────────
+standing prompt        25,755 chars   every session
+```
 
-**No `plain` column and no search index on `studioDocs`.** A Convex search index
-needs a plain-text field, and a document is stored as the editor's JSON tree —
-indexing that makes every document match a search for "children". A `plain`
-column beside `content` is a second copy of the document's words inside its own
-row, which is the drift this project rejected twice today. Text recall ranks the
-live rows with `rankSources` instead: the SAME function the picker uses, so
-Studio has one ranking rule everywhere.
+Half of it is tool descriptions, and **the persona restates most of them**.
+`create_task`'s description and its persona paragraph say nearly the same thing
+in different words. Two surfaces, no test that they agree, both growing with
+every feature.
 
-It costs a scan of a table bounded by how fast one person writes. **If Studio
-ever holds thousands of documents, `secondBrain.recall` is the line that
-changes** — and only that line.
+The rot mechanism is precise: **a tool's description cannot outlive its tool; a
+persona paragraph can.** Delete a tool and its description goes with it. Delete
+a tool and its paragraph sits there forever describing a capability that no
+longer exists. Nothing today would catch that.
 
-**Embedding on snapshot, never on save.** `save` fires on a 900ms debounce while
-someone is typing. `snapshot` — "keep version" — is the one act that means
-"worth coming back to", which is the text worth being findable. Between
-snapshots a document is still findable by its WORDS; only the semantic half
-waits, and the nightly consolidation runs the same backfill anyway.
+### The principle
 
-`embeddedRevision` records which revision the vector came from. The other four
-tables clear their embedding when their text changes, so absence means "due" —
-but a Studio document is edited for weeks and always has an embedding, of some
-earlier revision.
+**One source of truth per fact, chosen by the fact's lifetime.**
 
-## Traps — new ones, from today
+| Lifetime | Home | Example |
+|---|---|---|
+| Same as the tool | the tool's `description` | when to call `create_task`, what `due` wants |
+| Spans tools | the persona | which inbox is whose; a task is not a reminder |
+| Changes per session | dynamic variables | `{{standing_context}}` |
 
-- **Splitting a route case on the first `}` lands inside a template literal.**
-  Two of my own guardrails asserted `doesNotMatch` against a string that had
-  been cut off before the thing it forbade. They passed while guarding nothing.
-  Split on the branch's own closing brace (`"\n      }"`).
-- **An ordering assertion can read source position when it means evaluation
-  order.** `rankSources(` is written BEFORE `archivedAt` on the page and
-  evaluated AFTER it. The right assertion reaches inside the call's arguments.
-- **`git push` did not deploy this project** for the whole of today, which left
-  production on the old build while Convex was already on the new schema. Fixed
-  at the end of the session, both halves: the repo is connected to Vercel, and
-  `vercel.json` runs `npx convex deploy --cmd 'npm run build'` in the production
-  build. **A push to `main` now ships the schema and the app together**, in that
-  order, and `tests/deployConfig.test.ts` guards it.
-  - `--cmd` rather than two commands is the load-bearing part: Convex deploys,
-    then the frontend builds with `NEXT_PUBLIC_CONVEX_URL` pointing at what was
-    just deployed.
-  - The `VERCEL_ENV` guard is the other one. `convex deploy` targets whatever
-    deployment the KEY belongs to, branch be damned, and `CONVEX_DEPLOY_KEY` is
-    a production key — so without the guard any preview build would overwrite
-    the production schema. Previews build the app only.
-- **`npx vercel --prod` no longer deploys; it builds and tells you to promote.**
-  Use `npx vercel deploy --prod` for a manual one.
-- **A Convex deploy key pasted into `vercel env add` can land malformed and the
-  error does not say so.** The build said "set CONVEX_DEPLOY_KEY to a new key",
-  which reads like the key is the wrong TYPE. It was the right type; the stored
-  bytes were wrong. The way to tell them apart: run the key against a read —
-  `CONVEX_DEPLOY_KEY=… npx convex env list` — and a *permission* error
-  ("you do not have permission … deployment:env:view") proves the key is valid
-  and correctly scoped. Re-added by piping from `.env.local` rather than
-  pasting.
-- **`CONVEX_DEPLOY_KEY` in `.env.local` SHADOWS your Convex login.** Every CLI
-  command uses it instead, and it carries only `deployment:deploy` — so
-  `npx convex data` and `npx convex env list` fail with a permission error that
-  reads like your account lost access. It is commented out there now; Vercel's
-  build is the only thing that needs it. If you hit this again,
-  `CONVEX_DEPLOY_KEY= npx convex …` clears it for one command.
-- **Every Clerk-gated Convex function is unreachable from `npx convex run`.**
-  Anything you want to verify from a terminal has to be on the secret-gated
-  surface, or verified in the browser.
-- The previous handoff's traps all still stand — codegen is not deploy,
-  no `.npmrc`, read past the shadcn installer's file list, screenshots are
-  upscaled, Grammarly blocks synthetic typing, localhost Clerk loops.
+All three patterns already exist here. `{{standing_context}}` is the third one
+done well. The first has never been applied consistently, so per-tool mechanics
+live in both places.
 
-## Projects — built and live
+### What to actually do
 
-Spec: `docs/superpowers/specs/2026-08-11-tarik-os-plane-projects-design.md`.
-**Read it before touching any of this**, especially its Reconnaissance section —
-those are the shapes the live API returns, and the documentation is wrong about
-one of them.
+- **Move mechanics down** into each tool's `description`. Arguments, when to
+  call it, what a failure means. It is already given to the model in the same
+  context, so it costs nothing extra and cannot drift from the tool's existence.
+- **Leave judgement up** in the persona. Distinctions, precedence, rituals that
+  span tools: *your inbox is Gmail, mine is zola@*; *a task is a thing to
+  finish, a reminder is an interruption*; *read the blueprint back and wait*.
+- **Move `{{standing_context}}` to the END.** It currently sits at char 504,
+  3% in, with 12,220 characters of stable text behind it. Under any prefix
+  caching scheme, a memory changing overnight invalidates the entire tool
+  roster. Free to fix, helps if ElevenLabs caches, harmless if they do not.
+- **Hoist the invariants.** "Lost in the Middle" (Liu et al., 2023) is the
+  well-replicated finding that models attend more reliably to the start and end
+  of a long context. *She never sends mail. She never picks between two
+  matches.* Both are currently buried mid-persona.
+- **Add the seam test.** Every tool named in the persona must exist in `TOOLS`.
+  Ten lines, mirrors `tests/textTools.test.ts`, catches exactly the rot above.
 
-`/projects` is a board backed by Plane Cloud, workspace `moody-and-co`. Five
-tools: `create_task`, `create_plane_project`, `find_plane_project`,
-`get_project_status`, `update_task_state`. All exercised against the real
-workspace; every test object created was deleted after.
+### Measure it; do not trust the reasoning
 
-**Two ceremonies, deliberately different.** A task she just does and confirms
-after — additive, one click to undo, and the calendar ritual would cost more
-than the mistake while sending him back to plane.so. A project asks first:
-`create_plane_project` without `confirmed` returns a blueprint and writes
-nothing. Verified: the project count stayed at 2.
+`evals/replay.py` exists for this and already has the mechanism:
 
-**No mirror tables and no MCP server**, both superseding the research doc with
-reasons in the spec. Plane owns work items; the board reads live. The only
-stored state is which project a nameless todo goes to — a row in the existing
-`settings` table, editable on `/control`.
+```bash
+python evals/replay.py --save before     # before touching anything
+#   … do the reshape …
+python evals/replay.py --compare before  # prints every utterance that changed
+```
 
-Three API facts that are load-bearing and not in the docs:
+Read its docstring first. Two things in it matter here: absolute numbers do not
+match production (different serving, no audio, one turn of history), so **the
+delta is the thing**; and two identical runs disagree on about 9% of utterances,
+so a two-point move is noise. Save a Phoenix run if the result is worth keeping.
 
-- **`state` is not required** when creating a work item, despite being
-  documented as required. Omitting it lands the item in the project default,
-  which is what makes a spoken task one round trip instead of two.
-- **State names are per-project and customisable; `state_group` is not.** The
-  board groups by group. A test renames a column and asserts the cards stay.
-- **Every list is cursor-paginated.** A caller that reads `results` once gets a
-  truncated board with no error — work simply missing, which looks exactly like
-  work that was never created.
+If selection holds or improves, roughly 6k characters of standing prompt were
+cut for free. If it drops, that is worth more than the saving.
 
-PROJECTS claims **hopbush `#cc6699`**. Every other LCARS hue was taken; execution
-is not a document, so it does not join the lavender family. One token in
-`globals.css` if you want it changed.
+### One caveat to carry
 
-### Two bugs it shipped with, both fixed the same evening
+**Caching makes a bloated prompt cheap, not effective.** Cache hits cut cost and
+latency; the model still attends to every token. It is an argument for fixing
+the ordering, never an argument against trimming.
 
-Worth reading before adding a sixth tool, because the first will happen again.
+The two channels differ:
 
-- **Zola could not confirm anything.** `create_plane_project` tested
-  `body.confirmed !== true`, and every property in the agent's tool schema is
-  declared through `bodyProp`, which types everything as a **string**. So she
-  sent `"true"`, the string never equalled the boolean, and Tarik was handed
-  the blueprint again no matter what he said. Reproduced against production
-  before touching anything: boolean `true` created, string `"true"` did not.
+- **Zola (voice)** — ElevenLabs owns the inference call. Whether they cache is
+  invisible and uncontrollable from this repo.
+- **Telegram** — `src/app/api/telegram/inbound/route.ts` constructs
+  `new Anthropic()` directly and there is **no `cache_control` anywhere**. That
+  system prompt plus `TEXT_TOOLS` is stable across every message in a
+  conversation: a textbook cache prefix, currently unused.
 
-  Confirmation is checked by VALUE now (`isConfirmed`), because the transport
-  decides the type and this code does not control the transport. **Any future
-  boolean flag in a tool argument has this problem** — use `boolProp` in the
-  schema and never compare against `true` in the route.
+---
 
+## 2. Four decisions the inbox spec is missing
+
+The spec was written before the Gmail relationship was thought through. These
+came out of that and are not yet in the file.
+
+**The organizing principle.** *Gmail is where Tarik is a person; `zola@` is
+where Zola is an agent.* The line is whose identity is on the envelope, which is
+the line the system already draws: `draft_email` writes as Tarik and he releases
+it; `email_tarik` writes as Zola to him and needs no release. Anything addressed
+to the world as Tarik requires Tarik.
+
+**A forward grants attention, not authority.** The spec says nothing arriving by
+mail can cause a write. Refine it: a forward is Tarik's gesture, so it earns her
+attention — she may summarize, extract a date, propose something. It does not
+make the *content* trustworthy. If a forwarded email says "wire $5,000", she
+reports that it says so and proposes nothing of the sort.
+
+**A forwarded thread replies through Gmail, not from `zola@`.** The
+correspondent knows Tarik, not Zola; a reply from a stranger's address is wrong
+almost every time. So a forwarded thread produces a Gmail draft as him.
+`draft_email` already resolves by `reply_match` against his own threads, and the
+original is in his Gmail because that is where he forwarded it from. **`zola@`
+is the intake; Gmail is the outlet**, for anyone who knows him.
+
+**The allowlist governs auto-processing, not storage.** As specced it is too
+strict: a confirmation from a service she signed up with would arrive from an
+unknown sender and be ignored. Correct rule — unlisted mail is stored, listed
+and readable when asked for by name; only allowlisted senders reach her
+reasoning context automatically. A stranger never gets auto-summarized into the
+morning brief; a confirmation is still there when she looks for it.
+
+**And the surface: a tab under `/mail`, not a new nav destination.** Tarik's
+call, and the better one. A tab means *sibling views of one domain*: both
+visible, labelled, mutually exclusive, so it is always obvious which mailbox you
+are in. A separate nav cap would let him land on hers thinking it was his, the
+exact confusion the identity split exists to prevent.
+
+- `/mail/zola`, not a query parameter. `isActiveRoute` matches on `startsWith`,
+  so the MAIL cap still lights and the nav needs no change.
+- Her tab carries a different accent. `/mail` is lavender because it is his;
+  hers must read as not-his at a glance.
+- An unread count on the tab, plus a line in the morning brief. Her inbox has to
+  surface to him rather than wait to be checked, or it is a second place to
+  remember to look.
+- The spec calls a separate page "a twelfth nav destination". It would be the
+  thirteenth; there are already twelve.
+
+---
+
+## 3. Build Zola's inbox
+
+### Reconnaissance, already done against the live API
+
+Do not re-derive this.
+
+| | |
+|---|---|
+| Base URL | `https://api.agentmail.to/v0` |
+| Auth | `Authorization: Bearer $AGENTMAIL_API_KEY`. **`X-API-Key` returns 401** |
+| Key | in `.env.local`. **Not yet in Vercel** — add before anything server-side ships |
+| Inbox | `zola@tarikos.app` **already exists and receives**; the domain is verified |
+| Others on the account | `triton-ingest@`, `mke-alerts@`, `tarik@agentmail.to` |
+| List | `GET /inboxes/{inbox}/messages` → `{count, messages[]}` |
+| One message | `GET /inboxes/{inbox}/messages/{urlencoded-message-id}` |
+
+Message fields: `message_id`, `thread_id`, `from`, `to`, `subject`, `timestamp`,
+`preview`, `labels`, `size`, `text`, `html`, `attachments`.
+
+**The finding worth building on.** The first real email was 20.9 KB and roughly
+**two percent of it was content** — one line, then a signature block with phone
+numbers, social links and a playlist. AgentMail's own `preview` field already
+cuts at the signature boundary. `summarize()` should lean on `preview` rather
+than `text`, or every summary of a real email is mostly a signature.
+
+### What to build first
+
+`check_zola_mail` and forward-handling. The smallest thing that makes the inbox
+earn its existence, and it needs no sending at all. Sending to Tarik and
+drafting to the world come after, per the spec.
+
+When reminders move to AgentMail, delete `src/lib/resend.ts` in the same change
+and `RESEND_API_KEY` stops being needed. Reminders then arrive from
+`zola@tarikos.app` rather than `onboarding@resend.dev`. One email provider.
+
+---
+
+## Traps
+
+The first two are worth reading as a **class**, not as incidents.
+
+- **Every tool argument is declared as a STRING.** `bodyProp` types everything
+  that way, which is right for 45 arguments and was wrong for exactly one:
+  `create_plane_project`'s confirmation. The route tested `body.confirmed !==
+  true`, the agent sent `"true"`, and **Tarik could never confirm a project, no
+  matter what he said.** There is a `boolProp` now, but the durable rule is:
+  **never compare a tool argument against `true` in a route.** Check by value.
   The guardrail that should have caught it asserted a blueprint branch existed.
-  It did exist; it was simply unreachable from the only caller that matters.
-
-- **Project codes collide.** `zzz Fix Check One` and `Two` both derived
-  `ZZZFIXCH` at Plane's eight-character cap, and Plane refuses a duplicate —
-  which surfaced as "the tool hit an internal error". Real names do this too:
-  "Pledge Drive 2026" and "2027" both give `PLEDGEDR`. The code is now derived
-  against the codes already in use, on both calls, so the blueprint reads back
-  the code that will actually be created. Plane's own refusals now reach Zola's
-  mouth instead of a generic error.
-
-### Left undone, on purpose
-
-- **`planeLinks` was specified and not built.** Nothing would populate it yet,
-  and a table with no writer is scaffolding. Spec open question 5.
-- **`get_project_status` says counts and what is in flight, not blockers or due
-  dates.** Plane's default states have no blocked group, and due dates are open
-  question 4 — `calendarLib`'s date parsing would do it.
-- Webhooks, Pages/Wiki, cycles, modules, the Plane-native agent, and **anything
-  destructive**. There is no delete or archive function in `src/lib/plane.ts` at
-  all, so a mis-heard sentence cannot reach one. A guardrail keeps them absent.
-- `mkedev` shows on the board alongside Moody and Co. If it is someone else's
-  project, the board wants an allowlist.
-- Plane's seven onboarding tutorial items are still in Moody and Co.
+  It did exist. It was unreachable from the only caller that matters.
+- **A derived identifier collides.** Two Plane projects a minute apart both
+  produced `ZZZFIXCH` at the eight-character cap, and Plane refused the
+  duplicate as "the tool hit an internal error". Real names do it too: "Pledge
+  Drive 2026" and "2027" both give `PLEDGEDR`. Derive against what already
+  exists, and surface the provider's own refusal instead of a generic error.
+- **`CONVEX_DEPLOY_KEY` in `.env.local` SHADOWS your Convex login.** Every CLI
+  command uses it instead, and it carries only `deployment:deploy`, so
+  `npx convex data` fails with a permission error that reads like the account
+  lost access. Commented out there now; Vercel's build is the only thing that
+  needs it. `CONVEX_DEPLOY_KEY= npx convex …` clears it for one command.
+- **`git push` deploys now.** `vercel.json` runs
+  `npx convex deploy --cmd 'npm run build'` in the production build, gated on
+  `VERCEL_ENV` because a production key on a preview build would overwrite the
+  production schema. A green local `next build` is the last gate before live.
+- **`npx vercel --prod` no longer deploys**; it builds and asks you to promote.
+  Use `npx vercel deploy --prod`.
+- **Splitting a route case on the first `}` lands inside a template literal.**
+  Two guardrails asserted `doesNotMatch` against a string cut off before the
+  thing they forbade. Split on the branch's own closing brace.
+- **An ordering assertion can read source position when it means evaluation
+  order.** `rankSources(` is written before `archivedAt` and evaluated after it.
+- Clerk-gated Convex functions are unreachable from `npx convex run`. Verify
+  those in the browser.
+- Earlier traps still stand: codegen is not deploy, no `.npmrc`, read past the
+  shadcn installer's file list, screenshots are upscaled, Grammarly blocks
+  synthetic typing, localhost Clerk loops.
 
 ## Known gaps, deliberately left
 
-**Studio**
-- **There is no Sources picker UI.** `studioSources` is backend-only and always
-  has been — `search`, `references`, `addReference` and `removeReference` have
-  no caller in `src/`. Gap 1 as written was a backend gap and is closed; the
-  panel that would let Tarik attach a source by hand is unbuilt. This also means
-  `excludeDocId` has no caller yet, and `studioSystemPrompt`'s grounding is only
-  exercised through the voice path.
-- **An untitled document is not findable by the word "untitled".** Its stored
-  title is empty; `Untitled brief` is a display fallback applied after ranking.
-  It is still findable by its words. Low stakes, but it will look like a bug.
-- ⌘J still applies directly through Plate's own menu — it does not create a
-  `studioProposals` row. The voice path and the screen path therefore share the
-  TABLE but not yet the menu. Pointing ⌘J at `studioProposals` is the next
-  obvious move and the panel is already built for it.
-- A proposal addresses a TOP-LEVEL block. A quote inside one list item resolves
-  to the whole list, which is usually what someone means and occasionally is not.
-- The AI is grounded in reference **labels**, not their contents.
-- No PDF. No Canvas. `.docx` still never opened in Word.
-
-**Contacts** — unchanged: whole-field editing only, iCloud unbuilt.
-
-## Reminders and due dates — built and live
-
-`remind_me`, `list_reminders`, `cancel_reminder`, plus `due` on `create_task`.
-Verified end to end in production: a reminder set two minutes out fired on time,
-marked `sent` 2.4 seconds after its due instant, while a cancelled one never
-fired.
-
-**Three decisions worth not re-opening.**
-
-*A phone call is not a reminder channel.* Zola can already ring him, but that
-path is held by three tests asserting exactly one dialling site whose
-destination is not a parameter anywhere. A reminder is not worth a second one.
-"Call me" sets a Telegram reminder and SAYS so, because a channel that quietly
-becomes another channel is how someone stops trusting the feature.
-
-*Email is a notification, not correspondence.* The no-send guardrail governs
-mail to other people as him. Reminders go to `OWNER_EMAIL` from the server
-through Resend, are not a parameter of any tool, and never touch Gmail. A
-guardrail fails if `emailOwner` so much as accepts a recipient.
-
-*Blocking time for a task is two tool calls*, taught in the persona. A
-`create_task` that could write to the calendar would either skip the confirm
-ritual or drag its ceremony onto every quick todo.
-
-**The timezone bit is the subtle part.** Chicago is UTC-5 today and UTC-6 in
-December, so a reminder set now for the 15th lands an hour wrong under any fixed
-offset, and nobody would notice until it arrived. `chicagoToUtc` resolves the
-offset in two passes; the second only matters within an hour of a DST
-transition. Two tests set a December reminder from August and a hardcoded -5
-fails both.
-
-**Needs Tarik:** `RESEND_API_KEY` in Vercel, if you want the email channel.
-Without it, an email reminder fails loudly ("RESEND_API_KEY is not set") rather
-than silently. `onboarding@resend.dev` needs no domain verification and only
-delivers to the account owner, which is the only recipient this code can reach
-anyway — so a key alone is enough to start. Set `RESEND_FROM` later if you
-verify a domain.
-
-**Not seen on screen:** the board's due-date badge. It is built, but no task in
-the workspace has a due date yet.
-
-## Also on the desk
-
-**Dial instead of Telnyx?** Researched, written up, no decision:
-`docs/new-feat-research/2026-08-11-dial-versus-telnyx.md`.
-
-The headline is that it **cannot** be a replacement — Dial has no SIP trunking,
-and `call_tarik` is an ElevenLabs SIP outbound call, so a Dial number cannot do
-that job. But Dial looks like a good answer to the half of Telnyx that has been
-blocked since 9 August: SMS, stuck behind an unfinished 10DLC registration. Dial
-claims compliance is handled in-platform.
-
-Recommendation is a split — Telnyx keeps the number ElevenLabs dials, Dial gets
-tried for SMS on their $5 free credit. One question decides it: *can a Dial
-number text Tarik today with no registration wait?*
-
-**A task detail panel for `/projects`** — built. A card opens the shared
-`SlideOver`: description as plain text, move between columns, change priority,
-and a link out to Plane for what the board deliberately does not do. Verified in
-production both directions, including into an EMPTY column — which is the move
-the first draft got wrong, because it resolved the destination state by reading
-it off a card already there.
+- **Reminders cannot phone him.** Zola can ring him via `call_tarik`, but three
+  tests assert exactly one dialling site whose destination is not a parameter
+  anywhere. A reminder was not worth a second one. "Call me" sets a Telegram
+  reminder and **says so**.
+- **`RESEND_API_KEY` is unset**, so an email reminder fails loudly rather than
+  silently. Moot once reminders move to AgentMail.
+- **The board's due-date badge has never been seen on screen.** Built; no task
+  in the workspace has a due date yet.
+- **`planeLinks` was specified and not built.** Nothing populates it, and a
+  table with no writer is scaffolding.
+- **No Studio Sources picker UI.** `studioSources` is backend-only and always
+  has been.
+- **⌘J in Studio applies directly** through Plate's own menu; it does not create
+  a `studioProposals` row. The voice path and the screen path share the table
+  but not yet the menu.
+- No PDF export, no Canvas, no iCloud sync, no Plane webhooks or Wiki.
 
 ## Open, needs Tarik
 
-- **Two archived test documents** — "Zebra pledge drive test" and "Zebra
-  ambiguity test". Archived, so they are out of the picker, out of recall and
-  out of the embedder. There is no delete button in the UI (`studio.remove`
-  exists and is wired to nothing), so they stay archived until one is added.
-- **Open an exported .docx in Word** and confirm it is not corrupt. Still open.
+- **`AGENTMAIL_API_KEY` in Vercel.** It is only in `.env.local`.
+- **Open an exported .docx in Word** and confirm it is not corrupt. Open since
+  three handoffs.
+- **MOO-529** — thirty seconds in airplane mode. Open since five.
 - **iCloud app-specific password**, if the iCloud half of MOO-499 is wanted.
-- **MOO-529** — thirty seconds in airplane mode. Open since four handoffs ago.
-- **Try `propose_studio_edit` by actually talking to her.** Every path was
-  exercised over HTTPS and in the browser, but not once through the voice agent,
-  and the quoting ritual lives in the persona where only a real call tests it.
+- Plane's seven onboarding tutorial items are still in "Moody and Co", and
+  `mkedev` shows on the board alongside it.
 
-**Settled, do not raise again:**
-
-- The Telegram bot token rotation. Proposed, declined.
-- **`.env.local`.** Verify against production instead.
-- **The Studio editor uses shadcn components.** One written, scoped exception.
-- **Studio's text recall has no search index.** Decided today, written up, and
-  the `plain` column that would enable it is the thing to resist.
+**Settled, do not raise again:** the Telegram token rotation; `.env.local`'s
+missing variables (they are in Vercel — verify against production); Studio's
+shadcn exception; Studio's text recall having no search index; Plane having no
+mirror tables and no MCP server; AtomicMail (evaluated, lost to AgentMail).
 
 ## Tarik
 
-They/them. Decisive — picks and moves, dislikes re-litigation. Answers very
-short, so put the recommended option first and make it unambiguous.
+They/them. Decisive, and dislikes re-litigation. Answers very short, so put the
+recommended option first and make it unambiguous.
 
-**When they ask a one-word question, give a one-line answer.** Read the length
-of the question.
+**Read the length of the question.** A one-word question wants a one-line
+answer. He will attach "ultrathink" when he wants the long version, and those
+are worth answering properly.
 
-Write in plain language. Lead with what they can do now.
+He pushes back accurately and it is usually a correction worth taking.
+Yesterday: "read-only is stupid" when the Plane workspace was empty, and the
+send rule for `zola@` — *she writes to me freely, drafts to everyone else* —
+which was better than either option offered and collapsed two rules into one
+sentence.
 
-They push back accurately, and they will click a button in production while you
-are still testing it — the first proposal of the day was accepted by them,
-mid-verification, which is how the accept path got exercised at all.
+Write in plain language. Lead with what he can do now.
 
 ## Suggested skills
 
-- **`superpowers:test-driven-development`** — test → RED → implement → GREEN.
-  Both new guardrail files were written before the code and both caught real
-  mistakes in the first run.
+- **`superpowers:test-driven-development`** — everything that landed cleanly
+  went through it, and the mutation sweep is where the value is.
 - **`superpowers:verification-before-completion`** — before any "done".
-- **`ponytail`** — active all day.
+- **`soundshuman:humanize`** for prose. Note its voice-calibration rule: a
+  writing sample outranks its own style rules. Tarik asked for em dashes gone
+  from the README regardless, so that is settled there.
+- **`ponytail`** — active throughout.
 
-`npx next build` before saying done. Pushing `main` deploys everything —
-schema then app — so a green local build is the last gate before it is live.
+`npx next build` before saying done. Pushing `main` deploys everything.
