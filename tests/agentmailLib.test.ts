@@ -8,6 +8,7 @@ import {
   unreadCount,
   isForwarded,
   parseAllowlist,
+  received,
   summarize,
   threadKey,
 } from "../src/lib/agentmailLib.ts";
@@ -295,4 +296,22 @@ test("an empty inbox is a sentence, not a zero", () => {
 test("the count distinguishes the listed from the rest", () => {
   const line = countInbox([FROM_TARIK, FROM_STRANGER], TARIK);
   assert.match(line, /1 from someone on your list|1 from a sender on your list/i);
+});
+
+test("her own sent mail is not mail that arrived", () => {
+  // Caught on screen: the reminder she emailed Tarik came back in her own
+  // inbox list, so "two messages arrived" counted one she had written herself.
+  // AgentMail labels both directions; only `received` is arrival.
+  const inbox = received([
+    { from: "Zola <zola@tarikos.app>", subject: "Reminder", labels: ["sent"] },
+    { ...FROM_TARIK, labels: ["received", "unread"] },
+  ]);
+  assert.equal(inbox.length, 1);
+  assert.match(inbox[0].from, /tarik/i);
+});
+
+test("a message with no labels at all is treated as arrived", () => {
+  // Fails open in the harmless direction: showing something that turns out to
+  // be sent is a cosmetic wrong, hiding something that arrived is a lost email.
+  assert.equal(received([{ from: "a@b.com", subject: "s" }]).length, 1);
 });

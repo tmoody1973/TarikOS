@@ -39,7 +39,7 @@ import { escapeHtml, notifyOwner } from "@/lib/telegram";
 import { briefDigest } from "@/lib/briefDigest";
 import { proposeRewrite } from "@/lib/studioPropose";
 import { AgentMailError, emailOwner, listMessages } from "@/lib/agentmail";
-import { countInbox, describeInbox, inboxAllowlist } from "@/lib/agentmailLib";
+import { countInbox, describeInbox, inboxAllowlist, received } from "@/lib/agentmailLib";
 import {
   askedForACall,
   channelOf,
@@ -2300,7 +2300,7 @@ async function runTool(
 
       let messages;
       try {
-        messages = await listMessages(20);
+        messages = received(await listMessages(20));
       } catch (err) {
         const why =
           err instanceof AgentMailError

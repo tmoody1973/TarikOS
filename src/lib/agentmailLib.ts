@@ -120,6 +120,25 @@ export function isForwarded(message: MailMessage): boolean {
 }
 
 /**
+ * Only the mail that arrived.
+ *
+ * AgentMail labels both directions and the list endpoint returns both, so her
+ * own outgoing reminders come back in her inbox. Counting those as arrivals
+ * would have her tell him two things came in when one of them was a message
+ * she wrote to him ten minutes earlier.
+ *
+ * An unlabelled message counts as arrived. That fails open in the harmless
+ * direction: showing something that turns out to be sent is cosmetic, hiding
+ * something that arrived is a lost email.
+ */
+export function received(messages: MailMessage[]): MailMessage[] {
+  return messages.filter((m) => {
+    const labels = m.labels ?? [];
+    return labels.length === 0 || labels.includes("received");
+  });
+}
+
+/**
  * How many are unread, from AgentMail's own label rather than a flag of ours.
  *
  * A read/unread bit stored here would be a second source of truth for

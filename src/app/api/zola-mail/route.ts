@@ -4,6 +4,7 @@ import {
   allowedSender,
   inboxAllowlist,
   isForwarded,
+  received,
   summarize,
   unreadCount,
 } from "@/lib/agentmailLib";
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const messages = await listMessages(50);
+    const messages = received(await listMessages(50));
     const allowlist = inboxAllowlist(
       process.env.OWNER_EMAIL,
       process.env.ZOLA_MAIL_ALLOWLIST,

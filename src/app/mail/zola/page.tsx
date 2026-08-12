@@ -134,19 +134,16 @@ function ZolaMailInner() {
                       </span>
                     </div>
                     <div className="truncate text-sm text-foreground/75">{m.subject}</div>
-                    <div className="truncate text-xs text-steel">
-                      {m.summary}
-                      {m.forwarded ? (
-                        <span className="ml-2 text-[10px] uppercase tracking-wider text-hopbush/70">
-                          forwarded
-                        </span>
-                      ) : null}
-                      {!m.listed ? (
-                        <span className="ml-2 text-[10px] uppercase tracking-wider text-steel">
-                          not on your list
-                        </span>
-                      ) : null}
-                    </div>
+                    <div className="truncate text-xs text-steel">{m.summary}</div>
+                    {/* Outside the truncating line on purpose: these two say
+                        whether she read it on her own and whether Tarik sent
+                        it, and a clipped label answers neither. */}
+                    {m.forwarded || !m.listed ? (
+                      <div className="mt-0.5 flex gap-2 text-[10px] uppercase tracking-wider">
+                        {m.forwarded ? <span className="text-hopbush/70">forwarded</span> : null}
+                        {!m.listed ? <span className="text-steel">not on your list</span> : null}
+                      </div>
+                    ) : null}
                   </button>
                 </li>
               ))}
