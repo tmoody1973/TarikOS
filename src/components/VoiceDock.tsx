@@ -323,7 +323,9 @@ export function VoiceDock() {
             <p className="text-sm italic text-steel">
               {connected
                 ? "Live. Say something."
-                : "Engage the voice link and talk to Zola."}
+                : wake.armed
+                  ? `Listening for "${wake.keyword}".`
+                  : `Engage, or arm ${wake.keyword.toUpperCase()} and just say it.`}
             </p>
           )}
         </div>

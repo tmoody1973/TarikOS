@@ -82,10 +82,25 @@ test("the audio worklet is served from public, not left to the bundler", () => {
   assert.match(HOOK, /workletUrl: "\/wake\/mic-worklet\.js"/);
 });
 
-test("frames are dropped rather than queued when inference lags", () => {
-  // Inference is async and frames arrive every 80ms. Without a guard a slow
-  // machine queues them and detection drifts further behind the longer it runs.
-  assert.match(HOOK, /busy/);
+test("no audio frame is ever skipped", () => {
+  // THE BUG, and it was mine. openWakeWord is a STREAMING pipeline: it holds a
+  // raw-audio buffer, a mel buffer and an embedding buffer across calls, and a
+  // wake word is assembled from consecutive frames. My first version dropped a
+  // frame whenever inference was still busy — a "robustness" guard that punched
+  // holes in the audio and meant nothing ever fired. It armed perfectly and
+  // detected nothing.
+  //
+  // Frames are chained instead, so every one arrives in order.
+  assert.doesNotMatch(HOOK, /if \(busy\) return/, "a skipped frame breaks the stream");
+  assert.match(HOOK, /chain = chain\s*\n?\s*\.then/, "frames must be serialised, not dropped");
+});
+
+test("a real backlog resets the stream rather than drifting", () => {
+  // If inference genuinely cannot keep up, the honest failure is to drop the
+  // backlog and reset the buffers — not to fall further behind real time every
+  // second while still claiming to be listening.
+  assert.match(HOOK, /reset\(\)/);
+  assert.match(HOOK, /MAX_BACKLOG/);
 });
 
 test("multithreaded wasm is not switched on quietly", () => {

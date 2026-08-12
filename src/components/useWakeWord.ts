@@ -130,17 +130,45 @@ export function useWakeWord(onWake: () => void, suspended: boolean) {
         },
       });
 
-      // Inference is async and frames arrive every 80ms. Without this guard a
-      // slow machine queues them forever and the detection drifts further
-      // behind real time the longer it is armed.
-      let busy = false;
+      // Every frame, in order, no exceptions.
+      //
+      // This is where the first version was wrong and it is worth the words.
+      // openWakeWord is a STREAMING pipeline: it carries a raw-audio buffer, a
+      // mel buffer and an embedding buffer across calls, and a wake word is
+      // assembled from CONSECUTIVE frames. The obvious "robustness" guard —
+      // skip a frame if inference is still busy — punches holes in the audio,
+      // and a phrase spread across a hole never assembles. It armed perfectly
+      // and detected nothing, which is the worst way for a bug to present.
+      //
+      // So frames are chained rather than dropped. If inference genuinely
+      // cannot keep up the backlog is dropped ALL AT ONCE and the buffers are
+      // reset, because falling behind cleanly is honest and falling behind
+      // silently is what caused this.
+      const MAX_BACKLOG = 25; // ~2 seconds of frames
+      let backlog = 0;
+      let chain: Promise<unknown> = Promise.resolve();
       const mic = new Microphone(
         (frame) => {
-          if (busy) return;
-          busy = true;
-          void oww.predict(frame).finally(() => {
-            busy = false;
-          });
+          if (backlog > MAX_BACKLOG) return;
+          backlog += 1;
+          chain = chain
+            .then(async () => {
+              if (backlog > MAX_BACKLOG) {
+                await oww.reset();
+                backlog = 0;
+                return;
+              }
+              const scores = await oww.predict(frame);
+              // A readout to tune against. "Nothing fires" with no numbers is
+              // unfixable; a peak score tells you instantly whether it is the
+              // threshold or the pipeline.
+              const peak = Math.max(0, ...Object.values(scores));
+              if (peak > 0.2) console.debug(`[wake] ${KEYWORD_LABEL} ${peak.toFixed(2)}`);
+            })
+            .catch(() => {})
+            .finally(() => {
+              backlog -= 1;
+            });
         },
         // Pointed at a copy in public/ because a bundler does not reliably emit
         // an AudioWorklet asset, and a worklet that 404s fails silently.
