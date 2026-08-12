@@ -1,6 +1,6 @@
 # Tarik OS
 
-A personal AI operating system you talk to. Zola — the voice assistant at its center — reads your mail, works your calendar, runs research, keeps a journal, tracks your long-term goals and daily habits, and briefs you every morning. You speak; she acts; a live dashboard shows what happened. Talk to her in the browser, or **call her on a real phone number** — same brain, same tools, no app.
+A personal AI operating system you talk to. Zola — the voice assistant at its center — reads your mail, works your calendar, runs research, keeps a journal, writes with you, tracks your projects, and briefs you every morning. You speak; she acts; a live dashboard shows what happened. Talk to her in the browser, text her on Telegram, or **call her on a real phone number** — same brain, same tools, no app.
 
 This is a single-user system built for one person's real life, published as a working reference. Fork it and make it yours — it is not a hosted product and has no multi-tenant support.
 
@@ -33,13 +33,15 @@ Clicking any headline slides in the reader: the article extracted server-side an
 5. **Some things run on a clock.** Convex cron jobs run scheduled workflows: a nightly pass that consolidates the day's conversations into long-term memory, a 3am pass that mines journal entries for goal signals, a morning brief, and a Sunday weekly review.
 6. **She remembers.** Conversations are stored in Convex, embedded with [Voyage AI](https://www.voyageai.com), and recalled semantically — so "what did I say about that station project last week?" works.
 
-Five guardrails are structural, not polite requests:
+Seven guardrails are structural, not polite requests:
 
 - **Zola can draft email; only a human can send it.** The send endpoint exists solely behind the browser UI's Send button. The agent's tool surface has no send path — a test fails the suite if one ever appears.
 - **Calendar writes confirm before they commit.** Event creation and edits go through a confirm ritual in conversation.
 - **The browser agent never types a password, and browsing is always attended.** Zola can drive a real browser (see Viewport below). Sessions are signed out by default; a login wall stops the agent and hands you the wheel. If you set up a persistent [Browserbase Context](#logged-in-browsing-optional) and sign in by hand, a session can carry those logins — but only when you ask for them in that request, never by the agent's own initiative. No scheduled job can start a browser session at all. All three parts are enforced by tests.
 - **Inferred evidence can only ever suggest, never record.** A calendar block can propose that a habit happened; only you accept it. The mutation that writes a vote requires a signed-in human and has no shared-secret path, so nothing automated can mark a day done on your behalf — and a test fails the suite if a secret branch is ever added to it.
 - **Zola can phone exactly one number, and it isn't a parameter.** The `call_tarik` tool takes no destination at all — the number comes from `OWNER_PHONE` on the server, so there is no argument to pass and nothing to talk her into. A test scans the route, the published tool schema, and the count of dialling sites; all three were watched to fail before being trusted.
+- **She proposes edits to your writing; she never applies them.** Voice can't show you a diff, so voice doesn't write. `propose_studio_edit` stores a pending rewrite that appears in the open document while she is still talking; you take it or leave it on screen. Accepting refuses outright if that paragraph changed underneath the proposal, because applying anyway would silently delete the rewrite you did by hand.
+- **She cannot delete anything in your project tracker.** Not blocked, absent: there is no delete or archive function in the Plane client at all, so a mis-heard sentence has nothing to reach. A test asserts they stay absent.
 
 ## Tech stack
 
@@ -53,7 +55,10 @@ Five guardrails are structural, not polite requests:
 | Auth | Clerk (protects every page and API route except the secret-gated tool webhooks) |
 | Google access | Composio (holds Gmail + Calendar OAuth, multi-account) |
 | Semantic memory | Voyage AI embeddings + Convex vector search |
-| Rich text | TipTap (mail compose) |
+| Projects and tasks | Plane Cloud (REST API; read live, no mirror) |
+| Rich text | Plate (Studio documents) · TipTap (mail compose) |
+| File storage and sharing | Cloudflare R2 with presigned, expiring, revocable links |
+| Text channel | Telegram bot (same tool surface, narrower) |
 | Browser automation | Browserbase (hosted sessions, interactive live view) + Stagehand (AI agent loop) |
 | Email safety | linkedom server-side sanitizer + sandboxed iframes |
 | 3D / HUD flourishes | three.js via react-three-fiber |
@@ -84,6 +89,8 @@ Five guardrails are structural, not polite requests:
               Calendar) │          │  vector memory)
                         ▼          ▼
                    Google APIs   Claude · Voyage
+                                 Plane (projects, read live)
+                                 Cloudflare R2 (saved files, share links)
                                  Browserbase + Stagehand (Viewport browser)
 ```
 
@@ -94,12 +101,15 @@ The repeatable pattern, documented in [AGENTS.md](AGENTS.md): every new capabili
 ## Project structure
 
 ```
-src/app/            Pages: home HUD, /briefs, /mail, /telos, /habits, /brain, /control
+src/app/            Pages: home HUD, /briefs, /mail, /studio, /projects, /contacts,
+                    /documents, /telos, /habits, /brain, /control
 src/app/api/tools/  The agent's tool webhook (one case per capability)
 src/app/api/mail/   Browser-facing mail routes (Clerk-protected)
 src/app/api/elevenlabs/  Post-call webhook → conversation traces
-src/lib/            Server-side domain logic: google.ts, mail.ts, calendarLib.ts …
-convex/             Schema, workflows, crons, memory consolidation, telos, habits
+src/lib/            Server-side domain logic: google.ts, mail.ts, calendarLib.ts,
+                    plane.ts + planeLib.ts (API boundary / pure logic) …
+convex/             Schema (26 tables), workflows, crons, memory consolidation,
+                    telos, habits, studio documents, contacts
 scripts/            provision-agent.ts · connect-google.ts · import-telos.ts
 tests/              node --test unit tests for the pure logic
 evals/              Tool-selection replay harness + Phoenix dataset/experiment push
@@ -161,6 +171,12 @@ Values live in `.env.local` (gitignored) and in Vercel/Convex env settings in pr
 | `ELEVENLABS_PHONE_NUMBER_ID` | The imported SIP-trunk number in ElevenLabs (`phnum_…`), used to place outbound calls |
 | `ELEVENLABS_WEBHOOK_SECRET` | HMAC signing secret for the post-call webhook (optional; without it the route rejects every delivery and you simply get no conversation traces) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` / `OTEL_EXPORTER_OTLP_HEADERS` | Where traces go, e.g. a self-hosted Phoenix. Headers take the form `Authorization=Bearer <key>`. Both optional — unset means no tracing, and nothing else changes. |
+| `PLANE_API_TOKEN` | A Plane workspace access token, for `/projects` and the task tools. The workspace slug is a constant in `src/lib/planeLib.ts`; change it to yours. Optional — unset means the board says so instead of showing an empty one. |
+| `R2_ACCESS_KEY` / `R2_SECRET_ACCESS_KEY` / `R2_STORAGE_TOKEN` | Cloudflare R2, for saved documents and share links (optional) |
+| `SHARE_BASE_URL` | Where a share link points, e.g. `https://<your-app>` |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot token for the text channel (optional) |
+| `GOOGLE_CONTACTS_ACCOUNT_ID` | Which connected Google account the contacts sync reads and writes |
+| `CONVEX_DEPLOY_KEY` | Set in Vercel only, never locally. Lets the production build deploy the Convex schema before building the app, so a push ships both together. |
 
 `MORPHEUS_TOOL_SECRET` must be set in both the Convex deployment (`npx convex env set`) and the app env, and is baked into the agent by the provision script.
 
@@ -200,16 +216,31 @@ locks, and you want both:
 ### Tests and deploys
 
 ```bash
-npm test              # node --test — pure-logic unit tests
+npm test              # node --test — 793 pure-logic and guardrail tests
 npm run build         # production build (Turbopack)
-npx convex deploy     # backend
-vercel deploy --prod  # app
+```
+
+A push to `main` deploys both halves. `vercel.json` sets the production build
+command to `npx convex deploy --cmd 'npm run build'`, so the schema ships first
+and the frontend then builds against the deployment it just created. The step is
+gated on `VERCEL_ENV`, because `convex deploy` targets whatever deployment its
+key belongs to regardless of branch, and a production key on a preview build
+would overwrite production's schema. To deploy by hand:
+
+```bash
+npx convex deploy         # backend
+npx vercel deploy --prod  # app  (plain `vercel --prod` only builds)
 ```
 
 ## Features
 
 - **Morning brief** — a GOALS-led daily brief assembled by workflow: calendar, mail highlights, feeds, telos progress. Regenerates on demand by voice ("run my brief").
 - **Mail center** (`/mail`) — read full Gmail threads in-app (server-sanitized, sandboxed), compose and reply with rich text, Gmail-native drafts, explicit send. Multi-account. Say *"draft a reply to the X email saying…"* and Zola writes it with thread context — it lands as a badged draft you edit and send yourself.
+- **Studio** (`/studio`) — a real writing workspace, not a note field. Five document types (note, draft, brief, plan, decision record), each starting from its own template; Plate's full editor with tables, lists, media and DOCX export; version snapshots you can restore; and references that point a document at the brief, conversation, contact or other document it came from. Say *"start a plan for the pledge drive"* and it exists, shaped like a plan. Ask her to tighten a paragraph and she quotes it back to find it, then leaves a suggestion waiting on screen for you to take or leave. Studio documents are searchable from the brief, from recall, and by meaning.
+- **Projects** (`/projects`) — a board backed by [Plane](https://plane.so), so you never open Plane. Say *"add calling the bank to my list"* and it's a task; say *"start a project for the pledge drive with these five tasks"* and she reads the plan back before creating anything. The board reads Plane live and keeps no copy of it, because a copy is a thing that can disagree. Click a card to read it, move it, or reprioritise it.
+- **Contacts** (`/contacts`) — your Google contacts, synced nightly and searchable by name, number or email. Zola can add, update and delete them, writing straight through to Google so nothing can drift. She resolves to exactly one person or asks; two matches is a question, never a guess. An edit reports what it displaced, because Google replaces a whole field at a time and that is the last moment the old value exists.
+- **Documents** (`/documents`) — turn a brief, a research result, or a Studio document into a real file, then hand it to someone. Share links are minted per visit from R2, with an expiry, a download cap, and revocation. Sharing takes a spoken confirmation; saving a file for yourself does not, because it never leaves your own login.
+- **Telegram** — the same assistant over text, with a deliberately narrower tool surface. Anything whose safety rests on a spoken confirmation stays on voice; the exclusions and their reasons are listed in `src/lib/textTools.ts`.
 - **Viewport** — a slide-in panel showing a real hosted browser that Zola drives by voice ("go dig into X") while you watch; click into the frame to take over, or open a blank session and browse yourself. Findings become a brief with a session-replay link.
 - **Feed manager** — add news sources by voice ("add The Verge to tech headlines") or by pasting a URL in the Control Panel; feeds are autodiscovered and validated before saving, with per-feed health dots.
 - **Calendar by voice** — list, create, and move events with a confirm-before-write ritual.
@@ -241,7 +272,7 @@ The loop this closes: you tell your AI what matters once, it holds you to it eve
 
 ## Design specs
 
-Each phase shipped against a written spec in [`docs/superpowers/specs/`](docs/superpowers/specs/) — foundation, workflows and briefs, telos, mail center, viewport, habits, observability and evals, restaurant booking. They read as a build log of the decisions and their reasons.
+Each phase shipped against a written spec in [`docs/superpowers/specs/`](docs/superpowers/specs/) — foundation, workflows and briefs, telos, mail center, viewport, habits, observability and evals, restaurant booking, document storage, mobile PWA, and Plane projects. Decisions that were genuinely contested get their own record in [`docs/decisions/`](docs/decisions/) — which editor Studio uses and why, and why Studio keeps its own store rather than becoming a thought. They read as a build log of the decisions and their reasons.
 
 ## License
 
