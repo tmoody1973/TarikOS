@@ -253,3 +253,10 @@ test("asking for something that is not there does not claim the inbox is empty",
   assert.doesNotMatch(said.message, /nothing new in your inbox/i);
   assert.match(said.message, /nothing.*match|no.*match/i);
 });
+
+test("she counts one message in the singular, because she says it out loud", () => {
+  const one = describeInbox([FROM_STRANGER], TARIK, "nothing like this").message;
+  assert.match(one, /there is 1 other message\b/);
+  const two = describeInbox([FROM_STRANGER, FROM_TARIK], TARIK, "nothing like this").message;
+  assert.match(two, /there are 2 other messages\b/);
+});

@@ -118,6 +118,11 @@ export function isForwarded(message: MailMessage): boolean {
   return FORWARD_BODY.test(message.text ?? "");
 }
 
+/** "there is 1 other message" / "there are 2 other messages". She says it aloud. */
+function plural(n: number): string {
+  return n === 1 ? "there is 1 other message" : `there are ${n} other messages`;
+}
+
 /** What Zola says about her inbox, and what she was allowed to look at. */
 export type InboxReport = {
   message: string;
@@ -153,7 +158,7 @@ export function describeInbox(
     // reply that would stop him looking, and it is false whenever anything at
     // all is sitting there.
     return {
-      message: `Nothing in my inbox matches that${messages.length ? ` — there are ${messages.length} other ${messages.length === 1 ? "message" : "messages"}` : ""}.`,
+      message: `Nothing in my inbox matches that${messages.length ? ` — ${plural(messages.length)}` : ""}.`,
       shown,
       withheld,
     };
