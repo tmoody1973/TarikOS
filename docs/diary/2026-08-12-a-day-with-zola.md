@@ -6,8 +6,8 @@ I build a personal AI called Zola. She runs my calendar, my mail, my notes, my
 projects. She talks; I talk back. This is what one day of building her actually
 looked like, written down honestly — including the parts where I was wrong.
 
-Six things shipped. Every one of them taught me something I did not expect —
-and the last one turned out to have nothing to do with code at all.
+Seven things shipped. Every one of them taught me something I did not expect —
+and the last two had almost nothing to do with code.
 
 ---
 
@@ -303,6 +303,76 @@ microphone. The default was set for a quiet room, and I don't have one.
 
 ---
 
+## 7. "Nothing fires" — and the bug I found looking for the wrong one
+
+It shipped. I said the wake word at my laptop. **Nothing happened.**
+
+So I went hunting, and within a few minutes I had a confident diagnosis — a good
+one, with evidence. The detector is a *streaming* model: it keeps a rolling
+buffer of the last few seconds of audio and assembles a phrase from
+**consecutive** chunks. My code had a guard in it that skipped an audio chunk
+whenever the previous one was still being processed. I'd written it to stop a
+slow machine falling behind. What it actually did was punch holes in the audio.
+A phrase spread across a hole never assembles.
+
+That's a real bug. I was pleased with myself for finding it. I was already
+writing the fix.
+
+Then I mentioned it to myself out loud, roughly: *"so nothing fires at all,
+even once?"* — and asked one more question before shipping the fix.
+
+**I hadn't pressed the button.**
+
+The wake word has to be armed — one click, which is also what gives the browser
+permission to use the microphone. The dock had a small control sitting right
+there and the hint text next to it said *"Engage the voice link and talk to
+Zola."* It never mentioned the other thing you could do. I built it, I named it,
+and I still didn't press it.
+
+### Two lessons, and the small one is the better one
+
+**The big one: I fell in love with a diagnosis.** I had evidence, the evidence
+was correct, and the conclusion was still wrong. The bug I found was real — it
+just wasn't *this* bug. If I'd shipped the fix and it had started working, I'd
+have learned exactly the wrong thing and believed it for months.
+
+**The small one: a control nobody knows to press does not exist.** That's not a
+polish issue, it's the whole feature. The line now reads *"Engage, or arm HEY
+JARVIS and just say it"*, and once armed, *"Listening for hey jarvis."* Six
+words of copy did more for this feature than anything I wrote all afternoon.
+
+I kept the frame fix, because it's genuinely wrong to drop chunks from a
+streaming model. It just doesn't get credit for anything. **It works on a machine
+that keeps up** — which is the most dangerous kind of correct, because it would
+have failed silently on my iPad and I'd have blamed the model.
+
+I also added something I should have had from the start: **the detection score
+now prints to the console.** "Nothing fires" is unfixable as a sentence. "It
+scored 0.62 and the threshold is 0.7" is a five-second fix. When a thing is
+invisible, the first feature to build is a way to see it.
+
+### And the price of a name
+
+The last piece is teaching it to answer to "Hey Zola" rather than a stock
+phrase. Every write-up describes this as **one command** — and technically it
+is.
+
+That one command installs PyTorch, torchaudio, librosa, scikit-learn and about a
+dozen other packages: a couple of gigabytes. Then it generates its own training
+audio from scratch and runs fifty thousand training steps. On a laptop that's
+comfortably an hour, and it might not land on the first attempt for a short
+name.
+
+Still worth it — it's free, it's local, and the result is a file I own. But
+"one command" and "an hour and two gigabytes" are different sentences, and only
+one of them was in the documentation.
+
+So for now she answers to a name that isn't hers. I'd rather live with it for a
+few days and find out how often it fires when I *didn't* mean it — because that
+number, not my taste, is what should decide the phrase.
+
+---
+
 ## What I'd tell someone building the same thing
 
 **Measure the thing you're sure about.** My prompt cleanup was correct in
@@ -339,6 +409,20 @@ licence file describes intentions; the code describes what happens.
 **Check the terms before you check the benchmarks.** I compared three wake-word
 engines on accuracy and integration effort for an hour before noticing that the
 question deciding it was whether a person alone could get one at all.
+
+**Ask "is it plugged in?" before you're proud of your diagnosis.** I found a
+real bug in the audio pipeline while the actual answer was that I hadn't pressed
+the button. Correct evidence, wrong conclusion — and if I'd shipped the fix and
+it had started working, I'd have learned the wrong lesson and believed it.
+
+**When a thing is invisible, build the way to see it first.** "Nothing fires" is
+unfixable as a sentence. "It scored 0.62 against a threshold of 0.7" is a
+five-second fix. I added the score readout after the debugging instead of
+before, which is exactly backwards.
+
+**Six words of copy can be the whole feature.** The wake word worked the entire
+time. Nothing on screen said it had to be switched on, so it may as well not
+have existed.
 
 ---
 
