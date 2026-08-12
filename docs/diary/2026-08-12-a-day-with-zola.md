@@ -6,7 +6,8 @@ I build a personal AI called Zola. She runs my calendar, my mail, my notes, my
 projects. She talks; I talk back. This is what one day of building her actually
 looked like, written down honestly — including the parts where I was wrong.
 
-Five things shipped. Every one of them taught me something I did not expect.
+Six things shipped. Every one of them taught me something I did not expect —
+and the last one turned out to have nothing to do with code at all.
 
 ---
 
@@ -223,6 +224,85 @@ it again, and now you've said it twice.
 
 ---
 
+## 6. Three wake-word vendors, and what a personal project actually needs
+
+This is the part I didn't expect to spend an afternoon on, and it turned out to
+be the most useful thing I learned all day. **The technology was never the hard
+part. The terms were.**
+
+### Attempt one: the obvious choice
+
+I built it on **Picovoice Porcupine** first. It's the industry standard, the SDK
+is genuinely good, and it took twenty minutes.
+
+Then I went to create my wake word and hit a wall: their console gates signup
+behind company approval, and I'm one person, not a company. Even past that,
+their free tier gives you **three custom phrases per month**. I'd be spending a
+monthly allowance to teach my own assistant its own name.
+
+### Attempt two: the open one
+
+**openWakeWord**, Apache-2.0. No account. No key. No approval. It works by
+chaining three small models — audio becomes a spectrogram, the spectrogram
+becomes a speech embedding, the embedding gets scored against your phrase — and
+all three run on my machine.
+
+Better still, someone released a tool that **trains a new phrase from synthetic
+audio in a single command**, exporting a file that drops straight into that
+pipeline. My assistant's name becomes a file I own, not a slot I rent.
+
+### Attempt three: the one that looked perfect
+
+Then I found another vendor with an MIT licence, a proper browser SDK, forty
+released versions, and impressive accuracy claims. Genuinely more mature than
+the open-source wrapper I'd landed on. I nearly switched.
+
+Before I did, I read their own example code:
+
+```js
+const licenseKey = "MTc1MjUyNjgwMDAwMA==-RbOr3R66OPByze...";
+const isLicensed = await keywordDetector.setLicense(licenseKey);
+if (!isLicensed) { alert('Invalid or expired license key.'); return; }
+```
+
+That key starts with a base64 blob. I decoded it. It's a **timestamp: 14 July
+2025.** And the comment right above it says *"Check for the latest License."*
+
+So: the code is MIT, and the *runtime* is gated on a key that expires. Custom
+phrases are an email to a person, at a price that isn't published. And the
+licence on the model files — as opposed to the code — is never stated anywhere,
+which matters when your repo is public.
+
+MIT on the wrapper. A meter on the thing.
+
+### What I actually learned
+
+**"Open source" is a claim about a licence file, not about whether you can
+depend on something.** All three of these are on-device, all three respect
+privacy in the sense everyone means it, and one of them still stops working on a
+date somebody else picks.
+
+For a personal project the questions that decide it aren't technical:
+
+- Can I get the thing without asking permission?
+- If they vanish tomorrow, do I still have what I built?
+- Is the artefact **mine**, or licensed to me?
+
+The open option's real weakness is honest and I wrote it down: the browser
+wrapper is version 0.1.0, published a month ago, by one person. That's a genuine
+risk. But the pipeline is three documented model files, and I have them on disk.
+If the wrapper goes stale I lose some glue code. If a licence key expires I lose
+the feature.
+
+**And the losing argument still improved the winning one.** The vendor I rejected
+had two pieces of advice that were plainly right, so I took them: use a longer,
+more distinctive phrase, and don't trust the default sensitivity — start higher
+and tune it in the room you're actually in. I'm a radio host. My office has
+voices and music in it most of the day, and every false trigger opens a live
+microphone. The default was set for a quiet room, and I don't have one.
+
+---
+
 ## What I'd tell someone building the same thing
 
 **Measure the thing you're sure about.** My prompt cleanup was correct in
@@ -250,6 +330,15 @@ get discovered as a disappointment three weeks later.
 build two spoken keywords. One of them turned out to be ten lines of
 configuration on a feature the platform already had, and the other turned out to
 be the only one that needed building at all.
+
+**Read the vendor's example code before you read their landing page.** An MIT
+badge, forty releases and a good SDK all pointed one way. A base64 string in
+their own sample pointed the other, and it was the one that mattered. The
+licence file describes intentions; the code describes what happens.
+
+**Check the terms before you check the benchmarks.** I compared three wake-word
+engines on accuracy and integration effort for an hour before noticing that the
+question deciding it was whether a person alone could get one at all.
 
 ---
 
