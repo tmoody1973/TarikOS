@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Authenticated, AuthLoading, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
-import { Zone, ZoneEmpty } from "@/components/hud/Zone";
+import { ZoneEmpty } from "@/components/hud/Zone";
 import type { BoardColumn, PlaneProject, StateGroup } from "@/lib/planeLib";
 
 // Projects. The board Tarik works in, so he never opens plane.so.
@@ -103,8 +103,15 @@ function ProjectsInner() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2 p-2">
-      <Zone title="Projects" accent="bg-hopbush">
+      {/* A header strip, not a Zone. A Zone carries min-h-64 — right for a
+          dashboard panel, and 256px stolen from a board that needs every pixel
+          of height it can get. The document page uses the same idiom. */}
+      <header className="shrink-0 rounded-lg border border-panel-edge bg-panel p-3">
         <div className="flex flex-wrap items-center gap-2">
+          <span className="lcars-cap-left h-4 w-10 shrink-0 bg-hopbush" />
+          <h1 className="font-[family-name:var(--font-display)] text-sm uppercase tracking-[0.35em] text-foreground/90">
+            Projects
+          </h1>
           {(board?.projects ?? []).map((p) => (
             <button
               key={p.id}
@@ -122,7 +129,7 @@ function ProjectsInner() {
 
         {problem ? <p className="mt-2 text-xs text-salmon">{problem}</p> : null}
 
-        <div className="mt-3 flex gap-2">
+        <div className="mt-2 flex gap-2">
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -142,7 +149,7 @@ function ProjectsInner() {
             {busy ? "Adding…" : "Add"}
           </button>
         </div>
-      </Zone>
+      </header>
 
       {/* Below lg the board is one column at a time. Five columns at 375px is
           five unusable columns. */}
