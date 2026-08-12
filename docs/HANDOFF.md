@@ -207,6 +207,47 @@ Worth reading before adding a sixth tool, because the first will happen again.
 
 **Contacts** — unchanged: whole-field editing only, iCloud unbuilt.
 
+## Reminders and due dates — built and live
+
+`remind_me`, `list_reminders`, `cancel_reminder`, plus `due` on `create_task`.
+Verified end to end in production: a reminder set two minutes out fired on time,
+marked `sent` 2.4 seconds after its due instant, while a cancelled one never
+fired.
+
+**Three decisions worth not re-opening.**
+
+*A phone call is not a reminder channel.* Zola can already ring him, but that
+path is held by three tests asserting exactly one dialling site whose
+destination is not a parameter anywhere. A reminder is not worth a second one.
+"Call me" sets a Telegram reminder and SAYS so, because a channel that quietly
+becomes another channel is how someone stops trusting the feature.
+
+*Email is a notification, not correspondence.* The no-send guardrail governs
+mail to other people as him. Reminders go to `OWNER_EMAIL` from the server
+through Resend, are not a parameter of any tool, and never touch Gmail. A
+guardrail fails if `emailOwner` so much as accepts a recipient.
+
+*Blocking time for a task is two tool calls*, taught in the persona. A
+`create_task` that could write to the calendar would either skip the confirm
+ritual or drag its ceremony onto every quick todo.
+
+**The timezone bit is the subtle part.** Chicago is UTC-5 today and UTC-6 in
+December, so a reminder set now for the 15th lands an hour wrong under any fixed
+offset, and nobody would notice until it arrived. `chicagoToUtc` resolves the
+offset in two passes; the second only matters within an hour of a DST
+transition. Two tests set a December reminder from August and a hardcoded -5
+fails both.
+
+**Needs Tarik:** `RESEND_API_KEY` in Vercel, if you want the email channel.
+Without it, an email reminder fails loudly ("RESEND_API_KEY is not set") rather
+than silently. `onboarding@resend.dev` needs no domain verification and only
+delivers to the account owner, which is the only recipient this code can reach
+anyway — so a key alone is enough to start. Set `RESEND_FROM` later if you
+verify a domain.
+
+**Not seen on screen:** the board's due-date badge. It is built, but no task in
+the workspace has a due date yet.
+
 ## Also on the desk
 
 **Dial instead of Telnyx?** Researched, written up, no decision:
