@@ -200,14 +200,31 @@ function comparable(text: string): string {
 }
 
 /**
+ * Score a title and a body against the words someone said. 0 means it does not
+ * belong in the answer at all.
+ *
+ * Exported because this rule now decides three different "which one did he
+ * mean" questions — the source picker, Studio recall, and Plane's projects.
+ * A second implementation would eventually disagree with this one, and the
+ * disagreement would show up as the wrong record being attached to something.
+ */
+export function scoreMatch(title: string, body: string, query: string): number {
+  const terms = comparable(query).split(" ").filter(Boolean);
+  if (terms.length === 0) return 0;
+  return scoreParts(comparable(title), comparable(body), terms);
+}
+
+/**
  * Score one candidate. 0 means it does not belong in the picker at all.
  *
  * A title match beats a body match outright, because a long transcript that
  * says the word once would otherwise bury the brief actually called that.
  */
 function scoreSource(hit: SourceHit, terms: string[]): number {
-  const title = comparable(hit.title);
-  const body = comparable(hit.snippet);
+  return scoreParts(comparable(hit.title), comparable(hit.snippet), terms);
+}
+
+function scoreParts(title: string, body: string, terms: string[]): number {
 
   // Every spoken word has to land somewhere, or "turnout brief" matches a
   // document called "Turnout" on one word out of two — the rule contact

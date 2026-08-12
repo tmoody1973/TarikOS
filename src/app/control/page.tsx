@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Authenticated,
   AuthLoading,
@@ -198,7 +198,65 @@ function ControlInner() {
 
       <FeedsPanel />
       <MutedMailPanel />
+      <DefaultProjectPanel />
     </div>
+  );
+}
+
+/**
+ * Where a quick todo goes when Tarik does not name a project.
+ *
+ * A setting rather than a constant, for the reason the mail mutes are one: the
+ * next time his todos belong somewhere else it should cost him a click.
+ *
+ * The list comes from Plane live — this is the only place in the app that
+ * enumerates projects for a choice, and a stale list here would offer a project
+ * that no longer exists.
+ */
+function DefaultProjectPanel() {
+  const current = useQuery(api.planeSettings.get, {});
+  const set = useMutation(api.planeSettings.set);
+  const [projects, setProjects] = useState<{ id: string; name: string }[] | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      const res = await fetch("/api/plane/board");
+      if (!res.ok) {
+        const detail = (await res.json().catch(() => ({}))) as { error?: string };
+        setProblem(detail.error ?? `Plane returned ${res.status}.`);
+        return;
+      }
+      const board = (await res.json()) as { projects: { id: string; name: string }[] };
+      setProjects(board.projects);
+    })();
+  }, []);
+
+  return (
+    <Zone title="Default project" accent="bg-hopbush">
+      <p className="text-xs text-steel">
+        Where a task goes when Zola isn&rsquo;t told which project.
+      </p>
+      {problem ? <p className="mt-2 text-xs text-salmon">{problem}</p> : null}
+      <div className="mt-3 flex flex-wrap gap-2">
+        {(projects ?? []).map((p) => (
+          <button
+            key={p.id}
+            onClick={() => void set({ projectId: p.id, projectName: p.name })}
+            className={`rounded-full border px-2.5 py-0.5 text-[10px] uppercase tracking-[0.3em] transition-colors focus-visible:outline-2 focus-visible:outline-cyan-hud motion-reduce:transition-none ${
+              current?.projectId === p.id
+                ? "border-hopbush bg-hopbush/15 text-hopbush"
+                : "border-panel-edge text-steel hover:text-foreground"
+            }`}
+          >
+            {p.name}
+          </button>
+        ))}
+        {projects === null && !problem ? (
+          <span className="pulse-soft text-[10px] tracking-[0.3em] text-steel">LOADING…</span>
+        ) : null}
+      </div>
+    </Zone>
   );
 }
 

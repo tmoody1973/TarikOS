@@ -12,6 +12,7 @@ export const NAV_LINKS: readonly NavLink[] = [
   { label: "HABITS", href: "/habits", color: "bg-sage" },
   { label: "MAIL", href: "/mail", color: "bg-lavender" },
   { label: "STUDIO", href: "/studio", color: "bg-ochre" },
+  { label: "PROJECTS", href: "/projects", color: "bg-hopbush" },
   { label: "DOCS", href: "/documents", color: "bg-lavender" },
   { label: "PEOPLE", href: "/contacts", color: "bg-salmon" },
   { label: "COMMS", href: "/conversations", color: "bg-salmon" },

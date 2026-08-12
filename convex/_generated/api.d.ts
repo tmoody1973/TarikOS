@@ -25,6 +25,7 @@ import type * as journal from "../journal.js";
 import type * as mailFilterLib from "../mailFilterLib.js";
 import type * as mailFilters from "../mailFilters.js";
 import type * as memoryOps from "../memoryOps.js";
+import type * as planeSettings from "../planeSettings.js";
 import type * as secondBrain from "../secondBrain.js";
 import type * as settingsLib from "../settingsLib.js";
 import type * as studio from "../studio.js";
@@ -65,6 +66,7 @@ declare const fullApi: ApiFromModules<{
   mailFilterLib: typeof mailFilterLib;
   mailFilters: typeof mailFilters;
   memoryOps: typeof memoryOps;
+  planeSettings: typeof planeSettings;
   secondBrain: typeof secondBrain;
   settingsLib: typeof settingsLib;
   studio: typeof studio;

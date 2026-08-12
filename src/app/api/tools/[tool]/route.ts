@@ -40,6 +40,15 @@ import { briefDigest } from "@/lib/briefDigest";
 import { proposeRewrite } from "@/lib/studioPropose";
 import { DOC_TYPES } from "../../../../../convex/studioLib";
 import {
+  createProject,
+  createWorkItem,
+  listProjects,
+  listStates,
+  listWorkItems,
+  updateWorkItem,
+} from "@/lib/plane";
+import { describeStatus, rankProjects, workItemPayload } from "@/lib/planeLib";
+import {
   createGoogleContact,
   deleteGoogleContact,
   fetchGooglePeople,
@@ -111,6 +120,95 @@ const STUDIO_SPOKEN_CHARS = 2400;
 /** A few words of a passage, enough to tell two paragraphs apart out loud. */
 function excerptOf(text: string): string {
   return text.length <= 90 ? text : `${text.slice(0, 90).trimEnd()}…`;
+}
+
+/**
+ * How many tasks one spoken project blueprint may carry.
+ *
+ * The research document's warning, made concrete: an agent asked to turn a
+ * conversation into work will happily produce forty items nobody will read.
+ */
+const MAX_BLUEPRINT_TASKS = 12;
+
+/**
+ * The project Tarik meant, or a question.
+ *
+ * No name given falls back to the configured default, which is what makes
+ * "add calling the bank to my list" a single sentence.
+ */
+async function resolvePlaneProject(
+  secret: string,
+  named: string | undefined,
+): Promise<
+  | { ok: true; id: string; name: string }
+  | { ok: false; result: { ok: boolean; message: string; data?: unknown } }
+> {
+  if (!named) {
+    const fallback = await convex.query(api.planeSettings.forTools, { secret });
+    if (!fallback.projectId) {
+      return {
+        ok: false,
+        result: {
+          ok: false,
+          message: "I don't have a default project set. Pick one on your control panel.",
+        },
+      };
+    }
+    return { ok: true, id: fallback.projectId, name: fallback.projectName };
+  }
+
+  const matches = rankProjects(await listProjects(), named);
+  if (matches.length === 0) {
+    return { ok: false, result: { ok: true, message: `No project matches ${named}.` } };
+  }
+  if (matches.length > 1) {
+    return {
+      ok: false,
+      result: {
+        ok: true,
+        message: `I have ${matches.length}: ${matches.map((m) => m.name).join("; ")}. Which one?`,
+        data: { matches },
+      },
+    };
+  }
+  return { ok: true, id: matches[0].id, name: matches[0].name };
+}
+
+/** The work items a spoken quote could mean. Returns every candidate. */
+function matchWorkItems<T extends { name: string }>(items: T[], quote: string): T[] {
+  const needle = quote.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
+  if (!needle) return [];
+  return items.filter((i) =>
+    i.name.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").includes(needle),
+  );
+}
+
+/**
+ * The state group behind a word someone said.
+ *
+ * Spoken English does not match Plane's vocabulary — nobody says "unstarted".
+ * Resolved to a GROUP rather than a state name, because names are per-project
+ * and customisable while groups are not.
+ */
+function groupForWord(word: string): string | undefined {
+  if (/backlog|later|someday/.test(word)) return "backlog";
+  if (/todo|to do|next|up next|waiting/.test(word)) return "unstarted";
+  if (/progress|started|doing|working/.test(word)) return "started";
+  if (/done|finished|complete/.test(word)) return "completed";
+  if (/cancel|dropped|abandon/.test(word)) return "cancelled";
+  return undefined;
+}
+
+/**
+ * Plane's project code: uppercase letters and digits, short.
+ *
+ * Derived from the name when Tarik does not say one, because being asked to
+ * invent a four-letter code mid-sentence is the kind of friction that makes
+ * someone open the web app instead.
+ */
+function planeIdentifier(source: string): string {
+  const cleaned = source.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return (cleaned || "PROJ").slice(0, 8);
 }
 
 function dateArg(value: unknown): string | undefined {
@@ -1886,6 +1984,167 @@ async function runTool(
         ok: true,
         message: `I've suggested a version. It's waiting in ${doc.title} for you to take or leave.`,
         data: { id: stored.id, proposed: rewritten },
+      };
+    }
+
+    // -------------------------------------------------------- Plane
+    //
+    // Projects and tasks. The requirement that shaped every one of these:
+    // Tarik does not open plane.so. Creation happens here or the integration
+    // is a viewer.
+    //
+    // Nothing is mirrored — every read is live against Plane, which owns work
+    // items. And nothing here deletes or archives: those functions do not
+    // exist in src/lib/plane.ts, so a mis-heard sentence cannot reach them.
+
+    case "create_task": {
+      const built = workItemPayload({
+        title: strArg(body.title, 400) ?? "",
+        description: strArg(body.description, 2000),
+        priority: strArg(body.priority, 20),
+      });
+      if (!built.ok) return { ok: false, message: built.error };
+
+      const project = await resolvePlaneProject(secret, strArg(body.project, 120));
+      if (!project.ok) return project.result;
+
+      const created = await createWorkItem(project.id, built.payload);
+      await convex.mutation(api.secondBrain.markToolHealthyFromTool, {
+        secret,
+        name: "create_task",
+      });
+      // Confirmed AFTER, not asked before. A task is additive and deleting it
+      // is one click — the calendar ritual would cost more than the mistake.
+      return {
+        ok: true,
+        message: `Added ${created.name} to ${project.name}.`,
+        data: { id: created.id, project: project.name },
+      };
+    }
+
+    case "find_plane_project": {
+      const q = strArg(body.query, 120);
+      if (!q) return { ok: false, message: "Which project?" };
+
+      const matches = rankProjects(await listProjects(), q);
+      if (matches.length === 0) {
+        return { ok: true, message: `No project matches ${q}.`, data: { matches: [] } };
+      }
+      const message =
+        matches.length === 1
+          ? `${matches[0].name}, ${matches[0].identifier}.`
+          : `I have ${matches.length}: ${matches.map((m) => m.name).join("; ")}. Which one?`;
+
+      await convex.mutation(api.secondBrain.markToolHealthyFromTool, {
+        secret,
+        name: "find_plane_project",
+      });
+      return { ok: true, message, data: { matches } };
+    }
+
+    case "get_project_status": {
+      const project = await resolvePlaneProject(secret, strArg(body.project, 120));
+      if (!project.ok) return project.result;
+
+      const items = await listWorkItems(project.id);
+      await convex.mutation(api.secondBrain.markToolHealthyFromTool, {
+        secret,
+        name: "get_project_status",
+      });
+      return {
+        ok: true,
+        message: describeStatus(project.name, items),
+        data: { total: items.length },
+      };
+    }
+
+    // Resolved by QUOTING the task, the same handle propose_studio_edit uses:
+    // over a phone call there is nothing to point at.
+    case "update_task_state": {
+      const quote = strArg(body.task, 300);
+      const wanted = strArg(body.state, 40)?.toLowerCase();
+      if (!quote) return { ok: false, message: "Which task — read me a few words of it?" };
+      if (!wanted) return { ok: false, message: "Move it to what — todo, in progress, or done?" };
+
+      const project = await resolvePlaneProject(secret, strArg(body.project, 120));
+      if (!project.ok) return project.result;
+
+      const [items, states] = await Promise.all([
+        listWorkItems(project.id),
+        listStates(project.id),
+      ]);
+      const matches = matchWorkItems(items, quote);
+      if (matches.length === 0) {
+        return { ok: true, message: `Nothing in ${project.name} matches ${quote}.` };
+      }
+      if (matches.length > 1) {
+        // She never picks. Moving the wrong task is a state change he did not
+        // ask for, in a project he was not looking at.
+        return {
+          ok: true,
+          message: `Two match: ${matches.map((m) => m.name).join("; ")}. Which one?`,
+          data: { matches },
+        };
+      }
+
+      const target = states.find(
+        (s) => s.group === groupForWord(wanted) || s.name.toLowerCase() === wanted,
+      );
+      if (!target) {
+        return {
+          ok: true,
+          message: `${project.name} has no ${wanted} column. It has ${states.map((s) => s.name).join(", ")}.`,
+        };
+      }
+
+      await updateWorkItem(project.id, matches[0].id, { state: target.id });
+      await convex.mutation(api.secondBrain.markToolHealthyFromTool, {
+        secret,
+        name: "update_task_state",
+      });
+      return {
+        ok: true,
+        message: `Moved ${matches[0].name} to ${target.name}.`,
+        data: { id: matches[0].id, state: target.name },
+      };
+    }
+
+    // A project is structural, so this one asks first. Without `confirmed` it
+    // returns a blueprint and writes nothing — the research document's
+    // approval card, in the only form a voice call has.
+    case "create_plane_project": {
+      const name = strArg(body.name, 120);
+      if (!name) return { ok: false, message: "What should the project be called?" };
+      const identifier = planeIdentifier(strArg(body.identifier, 12) ?? name);
+      const description = strArg(body.description, 2000);
+      const tasks = Array.isArray(body.tasks)
+        ? body.tasks.flatMap((t) => {
+            const title = strArg(t, 400);
+            return title ? [title] : [];
+          }).slice(0, MAX_BLUEPRINT_TASKS)
+        : [];
+
+      if (body.confirmed !== true) {
+        return {
+          ok: true,
+          message: `I'd create ${name}, code ${identifier}${tasks.length ? `, with ${tasks.length} task${tasks.length === 1 ? "" : "s"}: ${tasks.join("; ")}` : ", with no tasks yet"}. Say go ahead and I'll make it.`,
+          data: { blueprint: { name, identifier, description, tasks } },
+        };
+      }
+
+      const project = await createProject({ name, identifier, description });
+      for (const title of tasks) {
+        const built = workItemPayload({ title });
+        if (built.ok) await createWorkItem(project.id, built.payload);
+      }
+      await convex.mutation(api.secondBrain.markToolHealthyFromTool, {
+        secret,
+        name: "create_plane_project",
+      });
+      return {
+        ok: true,
+        message: `Created ${project.name}${tasks.length ? ` with ${tasks.length} task${tasks.length === 1 ? "" : "s"}` : ""}. It's on your Projects page.`,
+        data: { id: project.id, identifier: project.identifier },
       };
     }
 

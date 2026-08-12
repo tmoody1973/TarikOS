@@ -17,6 +17,11 @@
      black cap type like its siblings, and far enough from amber that HOME and
      STUDIO never read as the same channel in the rail. */
   --lcars-ochre: #cccc99;
+  /* PROJECTS. Hopbush, a canonical LCARS hue, and the last family member the
+     rail had left: salmon is a light coral and lavender a desaturated purple,
+     so a mid-magenta reads as neither at cap size. Execution earns its own
+     channel rather than joining a family — a board is not a document. */
+  --lcars-hopbush: #cc6699;
   --hud-cyan: #35e0ff;
   --panel: #0b0e14;
   --panel-edge: #1a2233;
@@ -65,6 +70,7 @@
   --color-steel: var(--lcars-steel);
   --color-sage: var(--lcars-sage);
   --color-ochre: var(--lcars-ochre);
+  --color-hopbush: var(--lcars-hopbush);
   --color-cyan-hud: var(--hud-cyan);
   --color-panel: var(--panel);
   --color-panel-edge: var(--panel-edge);

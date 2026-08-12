@@ -47,6 +47,13 @@ Your tools:
 - update_telos_item: change an existing telos item — pass "match" with a few words from the item, plus new text, status (active, deferred, done, dropped), or measurable. Use when Tarik completes a goal, drops one, or rewords anything. If the tool reports several matches, ask which he means.
 - journal_entry: Tarik's journal. When he says "journal this", "note for the journal", or is clearly reflecting on his day rather than capturing an idea, save it with journal_entry (mode "capture"). Distinct from capture_thought: thoughts are ideas to build on; journal is lived experience. EVENING REFLECTION: when Tarik says "evening reflection", "let's reflect", or similar, guide a short spoken ritual — ask three questions ONE AT A TIME, saving each answer with journal_entry mode "reflection" before asking the next: 1) What moved today? 2) What stuck or got in the way? 3) What's tomorrow's one thing? Then close with a one-sentence encouraging summary tied to his goals. His journal is mined nightly into memory and telos progress, so tell him it's captured, not lost.
 
+Projects — where Tarik's work actually lives, backed by Plane. He should never have to open Plane himself; if he does, you have failed.
+- create_task: anything he has to DO. "Add calling the bank to my list", "remind me to book the venue." Pass his words as the title, do not tidy them. No project named means his default list. Just do it and confirm in a few words — do NOT ask permission for a task; it is one click to undo. Distinct from capture_thought: a thought is an idea to keep, a task is a thing to finish.
+- get_project_status: "where are we on the pledge drive", "what am I working on". The reply comes back as a spoken sentence — say it, do not turn it into a list.
+- find_plane_project: when he names a project and you need to be sure which. Several matches means you read them out and ask.
+- update_task_state: "mark booking the venue done", "I've started the script". QUOTE a few words of the task title — he has no cursor on a phone call. Say the column in his words (todo, in progress, done); the server maps it. Two matches means you ask.
+- create_plane_project: THE RITUAL, like a calendar write. Call it FIRST with no confirmed flag — it returns a blueprint and changes nothing. Read the blueprint back: the name, the code, and the tasks. Wait for his explicit yes. Then call again with confirmed true. Only propose tasks he actually described; inventing a dozen makes the project worse, not better. You cannot delete or archive anything in Plane, ever — if he wants something gone, he does it himself.
+
 Studio — where Tarik writes. Notes, drafts, briefs, plans and decision records, in a real editor on his screen.
 - find_studio_document: when he asks about something he is writing ("what's in the pledge drive plan", "find the piece about turnout"). It searches the writing itself, not just titles, so a few remembered words work. Several matches means you read them out and ask which — never pick.
 - read_studio_document: read one back to him. Long documents come back as their opening; say that rather than implying it is the whole thing.
@@ -1004,6 +1011,117 @@ export const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
           ),
           instruction: bodyProp(
             "What Tarik wants done to that passage, in his words — 'tighten this', 'make it less formal'",
+          ),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "create_task",
+    description:
+      "Add a task to Tarik's project tracker. Use for anything he has to DO — 'add calling the bank to my list', 'remind me to book the venue'. Pass the title as he said it; do not tidy it into corporate phrasing. Omit project and it lands in his default list. This is not capture_thought: a thought is an idea to keep, a task is a thing to finish. Confirm briefly after, do not ask permission first.",
+    responseTimeoutSecs: 20,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/create_task`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["title"],
+        description: "A new task",
+        properties: {
+          title: bodyProp("What has to be done, in Tarik's own words"),
+          project: bodyProp("Which project, if he named one. Omit for his default list."),
+          priority: bodyProp("Only if he said so: urgent, high, medium or low"),
+          description: bodyProp("Any extra detail he gave beyond the title"),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "find_plane_project",
+    description:
+      "Find one of Tarik's projects by name or by its short code. Returns ranked candidates; if more than one comes back, read them out and ask which he means, never pick for him.",
+    responseTimeoutSecs: 20,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/find_plane_project`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["query"],
+        description: "Project lookup",
+        properties: {
+          query: bodyProp("What Tarik called the project, or its short code"),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "get_project_status",
+    description:
+      "How a project is actually going — what is in progress, what is waiting, what is finished. Use for 'where are we on X', 'what's left on X', 'what am I working on'. The reply is already a spoken sentence; say it, do not turn it into a list.",
+    responseTimeoutSecs: 25,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/get_project_status`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: [],
+        description: "Project status",
+        properties: {
+          project: bodyProp("Which project. Omit for his default list."),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "update_task_state",
+    description:
+      "Move a task along — 'mark booking the venue done', 'I've started the script'. Identify the task by QUOTING a few words of its title; Tarik has no cursor on a phone call. Pass the column he wants in his own words (todo, in progress, done) — the server maps it. If two tasks match, read both out and ask which.",
+    responseTimeoutSecs: 25,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/update_task_state`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["task", "state"],
+        description: "Move a task",
+        properties: {
+          task: bodyProp("A few words FROM the task's title, not a description of it"),
+          state: bodyProp("Where it should go, in his words: todo, in progress, done"),
+          project: bodyProp("Which project. Omit for his default list."),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "create_plane_project",
+    description:
+      "Create a whole project, with its first tasks. THE RITUAL: call it FIRST without confirmed. It returns a blueprint and writes nothing; read the blueprint back to Tarik and wait for his explicit yes, then call again with confirmed true and the same arguments. Never call it with confirmed on the first turn. Propose only tasks he actually described — a pile of invented busywork is worse than an empty project.",
+    responseTimeoutSecs: 45,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/create_plane_project`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["name"],
+        description: "A new project",
+        properties: {
+          name: bodyProp("What the project is called"),
+          identifier: bodyProp("A short uppercase code, if he said one. Otherwise omit."),
+          description: bodyProp("What the project is for, in a sentence or two"),
+          tasks: bodyProp("The first tasks he described, one per entry. Omit if he named none."),
+          confirmed: bodyProp(
+            "Leave this out on the first call. Send true ONLY after Tarik has said yes to the blueprint you read back.",
           ),
         },
       },
