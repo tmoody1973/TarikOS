@@ -28,6 +28,8 @@
     "@faker-js/faker": "^10.5.0",
     "@mozilla/readability": "^0.6.0",
     "@opentelemetry/api": "^1.9.1",
+    "@picovoice/porcupine-web": "^4.0.1",
+    "@picovoice/web-voice-processor": "^4.0.10",
     "@platejs/ai": "^53.3.3",
     "@platejs/basic-nodes": "^53.0.0",
     "@platejs/basic-styles": "^53.0.0",

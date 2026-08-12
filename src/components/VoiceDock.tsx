@@ -10,6 +10,7 @@ import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { LiveWaveform } from "./hud/LiveWaveform";
 import { Matrix } from "./hud/Matrix";
+import { useWakeWord } from "./useWakeWord";
 
 // Persistent voice console (MOO-483): lives in the root layout so the
 // WebRTC session survives page navigation. Compact dock form of the old
@@ -188,6 +189,11 @@ export function VoiceDock() {
     }
   }
 
+  // Saying her name instead of reaching for the button. Suspended while a
+  // session is live: one microphone, and a detector that could hear her own
+  // voice would trigger on it.
+  const wake = useWakeWord(() => void engage(), connected);
+
   const lastTurn = turns[turns.length - 1];
 
   return (
@@ -322,10 +328,35 @@ export function VoiceDock() {
           )}
         </div>
 
+        {!connected && wake.state !== "unsupported" && (
+          <button
+            type="button"
+            onClick={wake.armed ? wake.disarm : wake.arm}
+            aria-pressed={wake.armed}
+            title={
+              wake.armed
+                ? `Listening for "${wake.keyword}". The tab has to stay in front of you.`
+                : "Listen for the wake word"
+            }
+            className={`ml-auto flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-[10px] uppercase tracking-wider transition motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-cyan-hud ${
+              wake.armed
+                ? "border-cyan-hud/70 bg-cyan-hud/15 text-foreground"
+                : "border-panel-edge text-steel hover:border-cyan-hud/40"
+            }`}
+          >
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                wake.armed ? "bg-cyan-hud pulse-soft" : "bg-steel"
+              }`}
+            />
+            {wake.state === "arming" ? "arming…" : wake.armed ? wake.keyword : "wake"}
+          </button>
+        )}
+
         <button
           onClick={connected ? () => conversation.endSession() : engage}
           disabled={connecting}
-          className={`lcars-cap-right ml-auto shrink-0 px-4 py-1.5 font-[family-name:var(--font-display)] text-sm text-black transition motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-cyan-hud disabled:opacity-50 ${
+          className={`lcars-cap-right shrink-0 px-4 py-1.5 font-[family-name:var(--font-display)] text-sm text-black transition motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-cyan-hud disabled:opacity-50 ${
             connected ? "bg-salmon hover:opacity-80" : "bg-amber hover:opacity-80"
           }`}
         >

@@ -325,8 +325,40 @@ The first two are worth reading as a **class**, not as incidents.
   and wrong at a hundred.
 - **Attachments** are stored by AgentMail and ignored here, by choice.
 
+## The wake word
+
+Built and shipped dark. `/api/wake/key` returns 404 while `PICOVOICE_ACCESS_KEY`
+is unset, and the dock reads that and never offers to arm — an absent key is an
+absent feature rather than a button that throws.
+
+- **Porcupine, on-device.** The Web Speech API is free and zero-dependency and
+  streams the room to Google, which is the wrong trade for the assistant
+  holding his calendar and mail.
+- **`BuiltInKeyword.Jarvis` by default**, so the whole path works before anyone
+  opens the Picovoice Console. A trained "Hey Zola" is a `.ppn` dropped in
+  `public/wake/` and `PICOVOICE_KEYWORD=hey-zola.ppn`.
+- **The detector is released while a session is live.** ElevenLabs' own guide
+  stops its mic stream before `start_session` "to avoid conflicts", and there is
+  a second reason it does not give: a detector left running hears Zola through
+  the speakers and triggers on her. This is also why the STOP word is `end_call`
+  and not a local one — nothing local can listen while she is talking.
+- **A chime fires on detection**, before the session connects, because token
+  mint plus WebRTC is one to two seconds and silence reads as "it didn't hear
+  me".
+
+**The ceiling, stated plainly:** browsers reject or suspend `getUserMedia` on
+backgrounded pages by design. This is always-on *while the tab is in front of
+you*, never an Echo on the counter. Counter-top is a Raspberry Pi and
+[ElevenLabs' own guide](https://elevenlabs.io/docs/eleven-agents/guides/integrations/raspberry-pi-voice-assistant),
+which is a different device and a different project.
+
+Still unmeasured: how often it false-fires in a room with a radio on.
+
 ## Open, needs Tarik
 
+- **`PICOVOICE_ACCESS_KEY` in Vercel**, from
+  [console.picovoice.ai](https://console.picovoice.ai/). Free tier covers three
+  users a month; he is one. Nothing about the wake word appears until it is set.
 - **Say "check your mail" to her out loud.** Everything below the voice layer
   is verified in production; the spoken path is not.
 
