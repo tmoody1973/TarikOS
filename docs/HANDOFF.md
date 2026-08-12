@@ -99,24 +99,57 @@ earlier revision.
   no `.npmrc`, read past the shadcn installer's file list, screenshots are
   upscaled, Grammarly blocks synthetic typing, localhost Clerk loops.
 
-## Next — Plane projects and tasks
+## Projects — built and live
 
-Approved and specified: `docs/superpowers/specs/2026-08-11-tarik-os-plane-projects-design.md`.
-**Read it before writing anything**, including its Reconnaissance section — those
-are the shapes the live API actually returns, not what the docs say.
+Spec: `docs/superpowers/specs/2026-08-11-tarik-os-plane-projects-design.md`.
+**Read it before touching any of this**, especially its Reconnaissance section —
+those are the shapes the live API returns, and the documentation is wrong about
+one of them.
 
-The point, in Tarik's words: *"I don't want to go to plane.so to create a
-project and then come back to Zola to ask about them."* Any design where
-creation happens elsewhere fails the requirement. Creation and the board ship
-together; read-only first was proposed and rejected.
+`/projects` is a board backed by Plane Cloud, workspace `moody-and-co`. Five
+tools: `create_task`, `create_plane_project`, `find_plane_project`,
+`get_project_status`, `update_task_state`. All exercised against the real
+workspace; every test object created was deleted after.
 
-The spec supersedes the research doc in three places — no MCP server, no mirror
-tables, creation before reads — each with its reason. Do not re-derive them from
-`new-feat-research/`.
+**Two ceremonies, deliberately different.** A task she just does and confirms
+after — additive, one click to undo, and the calendar ritual would cost more
+than the mistake while sending him back to plane.so. A project asks first:
+`create_plane_project` without `confirmed` returns a blueprint and writes
+nothing. Verified: the project count stayed at 2.
 
-Ready: `PLANE_API_TOKEN` is in Vercel production **and** `.env.local`, workspace
-slug is `moody-and-co`, and the API was exercised tonight. Open question 1 (the
-channel colour) blocks the UI and nothing else.
+**No mirror tables and no MCP server**, both superseding the research doc with
+reasons in the spec. Plane owns work items; the board reads live. The only
+stored state is which project a nameless todo goes to — a row in the existing
+`settings` table, editable on `/control`.
+
+Three API facts that are load-bearing and not in the docs:
+
+- **`state` is not required** when creating a work item, despite being
+  documented as required. Omitting it lands the item in the project default,
+  which is what makes a spoken task one round trip instead of two.
+- **State names are per-project and customisable; `state_group` is not.** The
+  board groups by group. A test renames a column and asserts the cards stay.
+- **Every list is cursor-paginated.** A caller that reads `results` once gets a
+  truncated board with no error — work simply missing, which looks exactly like
+  work that was never created.
+
+PROJECTS claims **hopbush `#cc6699`**. Every other LCARS hue was taken; execution
+is not a document, so it does not join the lavender family. One token in
+`globals.css` if you want it changed.
+
+### Left undone, on purpose
+
+- **`planeLinks` was specified and not built.** Nothing would populate it yet,
+  and a table with no writer is scaffolding. Spec open question 5.
+- **`get_project_status` says counts and what is in flight, not blockers or due
+  dates.** Plane's default states have no blocked group, and due dates are open
+  question 4 — `calendarLib`'s date parsing would do it.
+- Webhooks, Pages/Wiki, cycles, modules, the Plane-native agent, and **anything
+  destructive**. There is no delete or archive function in `src/lib/plane.ts` at
+  all, so a mis-heard sentence cannot reach one. A guardrail keeps them absent.
+- `mkedev` shows on the board alongside Moody and Co. If it is someone else's
+  project, the board wants an allowlist.
+- Plane's seven onboarding tutorial items are still in Moody and Co.
 
 ## Known gaps, deliberately left
 
