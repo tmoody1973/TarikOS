@@ -15,19 +15,17 @@ cleaner, so resist doing the third first.
 
 ## State
 
-`main` is AHEAD of origin by one commit — the three items below are done and
-committed, **not pushed**, because a push deploys. **868/868 tests, tsc clean,
-`next build` green.**
+`main` in sync with origin. **869/869 tests, tsc clean, `next build` green.**
+Convex deployed, agent provisioned, Vercel deployed.
 
 The prompt is reshaped (persona 12,724 → 4,191 chars), the spec carries the four
-decisions, and `check_zola_mail` exists. Read "Where the three items landed"
-below before doing anything else.
+decisions, and `check_zola_mail` is LIVE — verified in production against the
+real inbox. Read "Where the three items landed" below.
 Convex deployed, agent provisioned, Vercel deployed. A push to `main` ships the
 Convex schema and the app together.
 
-47 tools defined; **46 published** — the agent has NOT been re-provisioned, so
-`check_zola_mail` is not live yet. Working tree carries only `.claude/`, which
-is not yours to decide on.
+47 tools published. Working tree carries only `.claude/`, which is not yours to
+decide on.
 
 Shipped since the last handoff: Plane projects and a board, a task detail panel,
 scheduled reminders with due dates, and two bug fixes worth reading as a class
@@ -275,12 +273,12 @@ The first two are worth reading as a **class**, not as incidents.
    ~18,000 rather than 25,755. Mechanics moved into 17 tool descriptions,
    invariants hoisted to the opening, `{{standing_context}}` moved to the end.
    `tests/personaSeam.test.ts` is the new seam guard and it bites (a mutation
-   case proves it). **Measured: 72.9% → 71.0%, twice.** Two utterances, both
-   `create_calendar_event → web_research`. One targeted fix followed — the
-   calendar description now leads with what the tool is FOR before its ritual —
-   and it is **UNMEASURED**, because the Anthropic key hit its usage limit and
-   regains access 2026-09-01. Re-run `python evals/replay.py --compare before`
-   then; `run-before.json` is saved and waiting.
+   case proves it). **Measured across three runs: 72.9% → 71.0%, 71.0%, then
+   72.0%.** The first two after-runs lost two utterances, both
+   `create_calendar_event → web_research`. The calendar description then
+   changed to lead with what the tool is FOR before its read-back ritual, and
+   that confusion class disappeared: 72.0%, one utterance off the baseline and
+   inside the harness's own noise. **Selection held. 8,533 characters gone.**
 2. **Spec corrected.** All four decisions plus the `/mail/zola` tab. Open
    questions 2 and 3 are struck through and answered rather than deleted.
 3. **`check_zola_mail` built.** `agentmailLib.ts` (pure, 29 tests),
@@ -290,15 +288,8 @@ The first two are worth reading as a **class**, not as incidents.
 
 ## Open, needs Tarik
 
-- **`AGENTMAIL_API_KEY` in Vercel.** It is only in `.env.local`. Nothing
-  server-side works without it.
-- **`ZOLA_MAIL_ALLOWLIST=tarikjmoody@gmail.com` in Vercel.** Found by running
-  the real message through the rule: `OWNER_EMAIL` is his work address, and the
-  one email in her inbox came from his personal Gmail. Without this his own
-  forwards are withheld, which is exactly the wrong first impression.
-- **Push, then re-provision.** `node scripts/provision-agent.ts` publishes
-  `check_zola_mail` to ElevenLabs. Doing it BEFORE the push points the agent at
-  a webhook that 404s.
+- **Say "check your mail" to her out loud.** Everything below the voice layer
+  is verified in production; the spoken path is not.
 - **Open an exported .docx in Word** and confirm it is not corrupt. Open since
   three handoffs.
 - **MOO-529** — thirty seconds in airplane mode. Open since five.

@@ -244,3 +244,12 @@ test("a message that never signs off keeps all of its preview", () => {
   const summary = summarize({ from: "a@b.com", subject: "s", preview: "no signature here" });
   assert.match(summary, /no signature here/);
 });
+
+test("asking for something that is not there does not claim the inbox is empty", () => {
+  // Found live: he asks "did the booking confirmation come in?", nothing
+  // matches, and she answers "nothing new in your inbox" — which is false, and
+  // is the one answer that would stop him looking.
+  const said = describeInbox([FROM_STRANGER], TARIK, "the booking from Delta");
+  assert.doesNotMatch(said.message, /nothing new in your inbox/i);
+  assert.match(said.message, /nothing.*match|no.*match/i);
+});

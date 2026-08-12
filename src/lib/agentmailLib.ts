@@ -148,6 +148,16 @@ export function describeInbox(
     : messages.filter((m) => allowedSender(m.from, allowlist));
   const withheld = needle ? 0 : messages.length - shown.length;
 
+  if (shown.length === 0 && needle) {
+    // Never "your inbox is empty" in answer to "did X come in?". It is the one
+    // reply that would stop him looking, and it is false whenever anything at
+    // all is sitting there.
+    return {
+      message: `Nothing in my inbox matches that${messages.length ? ` — there are ${messages.length} other ${messages.length === 1 ? "message" : "messages"}` : ""}.`,
+      shown,
+      withheld,
+    };
+  }
   if (shown.length === 0 && withheld === 0) {
     return { message: "Nothing new in your inbox.", shown, withheld };
   }
