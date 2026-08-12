@@ -201,6 +201,27 @@ Worth reading before adding a sixth tool, because the first will happen again.
 
 **Contacts** — unchanged: whole-field editing only, iCloud unbuilt.
 
+## Also on the desk
+
+**Dial instead of Telnyx?** Researched, written up, no decision:
+`docs/new-feat-research/2026-08-11-dial-versus-telnyx.md`.
+
+The headline is that it **cannot** be a replacement — Dial has no SIP trunking,
+and `call_tarik` is an ElevenLabs SIP outbound call, so a Dial number cannot do
+that job. But Dial looks like a good answer to the half of Telnyx that has been
+blocked since 9 August: SMS, stuck behind an unfinished 10DLC registration. Dial
+claims compliance is handled in-platform.
+
+Recommendation is a split — Telnyx keeps the number ElevenLabs dials, Dial gets
+tried for SMS on their $5 free credit. One question decides it: *can a Dial
+number text Tarik today with no registration wait?*
+
+**A task detail panel for `/projects`.** Asked for and not built. Cards on the
+board show a title and a priority and nothing else — no description, no way to
+change state or priority by hand, no link into Plane. `updateWorkItem` already
+takes a `state` patch and the board route already exposes it, so the panel is
+mostly UI over things that exist.
+
 ## Open, needs Tarik
 
 - **Two archived test documents** — "Zebra pledge drive test" and "Zebra
