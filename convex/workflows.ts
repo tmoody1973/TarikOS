@@ -295,6 +295,10 @@ const MORNING_BRIEF_STEPS: { tool: string; args: Record<string, string> }[] = [
   { tool: "telos_brief", args: {} },
   { tool: "get_calendar", args: { date: "{{today}}" } },
   { tool: "get_emails", args: {} },
+  // Her inbox surfaces to him rather than waiting to be checked. `as: count`
+  // because a brief is generated unattended and read aloud: he gets how much
+  // arrived, never what a stranger wrote.
+  { tool: "check_zola_mail", args: { as: "count" } },
   { tool: "get_rss", args: { feeds: "{{feedGroups}}" } },
   { tool: "web_research", args: { query: "{{topics}}" } },
 ];

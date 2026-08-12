@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import {
   allowedSender,
   describeInbox,
+  countInbox,
   inboxAllowlist,
+  unreadCount,
   isForwarded,
   parseAllowlist,
   summarize,
@@ -259,4 +261,38 @@ test("she counts one message in the singular, because she says it out loud", () 
   assert.match(one, /there is 1 other message\b/);
   const two = describeInbox([FROM_STRANGER, FROM_TARIK], TARIK, "nothing like this").message;
   assert.match(two, /there are 2 other messages\b/);
+});
+
+// ------------------------------------------------------- the tab and the brief
+
+test("unread is counted from AgentMail's own label", () => {
+  assert.equal(
+    unreadCount([
+      { ...FROM_TARIK, labels: ["received", "unread"] },
+      { ...FROM_STRANGER, labels: ["received"] },
+    ]),
+    1,
+  );
+});
+
+test("a message with no labels is not counted as unread", () => {
+  assert.equal(unreadCount([FROM_TARIK]), 0);
+});
+
+test("the brief gets a count, never the content", () => {
+  // Settled in the design: her inbox surfaces to him in the morning brief as
+  // "two things arrived", not as what they said. A brief is generated
+  // unattended, so nothing a stranger wrote should end up inside one.
+  const line = countInbox([FROM_TARIK, FROM_STRANGER], TARIK);
+  assert.match(line, /2/);
+  assert.doesNotMatch(line, /Thursday|Confirmation/);
+});
+
+test("an empty inbox is a sentence, not a zero", () => {
+  assert.match(countInbox([], TARIK), /nothing|no mail/i);
+});
+
+test("the count distinguishes the listed from the rest", () => {
+  const line = countInbox([FROM_TARIK, FROM_STRANGER], TARIK);
+  assert.match(line, /1 from someone on your list|1 from a sender on your list/i);
 });

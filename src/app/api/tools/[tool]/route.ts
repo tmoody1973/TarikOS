@@ -39,7 +39,7 @@ import { escapeHtml, notifyOwner } from "@/lib/telegram";
 import { briefDigest } from "@/lib/briefDigest";
 import { proposeRewrite } from "@/lib/studioPropose";
 import { AgentMailError, emailOwner, listMessages } from "@/lib/agentmail";
-import { describeInbox, inboxAllowlist } from "@/lib/agentmailLib";
+import { countInbox, describeInbox, inboxAllowlist } from "@/lib/agentmailLib";
 import {
   askedForACall,
   channelOf,
@@ -2311,11 +2311,28 @@ async function runTool(
         return { ok: false, message: `I could not read my inbox — ${why}.` };
       }
 
-      const report = describeInbox(
-        messages,
-        inboxAllowlist(process.env.OWNER_EMAIL, process.env.ZOLA_MAIL_ALLOWLIST),
-        wanted,
+      const allowlist = inboxAllowlist(
+        process.env.OWNER_EMAIL,
+        process.env.ZOLA_MAIL_ALLOWLIST,
       );
+
+      // `as: count` is the morning brief's call, and it is deliberately not in
+      // the published schema — the shape deliver_reminder established. A brief
+      // is built unattended and read aloud, so it gets how much arrived and
+      // never what a stranger wrote.
+      if (strArg(body.as, 20) === "count") {
+        await convex.mutation(api.secondBrain.markToolHealthyFromTool, {
+          secret,
+          name: "check_zola_mail",
+        });
+        return {
+          ok: true,
+          message: countInbox(messages, allowlist),
+          data: { total: messages.length },
+        };
+      }
+
+      const report = describeInbox(messages, allowlist, wanted);
 
       await convex.mutation(api.secondBrain.markToolHealthyFromTool, {
         secret,

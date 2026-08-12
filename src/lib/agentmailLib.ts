@@ -16,6 +16,7 @@ export type MailMessage = {
   /** AgentMail's own cut of the message, which stops at the signature. */
   preview?: string;
   text?: string;
+  labels?: string[];
   thread_id?: string;
   message_id?: string;
   timestamp?: string;
@@ -116,6 +117,35 @@ const FORWARD_BODY = /-+\s*forwarded message\s*-+|^\s*begin forwarded message/im
 export function isForwarded(message: MailMessage): boolean {
   if (FORWARD_SUBJECT.test(message.subject ?? "")) return true;
   return FORWARD_BODY.test(message.text ?? "");
+}
+
+/**
+ * How many are unread, from AgentMail's own label rather than a flag of ours.
+ *
+ * A read/unread bit stored here would be a second source of truth for
+ * something the provider already owns, and the two would disagree the first
+ * time he opened something anywhere else.
+ */
+export function unreadCount(messages: MailMessage[]): number {
+  return messages.filter((m) => (m.labels ?? []).includes("unread")).length;
+}
+
+/**
+ * One line for the morning brief: how much arrived, never what it said.
+ *
+ * A brief is generated unattended and then read aloud, so it is the one place
+ * a stranger's words must not reach. He gets a number and a reason to look.
+ */
+export function countInbox(messages: MailMessage[], allowlist: string[]): string {
+  if (messages.length === 0) return "Nothing in Zola's inbox.";
+  const listed = messages.filter((m) => allowedSender(m.from, allowlist)).length;
+  const rest = messages.length - listed;
+  const parts = [
+    listed ? `${listed} from ${listed === 1 ? "someone" : "people"} on your list` : "",
+    rest ? `${rest} from ${rest === 1 ? "a sender" : "senders"} who ${rest === 1 ? "is" : "are"} not` : "",
+  ].filter(Boolean);
+  const n = messages.length;
+  return `${n} ${n === 1 ? "message" : "messages"} in Zola's inbox — ${parts.join(", ")}.`;
 }
 
 /** "there is 1 other message" / "there are 2 other messages". She says it aloud. */

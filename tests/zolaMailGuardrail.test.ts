@@ -17,11 +17,17 @@ const PROVISION = readFileSync(
   "utf8",
 );
 
-/** The body of one `case "name":` block in the tool route. */
+/**
+ * The body of one `case "name":` block in the tool route, comments stripped.
+ *
+ * Stripped because these assertions scan for calls, and a comment naming a
+ * forbidden call is documentation rather than a call — the same treatment
+ * tests/reminderGuardrail.test.ts gives every file it scans.
+ */
 function routeCase(name: string): string {
   const body = ROUTE.split(`case "${name}": {`)[1]?.split("\n    }")[0] ?? "";
   assert.ok(body, `no route case for ${name}`);
-  return body;
+  return body.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
 }
 
 // ------------------------------------------------------- the client

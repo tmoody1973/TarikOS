@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Authenticated, AuthLoading } from "convex/react";
 import { Zone, ZoneEmpty } from "@/components/hud/Zone";
+import { MailTabs } from "@/components/MailTabs";
 import { Compose, type ComposePrefill } from "./Compose";
 import { extractEmailAddress } from "@/lib/emailAddress";
 import {
@@ -198,6 +199,7 @@ function MailInner() {
         }`}
       >
         <Zone title="Mail" accent="bg-lavender">
+          <MailTabs />
           <div className="mb-3 flex flex-wrap items-center gap-1.5">
             {["all", ...accounts].map((a) => (
               <button
