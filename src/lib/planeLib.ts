@@ -111,6 +111,51 @@ export function isConfirmed(value: unknown): boolean {
   return AFFIRMATIVE.has(value.trim().toLowerCase());
 }
 
+/** Plane's cap on a project code. */
+const IDENTIFIER_MAX = 8;
+
+/**
+ * A project's short code — free to use, not merely derived.
+ *
+ * Derived from the name when Tarik does not say one, because being asked to
+ * invent a four-letter code mid-sentence is the friction that sends someone
+ * back to the web app.
+ *
+ * But a derived code COLLIDES. "Pledge Drive 2026" and "Pledge Drive 2027"
+ * both truncate to PLEDGEDR, and Plane refuses the second with "The project
+ * identifier is already taken" — which reached Tarik as "the tool hit an
+ * internal error", from a project that simply never got created.
+ *
+ * So the taken codes are passed in and a free one is found. The digit REPLACES
+ * a character rather than extending the code, since going past the cap trades
+ * one rejection for another.
+ *
+ * A code Tarik actually said is honoured as-is. If he names one that is taken,
+ * that is worth telling him rather than quietly using a different one — a
+ * project code appears on every work item forever.
+ */
+export function projectIdentifier(
+  name: string,
+  taken: string[],
+  requested?: string,
+): string {
+  const clean = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (requested?.trim()) return clean(requested).slice(0, IDENTIFIER_MAX) || "PROJ";
+
+  const base = clean(name).slice(0, IDENTIFIER_MAX) || "PROJ";
+  const used = new Set(taken.map((t) => clean(t)));
+  if (!used.has(base)) return base;
+
+  for (let n = 2; n < 100; n++) {
+    const suffix = String(n);
+    const candidate = base.slice(0, IDENTIFIER_MAX - suffix.length) + suffix;
+    if (!used.has(candidate)) return candidate;
+  }
+  // A hundred projects sharing eight leading characters is not a real case;
+  // returning the base lets Plane refuse it and say why.
+  return base;
+}
+
 export type BoardColumn = {
   group: StateGroup;
   /** The project's own name for this group, e.g. "Todo" or "Next up". */

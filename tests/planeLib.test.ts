@@ -4,6 +4,7 @@ import {
   boardColumns,
   describeStatus,
   isConfirmed,
+  projectIdentifier,
   rankProjects,
   workItemPayload,
   type PlaneState,
@@ -115,6 +116,42 @@ test("absence is not confirmation", () => {
   for (const value of [undefined, null, "", false, "false", "no", "maybe", 0, {}]) {
     assert.equal(isConfirmed(value), false, `${JSON.stringify(value)} must not confirm`);
   }
+});
+
+// ------------------------------------------------------ project codes
+
+test("a project code is derived from the name when none is given", () => {
+  assert.equal(projectIdentifier("Pledge drive", []), "PLEDGEDR");
+});
+
+test("a code that is already taken gets a free one instead", () => {
+  // Found by creating two test projects a minute apart. "Pledge Drive 2026"
+  // and "Pledge Drive 2027" both truncate to PLEDGEDR, and Plane rejects the
+  // second with "The project identifier is already taken" — which reached
+  // Tarik as "the tool hit an internal error".
+  assert.equal(projectIdentifier("Pledge drive", ["PLEDGEDR"]), "PLEDGED2");
+});
+
+test("codes keep being freed up as more collide", () => {
+  assert.equal(projectIdentifier("Pledge drive", ["PLEDGEDR", "PLEDGED2"]), "PLEDGED3");
+});
+
+test("a taken code is matched however it was cased", () => {
+  assert.equal(projectIdentifier("Pledge drive", ["pledgedr"]), "PLEDGED2");
+});
+
+test("a code stays inside Plane's length limit while being freed", () => {
+  // Appending a digit must REPLACE a character, not extend past the cap.
+  const code = projectIdentifier("Pledge drive planning", ["PLEDGEDR"]);
+  assert.ok(code.length <= 8, `${code} is too long`);
+});
+
+test("a name with no letters still produces a usable code", () => {
+  assert.match(projectIdentifier("!!! ???", []), /^[A-Z0-9]+$/);
+});
+
+test("a code Tarik actually said is honoured, not re-derived", () => {
+  assert.equal(projectIdentifier("Pledge drive", [], "PD"), "PD");
 });
 
 // ------------------------------------------------------------ the board

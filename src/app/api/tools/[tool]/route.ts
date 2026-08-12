@@ -46,8 +46,15 @@ import {
   listStates,
   listWorkItems,
   updateWorkItem,
+  PlaneError,
 } from "@/lib/plane";
-import { describeStatus, isConfirmed, rankProjects, workItemPayload } from "@/lib/planeLib";
+import {
+  describeStatus,
+  isConfirmed,
+  projectIdentifier,
+  rankProjects,
+  workItemPayload,
+} from "@/lib/planeLib";
 import {
   createGoogleContact,
   deleteGoogleContact,
@@ -200,15 +207,21 @@ function groupForWord(word: string): string | undefined {
 }
 
 /**
- * Plane's project code: uppercase letters and digits, short.
+ * Plane's refusal, as a sentence Zola can say.
  *
- * Derived from the name when Tarik does not say one, because being asked to
- * invent a four-letter code mid-sentence is the kind of friction that makes
- * someone open the web app instead.
+ * Its errors arrive as `{"identifier":"The project identifier is already
+ * taken"}` — the message is useful, the JSON around it is not, and reading a
+ * brace out loud helps nobody.
  */
-function planeIdentifier(source: string): string {
-  const cleaned = source.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  return (cleaned || "PROJ").slice(0, 8);
+function planeComplaint(detail: string): string {
+  try {
+    const parsed = JSON.parse(detail) as Record<string, unknown>;
+    const first = Object.values(parsed).flat().find((v) => typeof v === "string");
+    if (typeof first === "string") return first;
+  } catch {
+    // Not JSON; fall through to the raw text.
+  }
+  return safeSlice(detail, 160);
 }
 
 function dateArg(value: unknown): string | undefined {
@@ -2115,7 +2128,17 @@ async function runTool(
     case "create_plane_project": {
       const name = strArg(body.name, 120);
       if (!name) return { ok: false, message: "What should the project be called?" };
-      const identifier = planeIdentifier(strArg(body.identifier, 12) ?? name);
+
+      // Derived against what already exists, on BOTH calls, so the code read
+      // back in the blueprint is the code that gets created. A derived code
+      // collides — "Pledge Drive 2026" and "2027" both give PLEDGEDR — and
+      // Plane refuses a duplicate, which surfaced as a bare internal error.
+      const existing = await listProjects();
+      const identifier = projectIdentifier(
+        name,
+        existing.map((p) => p.identifier),
+        strArg(body.identifier, 12),
+      );
       const description = strArg(body.description, 2000);
       const tasks = Array.isArray(body.tasks)
         ? body.tasks.flatMap((t) => {
@@ -2132,7 +2155,21 @@ async function runTool(
         };
       }
 
-      const project = await createProject({ name, identifier, description });
+      let project;
+      try {
+        project = await createProject({ name, identifier, description });
+      } catch (error) {
+        // Plane's own words rather than "internal error". Its refusals are
+        // actionable — a taken code, a name that is too long — and a caller who
+        // is told what happened can fix it in the next sentence.
+        if (error instanceof PlaneError) {
+          return {
+            ok: false,
+            message: `Plane wouldn't create it: ${planeComplaint(error.detail)}`,
+          };
+        }
+        throw error;
+      }
       for (const title of tasks) {
         const built = workItemPayload({ title });
         if (built.ok) await createWorkItem(project.id, built.payload);
