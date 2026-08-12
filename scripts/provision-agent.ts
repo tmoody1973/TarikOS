@@ -1209,6 +1209,29 @@ export const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
   },
 ];
 
+/**
+ * System tools: ElevenLabs' own, not ours.
+ *
+ * THE TRAP, paid for live: the agent config has a `built_in_tools` map and
+ * writing `end_call` into it does nothing. The API returns 200, reports
+ * success, and leaves the value null. A system tool has to go in the `tools`
+ * array like any other; the API then REFLECTS it back into `built_in_tools` on
+ * read, which is what makes the wrong shape look so plausible.
+ *
+ * Kept out of TOOLS because TOOLS is the webhook registry — the list with
+ * health dots and toggles on the control page, and the number the landing page
+ * claims. end_call has none of that: it never reaches /api/tools.
+ */
+const SYSTEM_TOOLS = [
+  {
+    type: "system" as const,
+    name: "end_call",
+    description:
+      "End the voice session and hang up. Call this when Tarik has plainly closed the conversation — \"that's all\", \"thanks Zola\", \"goodbye\", \"we're done\", \"talk later\" — or when he asks you to disengage, hang up, or stop listening. Say a short goodbye first. NEVER end a session because a task finished, because he went quiet or is thinking, or because he said something that merely sounds final: \"okay\", \"sure\", \"yes\", \"got it\" and \"why not\" are how he talks mid-conversation, not how he says goodbye. He can always end it himself with the DISENGAGE button, so when in doubt stay on the line — hanging up on him costs him the whole thread and he has to start again.",
+    params: { systemToolType: "end_call" as const },
+  },
+];
+
 async function main() {
   const client = new ElevenLabsClient({ apiKey: env.ELEVENLABS_API_KEY });
 
@@ -1224,7 +1247,7 @@ async function main() {
         llm: "claude-sonnet-5" as const,
         temperature: 0.6,
         timezone: "America/Chicago",
-        tools: TOOLS,
+        tools: [...TOOLS, ...SYSTEM_TOOLS],
       },
       dynamicVariables: {
         dynamicVariablePlaceholders: {

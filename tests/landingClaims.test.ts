@@ -9,8 +9,14 @@ import { readFileSync } from "node:fs";
 const landing = readFileSync("src/components/landing/Landing.tsx", "utf8");
 const provision = readFileSync("scripts/provision-agent.ts", "utf8");
 
+// Scoped to the TOOLS array on purpose. A built-in like end_call is a
+// capability, not an entry in the tool registry: it never hits /api/tools, it
+// has no health dot and no toggle on the control page. Counting it would make
+// a public page overstate the registry by one.
 function realToolNames(): string[] {
-  const matches = provision.matchAll(/name: ["']([a-z_]+)["']/g);
+  const TOOLS = provision.split("export const TOOLS")[1]?.split("\n];")[0] ?? "";
+  assert.ok(TOOLS, "the TOOLS array is missing from provision-agent.ts");
+  const matches = TOOLS.matchAll(/name: ["']([a-z_]+)["']/g);
   return [...new Set([...matches].map((m) => m[1]))].sort();
 }
 

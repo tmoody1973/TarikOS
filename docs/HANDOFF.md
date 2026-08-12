@@ -227,6 +227,15 @@ The first two are worth reading as a **class**, not as incidents.
   duplicate as "the tool hit an internal error". Real names do it too: "Pledge
   Drive 2026" and "2027" both give `PLEDGEDR`. Derive against what already
   exists, and surface the provider's own refusal instead of a generic error.
+- **An ElevenLabs system tool goes in `tools`, NOT in `built_in_tools`.** The
+  agent config has a `built_in_tools` map with an `end_call` slot, and writing
+  to it does nothing whatsoever: the API returns **200**, reports success, and
+  leaves the value `null`. The SDK serialises the field correctly, so nothing
+  in the request is wrong — the server just ignores it. A system tool has to go
+  in the `tools` array like any other, and the API then REFLECTS it back into
+  `built_in_tools` on read, which is precisely what makes the wrong shape look
+  like it worked. Read the tool back from the live agent after provisioning;
+  the script's own "Updated agent" line proves nothing.
 - **`CONVEX_DEPLOY_KEY` in `.env.local` SHADOWS your Convex login.** Every CLI
   command uses it instead, and it carries only `deployment:deploy`, so
   `npx convex data` fails with a permission error that reads like the account
@@ -315,6 +324,12 @@ The first two are worth reading as a **class**, not as incidents.
 
 - **Say "check your mail" to her out loud.** Everything below the voice layer
   is verified in production; the spoken path is not.
+- **Say "that's all, thanks Zola" out loud and watch the dock.** She now has
+  `end_call` and the simulation proves she reaches for it on a goodbye and not
+  on four turns of "okay"/"sure"/"got it". What the simulation cannot prove is
+  that ending the call actually closes the **WebRTC transport** so `onDisconnect`
+  fires and the dock returns to STANDBY. That is undocumented for browser
+  sessions and is the one thing left to check.
 - **Watch tomorrow's morning brief** for the inbox line. The step is deployed
   but has never run on a schedule.
 - **Open an exported .docx in Word** and confirm it is not corrupt. Open since
