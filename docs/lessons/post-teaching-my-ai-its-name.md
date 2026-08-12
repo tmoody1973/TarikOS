@@ -55,3 +55,13 @@ Almost nothing that was hard today was the machine learning.
 It was being logged in. Having disk space. A program from 1995. And knowing which kind of wrong I could live with: for a wake word, firing when I didn't speak is worse than missing me once, because one of those opens a live microphone in my office and the other means I say it again.
 
 The model was the easy part, which I did not expect going in.
+
+**The thing I'll actually remember**
+
+Somewhere between the disk filling up and the job finally starting, it stopped being about the wake word.
+
+I'd filed fine-tuning a language model under things other people do. Other people with GPUs, and budgets, and a background I don't have. Today I ran a two-second test job for a fraction of a cent, then a real training job on a rented GPU for under a dollar, and the entire barrier turned out to be a login and a credit card.
+
+Gemma 4 is sitting on the same site I just used. So is nearly every dataset I'd want. The commands are the ones I typed this afternoon.
+
+I set out to teach my assistant its own name. I came away knowing how to fine-tune a model, which is not something I could have said at breakfast. That's the part I'm still thinking about.
