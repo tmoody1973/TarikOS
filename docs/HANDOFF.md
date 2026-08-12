@@ -92,6 +92,12 @@ earlier revision.
   ("you do not have permission … deployment:env:view") proves the key is valid
   and correctly scoped. Re-added by piping from `.env.local` rather than
   pasting.
+- **`CONVEX_DEPLOY_KEY` in `.env.local` SHADOWS your Convex login.** Every CLI
+  command uses it instead, and it carries only `deployment:deploy` — so
+  `npx convex data` and `npx convex env list` fail with a permission error that
+  reads like your account lost access. It is commented out there now; Vercel's
+  build is the only thing that needs it. If you hit this again,
+  `CONVEX_DEPLOY_KEY= npx convex …` clears it for one command.
 - **Every Clerk-gated Convex function is unreachable from `npx convex run`.**
   Anything you want to verify from a terminal has to be on the secret-gated
   surface, or verified in the browser.
