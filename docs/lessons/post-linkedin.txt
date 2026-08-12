@@ -1,0 +1,43 @@
+I spent today teaching my AI assistant to recognize its own name. Five things I didn't expect.
+
+I build a personal AI called Zola. She reads my calendar, drafts my email, keeps my notes. I wanted her to answer to "Hey Zola." Like an Echo, but private.
+
+1. There are no recordings of anyone saying "Hey Zola."
+
+Nobody had ever needed to. So the training makes them up: thousands of synthetic voices saying the phrase. Then it deliberately ruins them with room echo, traffic, music, distance.
+
+That's the whole lesson. You're not teaching it what the phrase sounds like. You're teaching it what stays the same when everything else changes. Train on clean studio audio and it learns "quiet room, close to the mic," then fails the second you speak from the doorway with the radio on.
+
+2. Almost none of it is actually trained.
+
+I assumed training a model meant building something from scratch. It doesn't. Four pieces in a row, and only the last one learns anything. The first three were trained by other people on far more data than I'll ever have. Frozen. Untouched.
+
+That's why the result is about a megabyte in under an hour, instead of a gigabyte over a month.
+
+3. The error I fought for an hour was protecting me.
+
+The training data wouldn't download. 429, too many requests. Turns out I wasn't logged in, and anonymous downloads get throttled hard. One command fixed it.
+
+Then it worked, and 16 GB started landing on a laptop with 17 GB free. I killed it at 2.1 GB remaining.
+
+The rate limit had been holding back a download I couldn't afford. I only found the real constraint by removing the fake one.
+
+4. What finally broke it wasn't AI at all.
+
+FileNotFoundError: espeak-ng not found
+
+espeak-ng is a speech synthesizer from the 1990s. Before a model can generate someone saying "Hey Zola," something has to turn those letters into phonemes, and that something is a 26 MB C program that Python's package manager can't install.
+
+A GPU pipeline generating synthetic human speech, stopped by a dependency older than most of the people using it.
+
+5. Renting a GPU for an hour costs less than a coffee.
+
+I gave up on my laptop and moved the job to Hugging Face. An Nvidia L4 with 24 GB of GPU memory runs $0.80 an hour. The training should come in under a dollar. No subscription needed. I put $10 of credits on the account and ran a two-second test job first.
+
+And then the part I'm still thinking about.
+
+I had filed fine-tuning a language model under things other people do. People with GPUs, and budgets, and a background I don't have.
+
+Gemma 4 is sitting on the same site I just used. So is nearly every dataset I'd want. The commands are the ones I typed this afternoon. The barrier was a login and a credit card.
+
+I set out to teach my assistant its own name. I came away knowing how to fine-tune a model, which is not something I could have said at breakfast.
