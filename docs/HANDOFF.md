@@ -216,11 +216,12 @@ Recommendation is a split — Telnyx keeps the number ElevenLabs dials, Dial get
 tried for SMS on their $5 free credit. One question decides it: *can a Dial
 number text Tarik today with no registration wait?*
 
-**A task detail panel for `/projects`.** Asked for and not built. Cards on the
-board show a title and a priority and nothing else — no description, no way to
-change state or priority by hand, no link into Plane. `updateWorkItem` already
-takes a `state` patch and the board route already exposes it, so the panel is
-mostly UI over things that exist.
+**A task detail panel for `/projects`** — built. A card opens the shared
+`SlideOver`: description as plain text, move between columns, change priority,
+and a link out to Plane for what the board deliberately does not do. Verified in
+production both directions, including into an EMPTY column — which is the move
+the first draft got wrong, because it resolved the destination state by reading
+it off a card already there.
 
 ## Open, needs Tarik
 
