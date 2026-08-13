@@ -927,10 +927,16 @@ async function runTool(
       }
       return {
         ok: true,
-        message: `Brief "${brief.title}" is ready with ${brief.sections.length} section(s). Speak from its sections.`,
+        // The lede is the whole spoken briefing. The section-count wording is
+        // the fallback for briefs built before this existed, and for a run
+        // whose writer failed.
+        message:
+          brief.lede ??
+          `Brief "${brief.title}" is ready with ${brief.sections.length} section(s). Speak from its sections.`,
         data: {
           title: brief.title,
           builtAt: brief.runStartedAt,
+          lede: brief.lede,
           sections: brief.sections.map((s) => ({
             heading: s.heading,
             body: s.body.slice(0, 1200),

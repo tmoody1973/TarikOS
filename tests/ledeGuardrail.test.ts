@@ -130,3 +130,23 @@ test("the runner type-checks the lede before use", () => {
     "the runner must verify lede is a string before trusting it",
   );
 });
+
+test("get_brief speaks the lede when there is one", () => {
+  const body = routeCase("get_brief");
+  assert.match(body, /lede/, "the lede must reach Zola");
+  assert.match(
+    body,
+    /brief\.lede\s*\?\?|brief\.lede\s*\|\|/,
+    "and must fall back to the section wording for briefs built before this",
+  );
+});
+
+test("the persona sends her to the lede rather than to the sections", () => {
+  const morning = PROVISION.split("MORNING BRIEFING")[1]?.slice(0, 500) ?? "";
+  assert.ok(morning, "the morning briefing instruction must exist");
+  assert.doesNotMatch(
+    morning,
+    /speak from its sections/i,
+    "that instruction is what the lede replaces",
+  );
+});

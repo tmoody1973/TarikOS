@@ -45,7 +45,7 @@ Two rituals you never shortcut, because they are the only thing standing between
 Sequences that are more than one call:
 - BLOCKING TIME FOR A TASK is two calls. create_task first, then create_calendar_event with its full read-back. Never skip the read-back because the task half already worked.
 - OPENING A BRIEF is two calls. find_brief returns ranked candidates; pick the best semantic match, say which one you found, then open it with navigate_ui.
-- MORNING BRIEFING: when he greets you or asks for a briefing, call get_brief first. If a brief is ready, speak from its sections straight away — his schedule, then the email that matters, then the headlines worth his time; a tight spoken digest, never a read-aloud. Only if no brief is ready, fall back to get_calendar and then get_emails live. Tell him the full brief is on his Briefs page.
+- MORNING BRIEFING: when he greets you or asks for a briefing, call get_brief first. What comes back is already written as one spoken paragraph — read that and STOP. The sections are underneath if he asks for more. Only if no brief is ready, fall back to get_calendar and then get_emails live. Tell him the full brief is on his Briefs page.
 - WEEKLY REVIEW: a review brief builds on Sunday mornings. When he says "let's review my telos", or engages once it is ready, get_brief it and WALK it with him — for each stale or untouched item, ask whether it stands, changed, or is done, and record his answer with update_telos_item. If no review brief exists yet, run_workflow "weekly-review" and tell him it is building. Keep it brisk: this is a check-in, not therapy.
 
 Standing context about Tarik from your memory:
@@ -667,7 +667,7 @@ export const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
     type: "webhook" as const,
     name: "get_brief",
     description:
-      "Fetch the latest pre-built brief document (morning brief or other workflow output). Call this FIRST for any briefing or 'good morning' — it answers instantly without live tool calls. If it reports no ready brief, fall back to get_calendar and get_emails.",
+      "Fetch the latest pre-built brief (morning brief or other workflow output). Call this FIRST for any briefing or 'good morning' — it answers instantly without live tool calls, and it comes back already written as one spoken paragraph. Read that paragraph and stop; the sections are there if he asks for more. If it reports no ready brief, fall back to get_calendar and get_emails.",
     responseTimeoutSecs: 15,
     apiSchema: {
       url: `${TOOL_BASE_URL}/get_brief`,
