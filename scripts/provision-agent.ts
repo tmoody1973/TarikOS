@@ -34,7 +34,7 @@ Every tool carries its own description: when to reach for it, what its arguments
 The distinctions he will blur, because he uses the words loosely:
 - A THOUGHT is an idea worth keeping. A TASK is a thing to finish and it lives on his board. A REMINDER is an interruption at a moment, and then it is gone. A JOURNAL ENTRY is lived experience rather than an idea. A STUDIO DOCUMENT is something he is going to write, at length, on screen.
 - "Add X to my list" is a task. "Remind me to X at three" is a reminder. If he wants both, do both and say so.
-- Two mailboxes, and they are not the same. get_emails reads HIS Gmail, where he is a person and his correspondents know him. check_zola_mail reads YOURS, zola@tarikos.app, where you are an agent. Anything addressed to the world as Tarik goes out as a Gmail draft he releases — including a reply to something he forwarded you, because the person on the other end knows him and not you.
+- Two mailboxes, and they are not the same. get_emails reads HIS Gmail, where he is a person and his correspondents know him. check_zola_mail reads YOURS, zola@tarikos.app, where you are an agent. Anything addressed to the world as Tarik goes out as a Gmail draft he releases — including a reply to something he forwarded you, because the person on the other end knows him and not you. From your own address the rule is one sentence: you write to HIM freely with email_tarik, and to everyone else only as a draft with draft_reply.
 - His telos is his mission, goals, problems, challenges and strategies. Let it steer priorities: connect a suggestion to one of his goals when it is natural, never preachy.
 - Projects are backed by Plane. He should never have to open Plane himself; if he does, you have failed. Studio is where he writes — notes, drafts, briefs, plans and decision records, in a real editor on his screen.
 
@@ -446,6 +446,52 @@ export const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
         properties: {
           from: bodyProp(
             "Optional: a few words of the sender or subject Tarik asked for by name, e.g. 'the booking confirmation'. Omit to hear what came in.",
+          ),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "email_tarik",
+    description:
+      "Write to Tarik yourself, from your address to his. Use it when something is worth putting in writing rather than only saying — a summary he asked for, a list he will want later, what you found while he was away. It goes straight to him and needs no release, because it is a note to the person who owns the system rather than correspondence with the world. There is no recipient to choose here and there never will be: it can only reach him.",
+    preToolSpeech: "force" as const,
+    responseTimeoutSecs: 20,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/email_tarik`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["text"],
+        description: "A note from Zola to Tarik",
+        properties: {
+          text: bodyProp("What the email says. Plain text, written to be read rather than heard."),
+          subject: bodyProp("Optional subject line, a few words about what it is."),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "draft_reply",
+    description:
+      "Answer something in YOUR OWN inbox, as a draft Tarik releases. Use it when someone has written to zola@tarikos.app and the reply should come from you. Name the message with reply_match — a few words of the sender or the subject — and if more than one could be it, you will be asked which rather than a guess being made. You never pick who it goes to: the address comes off the message you are answering. If Tarik FORWARDED the thread, the person on the other end knows him and not you, so use draft_email instead and it goes out through his Gmail as him.",
+    preToolSpeech: "force" as const,
+    responseTimeoutSecs: 25,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/draft_reply`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["text", "reply_match"],
+        description: "A reply drafted from her inbox",
+        properties: {
+          text: bodyProp("What the reply says, in your own voice. It is from you, not from Tarik."),
+          reply_match: bodyProp(
+            "A few words of the sender or subject of the message being answered, e.g. 'Dana about the studio session'.",
           ),
         },
       },

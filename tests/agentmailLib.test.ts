@@ -9,7 +9,9 @@ import {
   unreadCount,
   isForwarded,
   parseAllowlist,
+  pickReplyTarget,
   received,
+  replySubject,
   shouldAutoReply,
   summarize,
   threadKey,
@@ -421,4 +423,88 @@ test("a verified real message would earn the letter", () => {
   const real = "amazonses.com; spf=pass; dkim=pass header.i=@gmail.com; dmarc=pass;";
   const decision = shouldAutoReply(STRANGER, authResults({ "Authentication-Results": real }), TARIK, false);
   assert.equal(decision.ok, true);
+});
+
+// ------------------------------------------------------- picking what to answer
+
+// The recipient of a reply is never a choice. It is lifted off the envelope of
+// a message that already arrived, which is what makes "a forwarded thread
+// replies through Gmail" structural rather than a sentence in a prompt: a
+// forward arrives FROM Tarik, so a reply to it goes TO Tarik, and reaching the
+// original correspondent is impossible by construction.
+
+const INBOX: Parameters<typeof pickReplyTarget>[0] = [
+  {
+    from: "Dana Booker <dana@venue.example>",
+    subject: "Re: studio session",
+    message_id: "<dana-2@venue.example>",
+    thread_id: "t-dana",
+    labels: ["received"],
+  },
+  {
+    from: "Zola <zola@tarikos.app>",
+    subject: "Re: studio session",
+    message_id: "<zola-1@tarikos.app>",
+    thread_id: "t-dana",
+    labels: ["sent"],
+  },
+  {
+    from: "Dana Booker <dana@venue.example>",
+    subject: "studio session",
+    message_id: "<dana-1@venue.example>",
+    thread_id: "t-dana",
+    labels: ["received"],
+  },
+  {
+    from: "Reggie <reggie@label.example>",
+    subject: "press kit",
+    message_id: "<reggie-1@label.example>",
+    thread_id: "t-reggie",
+    labels: ["received"],
+  },
+];
+
+test("nothing matching is nothing to answer", () => {
+  assert.deepEqual(pickReplyTarget(INBOX, "somebody who never wrote"), {
+    outcome: "none",
+  });
+});
+
+test("a match across two conversations is ambiguous, not a guess", () => {
+  const picked = pickReplyTarget(INBOX, "e");
+  assert.equal(picked.outcome, "ambiguous");
+  assert.equal(picked.outcome === "ambiguous" && picked.candidates.length, 2);
+});
+
+test("one conversation resolves to its newest message", () => {
+  const picked = pickReplyTarget(INBOX, "dana");
+  assert.equal(picked.outcome, "resolved");
+  assert.equal(picked.outcome === "resolved" && picked.inReplyTo, "<dana-2@venue.example>");
+});
+
+test("the recipient is the bare address off the envelope", () => {
+  const picked = pickReplyTarget(INBOX, "studio session");
+  assert.equal(picked.outcome === "resolved" && picked.to, "dana@venue.example");
+});
+
+test("her own sent mail is never a reply target", () => {
+  // AgentMail returns both directions, so her outgoing reply to Dana is sitting
+  // in the same list. Answering it would have her write to herself.
+  const picked = pickReplyTarget(INBOX, "zola@tarikos.app");
+  assert.deepEqual(picked, { outcome: "none" });
+});
+
+test("the subject is the one being answered, prefixed once", () => {
+  const picked = pickReplyTarget(INBOX, "reggie");
+  assert.equal(picked.outcome === "resolved" && picked.subject, "Re: press kit");
+});
+
+test("Re is not stacked on a subject that already carries it", () => {
+  assert.equal(replySubject("Re: studio session"), "Re: studio session");
+  assert.equal(replySubject("RE: studio session"), "RE: studio session");
+  assert.equal(replySubject("studio session"), "Re: studio session");
+});
+
+test("a message with no subject still gets an answerable one", () => {
+  assert.equal(replySubject(undefined), "Re: (no subject)");
 });

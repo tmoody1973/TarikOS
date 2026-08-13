@@ -255,6 +255,75 @@ export function threadKey(message: MailMessage): string {
   return subject || address(message.from) || "unknown";
 }
 
+// ---------------------------------------------------- picking what to answer
+
+/** "Re: X", exactly once. Every mail client stacks these if you let it. */
+export function replySubject(subject: string | null | undefined): string {
+  const original = (subject ?? "").trim() || "(no subject)";
+  return /^re\s*:/i.test(original) ? original : `Re: ${original}`;
+}
+
+/** Which conversation `draft_reply` is answering, or why it cannot tell. */
+export type ReplyTarget =
+  | { outcome: "none" }
+  | { outcome: "ambiguous"; candidates: MailMessage[] }
+  | { outcome: "resolved"; to: string; subject: string; inReplyTo?: string };
+
+/**
+ * Find the one message a reply belongs to, from a few words Zola heard.
+ *
+ * The recipient is NOT a parameter of this — it comes off the envelope of a
+ * message that already arrived, which is the same rule `replyToSender` and
+ * `emailOwner` obey and the reason a forwarded thread cannot be answered from
+ * `zola@` even by accident: a forward arrives FROM Tarik, so a reply to it goes
+ * TO Tarik. Reaching the original correspondent is impossible by construction
+ * rather than by instruction, and instructions are the part an inbox can argue
+ * with.
+ *
+ * Her own sent mail is excluded first. AgentMail returns both directions, so her
+ * outgoing reply to someone is sitting in the same list as their message, and
+ * answering that one would have her write to herself.
+ *
+ * Several messages in ONE conversation resolve to its newest. Several
+ * conversations are ambiguous and she asks — a wrong guess here sends a real
+ * letter to a real stranger, which is not a mistake worth being brisk about.
+ */
+export function pickReplyTarget(
+  messages: MailMessage[],
+  match: string,
+): ReplyTarget {
+  const needle = (match ?? "").trim().toLowerCase();
+  if (!needle) return { outcome: "none" };
+
+  const hits = received(messages).filter((m) =>
+    `${m.from} ${m.subject ?? ""}`.toLowerCase().includes(needle),
+  );
+  if (hits.length === 0) return { outcome: "none" };
+
+  // Newest first, as AgentMail returns them, so the first hit in each thread is
+  // the one to answer.
+  const newestPerThread = new Map<string, MailMessage>();
+  for (const m of hits) {
+    const key = threadKey(m);
+    if (!newestPerThread.has(key)) newestPerThread.set(key, m);
+  }
+  const candidates = [...newestPerThread.values()];
+  if (candidates.length > 1) return { outcome: "ambiguous", candidates };
+
+  const target = candidates[0];
+  const to = address(target.from);
+  if (!to) return { outcome: "none" };
+  return {
+    outcome: "resolved",
+    to,
+    subject: replySubject(target.subject),
+    // Optional on purpose. AgentMail validates `in_reply_to` against a real
+    // message and 404s on anything else, so a missing id must omit the field
+    // rather than send a guess — an unthreaded draft beats no draft.
+    ...(target.message_id ? { inReplyTo: target.message_id } : {}),
+  };
+}
+
 // ---------------------------------------------------- the letter to a stranger
 
 /** The authentication results AgentMail reports for an inbound message. */

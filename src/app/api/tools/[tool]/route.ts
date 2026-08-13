@@ -38,8 +38,20 @@ import { uploadBuffer } from "@/lib/r2";
 import { escapeHtml, notifyOwner } from "@/lib/telegram";
 import { briefDigest } from "@/lib/briefDigest";
 import { proposeRewrite } from "@/lib/studioPropose";
-import { AgentMailError, emailOwner, listMessages } from "@/lib/agentmail";
-import { countInbox, describeInbox, inboxAllowlist, received } from "@/lib/agentmailLib";
+import {
+  AgentMailError,
+  createReplyDraft,
+  emailOwner,
+  listMessages,
+} from "@/lib/agentmail";
+import {
+  countInbox,
+  describeInbox,
+  inboxAllowlist,
+  pickReplyTarget,
+  received,
+  summarize,
+} from "@/lib/agentmailLib";
 import {
   askedForACall,
   channelOf,
@@ -2342,6 +2354,98 @@ async function runTool(
         ok: true,
         message: report.message,
         data: { total: messages.length, read: report.shown.length, withheld: report.withheld },
+      };
+    }
+
+    // She writes to him freely, and drafts to everyone else. These two cases are
+    // that sentence, and the difference between them is structural rather than
+    // written down: this one has no recipient argument at all.
+    //
+    // The call_tarik shape, applied to mail. emailOwner reads OWNER_EMAIL off
+    // the server, so there is nothing to pass and nothing to talk her into.
+    case "email_tarik": {
+      const text = strArg(body.text, 4000);
+      if (!text) {
+        return { ok: false, message: "There's nothing in the email — what should it say?" };
+      }
+      const subject = strArg(body.subject, 200) ?? "From Zola";
+
+      const sent = await emailOwner(subject, text);
+      if (!sent.ok) {
+        // Said out loud, with the reason. A mail she thinks she sent and he
+        // never got is the failure this whole path is shaped around.
+        return { ok: false, message: `I couldn't send that — ${sent.reason}.` };
+      }
+
+      await convex.mutation(api.secondBrain.markToolHealthyFromTool, {
+        secret,
+        name: "email_tarik",
+      });
+      return {
+        ok: true,
+        message: `Sent — "${subject}", from my address to yours.`,
+        data: { subject },
+      };
+    }
+
+    // And this one drafts. It reaches the drafts resource and stops; there is
+    // no release path anywhere in the tool surface, the same way there is no
+    // send path for Gmail.
+    case "draft_reply": {
+      const text = strArg(body.text, 4000);
+      if (!text) {
+        return { ok: false, message: "Tell me what the reply should say first." };
+      }
+      const match = strArg(body.reply_match, 200);
+      if (!match) {
+        return { ok: false, message: "Which message should I answer? Name the sender or the subject." };
+      }
+
+      let inbox;
+      try {
+        inbox = await listMessages(30);
+      } catch (err) {
+        const why = err instanceof AgentMailError ? `AgentMail answered ${err.status}` : "something went wrong";
+        return { ok: false, message: `I couldn't read my inbox to find that — ${why}.` };
+      }
+
+      const target = pickReplyTarget(inbox, match);
+      if (target.outcome === "none") {
+        return {
+          ok: false,
+          outcome: "no_match",
+          message: `Nothing in my inbox matches "${match}", so I haven't drafted anything.`,
+        };
+      }
+      if (target.outcome === "ambiguous") {
+        // Never a guess. A wrong guess here is a real letter waiting to go to a
+        // real stranger, and he would be releasing it on my word.
+        const names = target.candidates.map((m) => summarize(m)).join(" ");
+        return {
+          ok: false,
+          outcome: "ambiguous",
+          message: `A few could be it — ${names} Which one? Nothing drafted yet.`,
+        };
+      }
+
+      const drafted = await createReplyDraft(
+        target.to,
+        target.subject,
+        text,
+        target.inReplyTo,
+      );
+      if (!drafted.ok) {
+        return { ok: false, message: `I couldn't save that draft — ${drafted.reason}.` };
+      }
+
+      await convex.mutation(api.secondBrain.markToolHealthyFromTool, {
+        secret,
+        name: "draft_reply",
+      });
+      return {
+        ok: true,
+        message: `Drafted to ${target.to} — "${target.subject}". It's waiting in my drafts and won't go anywhere until you send it.`,
+        data: { draftId: drafted.draftId, to: target.to, subject: target.subject },
       };
     }
 

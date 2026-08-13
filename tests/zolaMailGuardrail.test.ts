@@ -81,18 +81,124 @@ test("checking her mail cannot write anything", () => {
 });
 
 test("no send anywhere chooses its own recipient", () => {
-  // THE rule, and it had to survive the auto-reply. Every send in this client
-  // takes its recipient from somewhere that is not a decision: emailOwner reads
-  // OWNER_EMAIL off the server, replyToSender lifts the envelope from the mail
-  // being answered. There is no function here that sends to an address somebody
-  // picked, and drafting to the world still does not exist.
+  // THE rule, and it has now survived the auto-reply AND the two tools that let
+  // her use these paths herself. Every send in this client takes its recipient
+  // from somewhere that is not a decision: emailOwner reads OWNER_EMAIL off the
+  // server, replyToSender lifts the envelope from the mail being answered.
+  // createReplyDraft is the third, and it does not send at all.
   const sends = CLIENT.match(/export async function \w+/g) ?? [];
   assert.deepEqual(
     sends.filter((s) => /send|email|draft|reply/i.test(s)).sort(),
-    ["export async function emailOwner", "export async function replyToSender"],
+    [
+      "export async function createReplyDraft",
+      "export async function emailOwner",
+      "export async function replyToSender",
+    ],
   );
   assert.match(CLIENT, /process\.env\.OWNER_EMAIL/, "the owner comes from the server");
-  assert.doesNotMatch(PROVISION, /name: "email_tarik"|name: "draft_reply"/);
+});
+
+/** The body of one `export async function name` in the client, comments stripped. */
+function clientFn(name: string): string {
+  const body = CLIENT.split(`export async function ${name}(`)[1]?.split("\n}")[0] ?? "";
+  assert.ok(body, `no client function ${name}`);
+  return body;
+}
+
+test("drafting a reply writes a draft and never sends one", () => {
+  // The whole difference between the two halves of the rule. Sending hits
+  // /messages/send; drafting hits /drafts and stops there. Confusing the two
+  // would turn "she drafts to everyone else" into "she writes to everyone
+  // else", silently, with a 200.
+  const draft = clientFn("createReplyDraft");
+  assert.match(draft, /\/drafts/, "a draft goes to the drafts resource");
+  assert.doesNotMatch(
+    draft,
+    /messages\/send/,
+    "createReplyDraft must not reach the send endpoint",
+  );
+});
+
+test("nothing in this codebase releases a draft", () => {
+  // AgentMail has POST /drafts/{id}/send and it really does send. Releasing is
+  // Tarik's gesture, made wherever he can see the draft — never something a
+  // tool can reach.
+  const src = readFileSync("src/lib/agentmail.ts", "utf8");
+  assert.doesNotMatch(src, /drafts\/\$\{[^}]*\}\/send|\/drafts\/.*\/send/);
+  assert.doesNotMatch(ROUTE, /drafts\/[^"'`\s]*\/send/);
+});
+
+// ------------------------------------------------------- writing to him
+
+test("email_tarik is published to the agent", () => {
+  assert.match(PROVISION, /name: "email_tarik"/);
+});
+
+test("the privileged recipient is not a parameter of email_tarik", () => {
+  // The call_tarik shape, now applied to mail: there is no argument to pass and
+  // therefore nothing to talk her into. The address comes from the server.
+  const body = routeCase("email_tarik");
+  assert.match(body, /emailOwner\(/);
+  for (const arg of ["body.to", "body.recipient", "body.email", "body.address"]) {
+    assert.doesNotMatch(
+      body,
+      new RegExp(arg.replace(".", "\\.")),
+      `email_tarik must not read ${arg} — the recipient comes from OWNER_EMAIL`,
+    );
+  }
+});
+
+// ------------------------------------------------------- drafting to everyone else
+
+test("draft_reply is published to the agent", () => {
+  assert.match(PROVISION, /name: "draft_reply"/);
+});
+
+test("draft_reply cannot send", () => {
+  const body = routeCase("draft_reply");
+  for (const forbidden of ["emailOwner", "replyToSender", "sendMail", "createDraft"]) {
+    assert.doesNotMatch(
+      body,
+      new RegExp(forbidden),
+      `draft_reply must not call ${forbidden} — it drafts and stops`,
+    );
+  }
+  assert.match(body, /createReplyDraft\(/);
+});
+
+test("draft_reply takes its recipient off a message that already arrived", () => {
+  const body = routeCase("draft_reply");
+  assert.match(body, /pickReplyTarget/, "the target comes from the pure rule");
+  for (const arg of ["body.to", "body.recipient", "body.address"]) {
+    assert.doesNotMatch(
+      body,
+      new RegExp(arg.replace(".", "\\.")),
+      `draft_reply must not read ${arg} — a chosen recipient is the whole thing being prevented`,
+    );
+  }
+});
+
+test("no tool schema offers her an outbound address to fill in", () => {
+  // Read from the published schemas rather than the route, because the schema
+  // is what the model actually sees. A field she can fill in is a field she can
+  // be talked into filling in.
+  for (const tool of ["email_tarik", "draft_reply"]) {
+    const schema = PROVISION.split(`name: "${tool}"`)[1]?.split("\n  },")[0] ?? "";
+    assert.ok(schema, `no tool definition for ${tool}`);
+    assert.doesNotMatch(
+      schema,
+      /\b(to|recipient|address|cc|bcc)\s*:\s*(bodyProp|boolProp|\{)/,
+      `${tool} must not expose a recipient field`,
+    );
+  }
+});
+
+test("the persona carries the one-sentence rule", () => {
+  // She writes to him freely, and drafts to everyone else. If the tools exist
+  // and the sentence does not, she has two send-shaped tools and no idea which
+  // is which.
+  assert.match(PROVISION, /email_tarik/);
+  assert.match(PROVISION, /draft_reply/);
 });
 
 test("a recipient is permitted only after every gate has passed", () => {

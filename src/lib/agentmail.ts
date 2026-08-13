@@ -174,6 +174,59 @@ export async function allowRecipient(
 }
 
 /**
+ * A reply she has written, parked where a human releases it.
+ *
+ * This is the other half of the rule — *she writes to him freely, and drafts to
+ * everyone else* — and the difference between the halves is one path segment.
+ * `emailOwner` posts to `messages/send` and the letter leaves. This posts to
+ * `drafts` and nothing leaves at all: AgentMail holds it, Tarik reads it, and
+ * releasing it is his gesture made somewhere he can see it. There is
+ * deliberately no function here that releases one.
+ *
+ * `to` is not a decision. It arrives already resolved from `pickReplyTarget`,
+ * which lifts it off the envelope of a message that came in — the same
+ * discipline `replyToSender` keeps, for the same reason.
+ *
+ * `inReplyTo` is optional because AgentMail validates it against a real message
+ * and answers 404 for anything else, so a missing id has to be omitted rather
+ * than guessed. An unthreaded draft is worth having; a 404 is not.
+ *
+ * Reports its failures rather than throwing, like the sends above: she says
+ * this out loud, and "I've drafted it" when nothing was drafted is the one
+ * answer worth engineering against.
+ */
+export async function createReplyDraft(
+  to: string,
+  subject: string,
+  body: string,
+  inReplyTo?: string,
+): Promise<{ ok: true; draftId: string } | { ok: false; reason: string }> {
+  const key = process.env.AGENTMAIL_API_KEY?.trim();
+  if (!key) return { ok: false, reason: "AGENTMAIL_API_KEY is not set" };
+  if (!to.includes("@")) return { ok: false, reason: "no recipient on the message" };
+
+  const res = await fetch(`${BASE}/inboxes/${encodeURIComponent(ZOLA_INBOX)}/drafts`, {
+    method: "POST",
+    headers: { "content-type": "application/json", Authorization: `Bearer ${key}` },
+    body: JSON.stringify({
+      to: [to],
+      subject,
+      text: body,
+      ...(inReplyTo ? { in_reply_to: inReplyTo } : {}),
+    }),
+  });
+
+  if (!res.ok) {
+    return {
+      ok: false,
+      reason: `AgentMail ${res.status}: ${(await res.text()).slice(0, 160)}`,
+    };
+  }
+  const created = (await res.json()) as { draft_id?: string };
+  return { ok: true, draftId: created.draft_id ?? "" };
+}
+
+/**
  * The one automatic letter, back to whoever wrote in.
  *
  * Note what is NOT a parameter here and never will be: a choice of recipient.
