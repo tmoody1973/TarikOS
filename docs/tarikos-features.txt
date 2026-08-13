@@ -1,0 +1,171 @@
+TARIK OS — FEATURE LIST
+Last updated 2026-08-13
+
+A personal AI assistant named Zola. You reach her by voice on a page, by text,
+or by calling a real phone number. 49 tools. Open source, MIT.
+github.com/tmoody1973/TarikOS
+
+
+THE SPINE
+
+1. TELOS
+   A structured record of what you are actually working toward: mission, goals
+   (each with a measurable finish line), problems, challenges, strategies. She
+   interviews you for it once, then maintains it. A summary rides into every
+   conversation, so she connects today's errand to this year's goal without
+   being asked. It updates itself nightly from your conversations and journal,
+   linking every change back to where it came from. Concept from Daniel
+   Miessler's TELOS framework.
+
+2. THE MORNING BRIEF
+   One page assembled before you wake: your day, the email that matters, the
+   headlines worth your time, and where your goals stand. Opens with GOALS, not
+   your inbox. Say "run my brief" to build a fresh one on the spot.
+
+3. THE LEDE
+   Every brief now opens with a paragraph written by a model that read the whole
+   brief plus the previous one. It connects things the sections keep apart — a
+   meeting that collides with another, an email that touches a goal, a headline
+   worth your time. Zola reads that paragraph and stops; the sections are there
+   if you ask. Same paragraph on the page, in the Telegram digest, and out loud.
+
+4. WEEKLY REVIEW
+   A review brief builds Sunday morning. Zola walks it with you item by item,
+   asking whether each goal still stands, changed, or is done, and records your
+   answers.
+
+
+THE WORKSPACE
+
+5. MAIL CENTER (/mail)
+   Read full Gmail threads in the app across multiple accounts, compose and
+   reply with rich text. Say "draft a reply to the X email saying..." and she
+   writes it with the thread in front of her; it lands as a badged draft in your
+   real Gmail. There is no send function anywhere in her tool surface.
+
+6. ZOLA'S OWN INBOX (/mail/zola)
+   She has her own address, zola@tarikos.app. Services write to her, you forward
+   her things, strangers reach an agent rather than you. The rule is one
+   sentence: she writes to you freely, and drafts to everyone else. A stranger
+   who writes in gets one automatic letter explaining the containment.
+
+7. STUDIO (/studio)
+   A real writing workspace. Five document types — note, draft, brief, plan,
+   decision record — each from its own template. Tables, lists, media, DOCX
+   export, version snapshots you can restore, and references pointing a document
+   at whatever it grew out of. Ask her to tighten a paragraph and she quotes your
+   own words back to find it, then leaves a suggestion waiting for you to take
+   or leave. She never edits your writing.
+
+8. PROJECTS (/projects)
+   A board backed by Plane, so you never open Plane. "Add calling the bank to my
+   list" is a task. "Start a project for the pledge drive with these five tasks"
+   gets read back to you before anything is created. The board reads Plane live
+   and keeps no copy, because a copy is a thing that can disagree.
+
+9. CONTACTS (/contacts)
+   4,370 Google contacts, synced nightly, searchable by name, number or email.
+   She can add, update and delete, writing straight through to Google. Two
+   matches is a question, never a guess. An edit reports what it displaced,
+   because Google replaces a whole field at a time.
+
+10. DOCUMENTS (/documents)
+    Turn a brief, a research result or a Studio document into a real file and
+    hand it to someone. Share links are minted per visit with an expiry, a
+    download cap, and a revoke button. Sharing takes a spoken confirmation;
+    saving a file for yourself does not.
+
+11. HABITS (/habits)
+    Identity-based pillars, not a checklist. Completion is graded — minimum,
+    standard, beyond, intentionally skipped — because "I did the two-minute
+    version" and "I did the full thing" are different truths. There is no streak
+    counter anywhere. The number shown is how often you came back after a gap.
+    An intentional skip carries no penalty. The evening check-in waits on the
+    dashboard and has no way to notify you, so it cannot nag.
+
+12. CALENDAR BY VOICE
+    List, create and move events, with a read-back before every write.
+
+13. REMINDERS
+    Due dates and nudges that reach you by Telegram or email, wherever you are.
+
+
+HOW YOU REACH HER
+
+14. VOICE, ON THE PAGE
+    Press ENGAGE, or arm the wake word and just say her name.
+
+15. WAKE WORD — "HEY ZOLA"
+    A 161 KB model trained from scratch on a rented GPU for under a dollar.
+    Runs in the browser, no account and no key. Open source, Apache-2.0.
+
+16. SHE HANGS UP
+    Say goodbye and the call ends because the conversation ended, not because
+    you pressed something.
+
+17. PHONE
+    A real number. Call it and she answers with the same brain and the same
+    tools. No app, no browser, no session to start. She can call you too.
+
+18. TELEGRAM
+    The same assistant over text with a deliberately narrower tool surface.
+    Anything whose safety rests on a spoken confirmation stays on voice, and
+    every exclusion is written down with its reason.
+
+19. VIEWPORT
+    A slide-in panel showing a real hosted browser she drives by voice while you
+    watch. Click into the frame to take over. Findings become a brief with a
+    session-replay link.
+
+20. VOICE CONSOLE
+    Microphone waveform, live transcripts, and a tool-activity matrix, so you
+    can watch her work.
+
+
+RUNNING IN THE BACKGROUND
+
+21. SEMANTIC MEMORY
+    Conversations consolidated nightly and recalled by meaning, not keywords.
+
+22. VOICE JOURNALING
+    Talk your day into it. A nightly pass mines entries for goal signals.
+
+23. RESEARCH WORKFLOWS
+    Scheduled or on-demand multi-step research (RSS plus web search), delivered
+    as briefing cards with an in-app reader.
+
+24. FEED MANAGER
+    Add news sources by voice or by pasting a URL. Feeds are autodiscovered and
+    validated before saving, with a health dot on each.
+
+
+HOW ANYONE KNOWS IT WORKS
+
+25. CONTROL PANEL (/control)
+    Every tool's health, its last error, and an enable/disable switch. A tool
+    turned off is blocked at the route before it can act, not merely hidden.
+
+26. OBSERVABILITY
+    Every tool call emits a span with its real outcome — success, no_match,
+    ambiguous, disabled, error — kept deliberately separate from the ok flag
+    Zola speaks from. Several tools answer "nothing matched" as a helpful
+    sentence; counting those as successes would quietly corrupt every number
+    built on the data. Full conversations arrive as traces with tool calls
+    attached to the turn that produced them.
+
+27. TOOL-SELECTION EVALS
+    Real past utterances become a labelled dataset. The harness replays them
+    against the live tool definitions and scores which tool the model reaches
+    for. Two identical runs disagree on about 9% of utterances, so it reports
+    that noise floor rather than letting anyone read meaning into a small move.
+
+28. 980 TESTS
+    Including guardrails that assert what the code is wired to, not just what it
+    returns: that no tool can send email, that the lede writer holds no tools,
+    that a disabled tool is blocked at the route.
+
+
+THE RULE UNDERNEATH ALL OF IT
+
+She can do a great deal on her own, and almost nothing on her own authority.
+She drafts, proposes and prepares. You release.

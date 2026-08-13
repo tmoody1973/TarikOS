@@ -28,6 +28,7 @@ Shipped, and how each was verified:
 | The letter a stranger gets | Tarik got one |
 | **Wake word: "Hey Zola"** | said out loud, first try |
 | `email_tarik` and `draft_reply` | both called live; he has the email, the draft is still a draft |
+| **The brief writes its own lede** | production built one and it found a calendar collision no section could |
 
 Also written: a build diary, a plain-English ML lesson, a LinkedIn post, and an
 11-page design paper in `docs/paper/`.
@@ -39,6 +40,12 @@ synthetic validation audio. Tarik's office has voices and music in it most of
 the day, which is close to adversarial. That number, not the validation one,
 decides whether the 0.07 threshold stays. Peak scores above 0.2 print to the
 browser console, so a normal working day produces the data for free.
+
+**1b. Read a week of ledes before touching the prompt.** The first one was
+good. One is not evidence. The knobs, in the order worth turning: the 50-to-80
+word target in `LEDE_BRIEF`, and `ledeInput`'s `\s+ -> " "` collapse, which
+flattens a twelve-bullet Inbox section into one run-on line and is the obvious
+first suspect if the quality disappoints.
 
 **2. Give the draft somewhere to be released.** `draft_reply` now parks a real
 letter in AgentMail, and the only place to release it is AgentMail's own
@@ -79,8 +86,71 @@ all lives on Hugging Face.
   key decodes to an expiry of 2025-07-14 under the comment "Check for the latest
   License".
 
+## The lede, since it is new
+
+A brief used to be a stapler: `workflowRunner` walked its steps and
+`formatSection` put each result under its own heading, and nothing in the
+pipeline ever saw two sections at once. Now one model call at the end of the run
+reads every section plus the previous brief's own lede, and writes the paragraph
+the brief opens with. `get_brief` returns it as the thing Zola speaks, the
+Telegram digest puts it in the header where truncation cannot drop it, and
+`/briefs` renders it above the columns.
+
+The first one production wrote, unedited:
+
+> Two things collide at eleven — the vibe coding show and tell and your Teams
+> call with Jeff Freeland Nelson. One of them needs to move, and only you can
+> pick. Noon is double-booked too, but both are Python, so that's just
+> redundancy. All three goals moved this week, which is rare. And Anthropic's
+> being talked about as a two trillion dollar IPO — worth a glance, given the
+> certification you're chasing.
+
+That is the argument for the feature in one paragraph. The calendar section can
+only list events; it cannot notice that two of them collide. The headlines and
+the goals live in different columns and had never been able to see each other.
+
+- **The writer is not Zola.** It is a separate call holding the sections and
+  nothing else — no tools, no telos, no memory. This is the first thing in the
+  system that turns a Gmail subject or a search snippet into her OWN words
+  rather than a quotation, so it borrows `zolaReply`'s containment whole.
+- **`write_lede` is runner-only.** It is a case in the tool route and it is
+  deliberately absent from `provision-agent.ts`, the shape `send_brief_digest`
+  established. She reads a lede; she can never write one.
+- **Truncation is a refusal, not something to salvage.** If `stop_reason` comes
+  back `max_tokens`, the tool returns `ok: false` and the brief ships without a
+  lede. A paragraph cut off at the ceiling is the opening of a thought that was
+  going somewhere else.
+- Design: `docs/superpowers/specs/2026-08-13-brief-lede-design.md`. Plan and the
+  full review trail: `docs/superpowers/plans/2026-08-13-brief-lede.md`.
+
 ## Traps
 
+- **A test that cannot fail is worse than no test, and I wrote five of them.**
+  Six tasks went through spec review, quality review and a scoped re-review.
+  Every finding but one was a defect in the PLAN, not the implementation — and
+  five were source-scanning tests that passed no matter what the code did. One
+  regex reached 100 lines past its function into `seedPhase2` and matched the
+  words "cron" and "trigger" there. One asserted a `continue`-not-`break`
+  behaviour on a fixture too small to ever reach the branch. One checked the
+  whole `get_brief` case body, so moving a `??` two lines away satisfied it while
+  the actual field reverted. The fix that worked, every time: **mutate the source
+  the test claims to protect, watch it fail, restore it, watch it pass.** If it
+  passes under both spellings it is decorative. Make that the acceptance
+  criterion in the task, not a suggestion.
+- **A guard that protects one path can break another.** `finishBrief` refuses to
+  overwrite a lede with `undefined`, so a failed retry cannot erase a good one.
+  Correct on its own. But `createOrResetBrief` cleared `sections` and not `lede`,
+  so a REBUILD whose writer failed finished `ready` with twelve new sections and
+  the previous run's paragraph on top — Zola confidently narrating a brief that
+  no longer existed. Only the whole-branch review caught it; six per-task reviews
+  could not, because neither half is wrong alone.
+- **A tool description is not scoped to a trigger.** The morning instruction
+  "read the paragraph and STOP" was safe in the persona bullet, which fires on a
+  greeting. Put in the `get_brief` DESCRIPTION it applied to every call —
+  including the weekly review, which had a lede of its own and a persona bullet
+  telling her to WALK it item by item. Nothing in the returned data let her tell
+  the two apart, so the Sunday telos ritual would have died silently. The fix was
+  structural, not a wording plea: `get_brief` now returns `data.workflow`.
 - **Probing an endpoint named after a verb PERFORMS the verb.** Mapping
   AgentMail's drafts API, a `POST /drafts/{id}/send` went out purely to find
   whether the route existed. It existed, and it sent: a real email, body "probe
