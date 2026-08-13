@@ -137,9 +137,14 @@ export const run = internalAction({
     let lede: string | undefined;
     if (ready) {
       const written = await callTool("write_lede", { brief_id: id }, secret);
-      const value = written.ok
-        ? (written.data as { lede?: string } | undefined)?.lede
+      const raw = written.ok
+        ? (written.data as { lede?: unknown } | undefined)?.lede
         : undefined;
+      // Verify shape before use: a cast we did not verify is a way to break
+      // the runner's promise that a failed writer still leaves a finished brief.
+      // If the route ever returns a non-string, we drop it rather than let it
+      // fail inside finishBrief, where the brief never reaches the finish state.
+      const value = typeof raw === "string" ? raw : undefined;
       if (value) lede = value;
     }
 

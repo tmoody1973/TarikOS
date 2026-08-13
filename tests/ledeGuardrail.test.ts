@@ -118,3 +118,15 @@ test("a failed lede still leaves a finished brief", () => {
 test("the Telegram digest gets the lede too", () => {
   assert.match(strip(RUNNER), /send_brief_digest[\s\S]{0,200}lede/);
 });
+
+test("the runner type-checks the lede before use", () => {
+  // A shape cast without verification is a way to break the promise that a
+  // failed writer still leaves a finished brief. If the route returns a
+  // non-string, we must drop it rather than let it fail inside finishBrief.
+  const src = strip(RUNNER);
+  assert.match(
+    src,
+    /typeof\s+raw\s*===\s*["']string["']/,
+    "the runner must verify lede is a string before trusting it",
+  );
+});
