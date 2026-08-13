@@ -1,0 +1,17 @@
+# "Hey Zola" — the phrase Tarik OS's assistant answers to.
+#
+# conv_attention over the flat DNN head: it keeps the temporal structure across
+# the 16-frame embedding window, which is what buys fewer false positives.
+# That matters more here than raw sensitivity — Tarik is a radio host and the
+# detector listens through voices and music most of the day. Every false fire
+# opens a live microphone.
+model_name: hey_zola
+target_phrases:
+  - "hey zola"
+
+n_samples: 10000
+model:
+  model_type: conv_attention
+  model_size: small
+steps: 50000
+target_fp_per_hour: 0.2
