@@ -1,0 +1,50 @@
+233 commits in eight days. Here are all 28 things my personal AI assistant can do.
+
+Her name is Zola. I reach her by voice on a page, by text, or by calling a phone number.
+
+THE SPINE
+
+1. Telos: a structured record of what I'm actually working toward. Mission, goals with real finish lines, problems, strategies. She interviews me for it once, then keeps it current from how I actually spend my days.
+2. A morning brief assembled before I wake up. It opens with my goals, not my inbox.
+3. The brief writes its own opening paragraph. Something reads all twelve sections and tells me what changed, what needs me, what's drifting.
+4. A Sunday review she walks me through, asking whether each goal still stands.
+
+THE WORKSPACE
+
+5. Read full email threads in the app, across accounts.
+6. She drafts replies in my voice. There is no send button she can reach.
+7. Her own email address. Strangers who write to it reach an agent, not me.
+8. A real writing workspace. Five document types, version history, DOCX export.
+9. She suggests edits by quoting my own words back. She never changes my writing.
+10. A project board backed by a real tracker, so I never open the tracker.
+11. Say "start a project with these five tasks" and she reads it back before creating anything.
+12. 4,370 contacts, synced nightly. Two matches is a question, never a guess.
+13. Turn any brief into a file and share it with an expiry, a download cap, and a kill switch.
+14. Habits with no streak counter anywhere. The number is how often I came back after a gap.
+15. Calendar by voice, with a read-back before every write.
+16. Reminders that reach me by text or email.
+
+HOW I REACH HER
+
+17. Voice in the browser.
+18. A wake word I trained myself for under a dollar. 161 KB, runs locally.
+19. She hangs up when the conversation ends, not when I press something.
+20. A real phone number. She answers with the same brain and the same tools.
+21. Text, with deliberately fewer tools than voice.
+22. A browser she drives while I watch, and I can take the wheel.
+23. A console showing the waveform, the transcript, and which tools are firing.
+
+RUNNING WHILE I SLEEP
+
+24. Conversations consolidated nightly, recalled by meaning rather than keywords.
+25. Voice journaling, mined overnight for signals about my goals.
+26. Multi-step research on a schedule, delivered as cards.
+
+HOW I KNOW IT WORKS
+
+27. Every tool has a health light and an off switch that blocks it at the door.
+28. 980 tests, and an eval harness that replays things I actually said to score which tool she reaches for. Two identical runs disagree about 9 percent of the time, so it reports that noise rather than letting me read meaning into a small move.
+
+The rule underneath all of it: she can do a great deal on her own, and almost nothing on her own authority. She drafts, proposes and prepares. I release.
+
+Open source, MIT: github.com/tmoody1973/TarikOS

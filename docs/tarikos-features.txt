@@ -1,4 +1,4 @@
-TARIK OS — FEATURE LIST
+TARIK OS: FEATURE LIST
 Last updated 2026-08-13
 
 A personal AI assistant named Zola. You reach her by voice on a page, by text,
@@ -24,7 +24,7 @@ THE SPINE
 
 3. THE LEDE
    Every brief now opens with a paragraph written by a model that read the whole
-   brief plus the previous one. It connects things the sections keep apart — a
+   brief plus the previous one. It connects things the sections keep apart, a
    meeting that collides with another, an email that touches a goal, a headline
    worth your time. Zola reads that paragraph and stops; the sections are there
    if you ask. Same paragraph on the page, in the Telegram digest, and out loud.
@@ -50,8 +50,8 @@ THE WORKSPACE
    who writes in gets one automatic letter explaining the containment.
 
 7. STUDIO (/studio)
-   A real writing workspace. Five document types — note, draft, brief, plan,
-   decision record — each from its own template. Tables, lists, media, DOCX
+   A real writing workspace. Five document types (note, draft, brief, plan,
+   decision record), each from its own template. Tables, lists, media, DOCX
    export, version snapshots you can restore, and references pointing a document
    at whatever it grew out of. Ask her to tighten a paragraph and she quotes your
    own words back to find it, then leaves a suggestion waiting for you to take
@@ -76,8 +76,8 @@ THE WORKSPACE
     saving a file for yourself does not.
 
 11. HABITS (/habits)
-    Identity-based pillars, not a checklist. Completion is graded — minimum,
-    standard, beyond, intentionally skipped — because "I did the two-minute
+    Identity-based pillars, not a checklist. Completion is graded (minimum,
+    standard, beyond, intentionally skipped) because "I did the two-minute
     version" and "I did the full thing" are different truths. There is no streak
     counter anywhere. The number shown is how often you came back after a gap.
     An intentional skip carries no penalty. The evening check-in waits on the
@@ -95,7 +95,7 @@ HOW YOU REACH HER
 14. VOICE, ON THE PAGE
     Press ENGAGE, or arm the wake word and just say her name.
 
-15. WAKE WORD — "HEY ZOLA"
+15. WAKE WORD: "HEY ZOLA"
     A 161 KB model trained from scratch on a rented GPU for under a dollar.
     Runs in the browser, no account and no key. Open source, Apache-2.0.
 
@@ -146,8 +146,8 @@ HOW ANYONE KNOWS IT WORKS
     turned off is blocked at the route before it can act, not merely hidden.
 
 26. OBSERVABILITY
-    Every tool call emits a span with its real outcome — success, no_match,
-    ambiguous, disabled, error — kept deliberately separate from the ok flag
+    Every tool call emits a span with its real outcome (success, no_match,
+    ambiguous, disabled, error), kept deliberately separate from the ok flag
     Zola speaks from. Several tools answer "nothing matched" as a helpful
     sentence; counting those as successes would quietly corrupt every number
     built on the data. Full conversations arrive as traces with tool calls
