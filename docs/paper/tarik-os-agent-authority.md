@@ -21,10 +21,10 @@ voice agent named Zola with 48 tools spanning calendar, email, notes, projects,
 contacts, habits and telephony. It is a single-user system, deployed to
 production, and in daily use.
 
-The paper makes four contributions. First, a framework for **agent authority**
+The paper makes four contributions. First, a framework for agent authority
 that separates what an agent may read, propose, write and send, and enforces
 each boundary structurally rather than by instruction. Second, a design rule for
-the **standing prompt** that treats it as two surfaces rather than one, with a
+the standing prompt that treats it as two surfaces rather than one, with a
 measured result: 8,533 characters removed from a 25,755-character prompt with no
 loss in tool-selection accuracy beyond the measurement noise floor. Third, a
 **taxonomy of failure modes** observed in production, of which the most
@@ -58,7 +58,7 @@ Most write-ups answer the first question and skip the second. A demonstration
 shows an agent booking a restaurant. It rarely shows what happens when a
 stranger emails the agent and asks it to book one.
 
-This paper is a first-person design case study of **Tarik OS**, a personal
+This paper is a first-person design case study of Tarik OS, a personal
 assistant its author built for himself and uses daily. It is deliberately a
 report from inside a running system rather than a controlled experiment. The
 system has one user. That is a limitation for some kinds of claim and a method
@@ -70,11 +70,11 @@ suffer before being corrected.
 
 The word *safety* in this literature usually means preventing a model from
 producing harmful text. That is not the problem here. The problem is that Zola
-can send email, create calendar events, file tasks and telephone her owner. The
-question is not whether she will say something objectionable. It is what she is
-permitted to *do*, on whose behalf, and with what confirmation.
+can send email, create calendar events, file tasks and telephone her owner. What
+matters instead is what she is permitted to *do*, on whose behalf, and with
+what confirmation.
 
-This paper uses **authority** for that question, and treats it as a design
+This paper uses authority for that question, and treats it as a design
 surface with four levels:
 
 | Level | Meaning | Example |
@@ -90,19 +90,19 @@ missing function is a fact.
 
 ### 1.2 Contributions
 
-1. **An authority framework** with worked examples, including two cases where
+1. An authority framework with worked examples, including two cases where
    the first version of the rule was wrong and had to be reversed.
-2. **A standing-prompt design rule** ("one home per fact, chosen by the fact's
+2. A standing-prompt design rule ("one home per fact, chosen by the fact's
    lifetime") with a measured before-and-after.
-3. **A failure taxonomy** grounded in production incidents, including the class
+3. A failure taxonomy grounded in production incidents, including the class
    of failure that returns success.
-4. **An account of AI-assisted construction** of the system, and which skills
+4. An account of AI-assisted construction of the system, and which skills
    turned out to be load-bearing when writing code stopped being the bottleneck.
 
 ### 1.3 What this paper is not
 
-It is not a benchmark. It does not propose a new algorithm. It does not
-generalise from one user to a population. Where it reports numbers, those
+It is not a benchmark, it proposes no new algorithm, and it does not generalise
+from one user to a population. Where it reports numbers, those
 numbers are from one system measured by one person, and Section 10 says so at
 length.
 
@@ -117,7 +117,7 @@ these systems.
 
 A language model produces text. On its own it cannot do anything else.
 
-To make it act, you give it a list of **tools**. Each tool is a short
+To make it act, you give it a list of tools. Each tool is a short
 description ("create a calendar event; requires a title, date and time") plus a
 function the surrounding program knows how to run. The model, given a
 conversation, may respond with text or with a request to call one of those
@@ -131,7 +131,7 @@ exists**, no matter how it is asked, tricked, or instructed.
 ### 2.2 The standing prompt
 
 Before any conversation begins, the model is given a block of text: who it is,
-who it serves, how it should behave. This is the **standing prompt** or
+who it serves, how it should behave. This is the standing prompt or
 *persona*. In Tarik OS it is sent at the start of every session, and until
 recently it was 25,755 characters long.
 
@@ -167,7 +167,7 @@ Verified figures from the repository as of 12 August 2026:
 | Tools published to the agent | 48 |
 | Tool handlers in the API route | 54 |
 | Written design specifications | 12 |
-| Commits in git history | 211, spanning 6–12 August 2026 |
+| Commits in git history | 211, spanning 6 to 12 August 2026 |
 | Standing prompt (persona) | 4,191 characters, reduced from 12,724 |
 
 ### 3.2 Architecture
@@ -236,7 +236,7 @@ mechanism enforcing it, and where the first attempt was wrong.
 
 Zola can compose email. She cannot send it.
 
-This is not enforced by telling her not to. **There is no send function.** The
+This is not enforced by telling her not to. There is no send function. The
 tool list contains `draft_email`, which writes a draft into Gmail and returns.
 No amount of instruction, persuasion or injected text can produce a sent message
 from a system that has no code path to send one.
@@ -255,7 +255,7 @@ the outside world as the owner requires the owner.
 Some actions are reversible and some are not. Creating a task is one click to
 undo. Creating a calendar event that emails four attendees is not.
 
-Irreversible actions in Tarik OS use a **read-back ritual**: the agent must say
+Irreversible actions in Tarik OS use a read-back ritual: the agent must say
 back exactly what it is about to do, including the values it computed, and wait
 for an explicit yes.
 
@@ -279,7 +279,7 @@ asserts a branch exists is not a test that the branch can be reached.
 
 Zola may telephone her owner and email her owner without confirmation.
 
-The mechanism is that **the recipient is not an argument of anything**. It is
+The mechanism is that the recipient is not an argument of anything. It is
 read from server configuration. There is no field in any tool schema where a
 phone number or address could be placed, so there is nothing to talk the agent
 into.
@@ -333,7 +333,7 @@ When a stranger emails the address, they receive one reply. Part of it is fixed
 text. Part of it is **written by a language model, for them, about their
 message**.
 
-This is safe for one specific reason: **the model that writes it is not Zola.**
+This is safe for one specific reason: the model that writes it is not Zola.
 It is a separate call holding one brief and one stranger's email. No tools. No
 memory. No calendar, no contacts, no files, nothing belonging to the owner.
 
@@ -359,15 +359,15 @@ paper's central design intuition in a form a stranger can understand:
 The automatic reply is governed by six conditions. Five are unglamorous, and the
 ratio is the point.
 
-1. **The sender must pass cryptographic authentication.** A `From:` header is
+1. The sender must pass cryptographic authentication. A `From:` header is
    forgeable; without this check, anyone could impersonate a victim and have the
    owner's domain send them unsolicited mail on demand.
-2. **One reply per sender, ever.** Two automatic responders pointed at each
+2. One reply per sender, ever. Two automatic responders pointed at each
    other stop only when a mail provider intervenes.
-3. **Never to no-reply, bounce or daemon addresses.**
-4. **Never to bulk or list mail**, detected by standard headers.
-5. **Never to the owner or the system's own domain.**
-6. **Idempotent on the message identifier**, because a webhook delivery arrives
+3. Never to no-reply, bounce or daemon addresses.
+4. Never to bulk or list mail, detected by standard headers.
+5. Never to the owner or the system's own domain.
+6. Idempotent on the message identifier, because a webhook delivery arrives
    more than once.
 
 Only the sandboxing in §4.5 concerns the model. Everything else is the ordinary
@@ -416,7 +416,7 @@ and end of long contexts [1].
 
 ### 5.4 The seam test
 
-The rule is enforced by a ten-line test: **every tool named in the persona must
+A ten-line test enforces the rule: **every tool named in the persona must
 exist in the tool list.** It includes a mutation case that appends a fictional
 tool and asserts the check fails, so the test cannot silently stop working.
 
@@ -431,11 +431,11 @@ persona. That decision can be replayed offline: hand the same descriptions and
 persona to a direct model call, show it a real utterance, and record which tool
 it reaches for.
 
-The harness scores **107 utterances drawn from real recorded conversations**,
+The harness scores 107 utterances drawn from real recorded conversations,
 each labelled by hand with the tool that should have been chosen.
 
 It does not reproduce production. Different serving, no audio, one turn of
-history. **What transfers is the delta**, and the harness reports a run-to-run
+history. What transfers is the delta, and the harness reports a run-to-run
 disagreement of approximately 9% of utterances between identical runs, which
 establishes a noise floor.
 
@@ -511,12 +511,12 @@ The most expensive class. The system says the operation worked and it did not.
 
 **Case: the configuration that was accepted and ignored.** The voice platform's
 configuration contains a section named for built-in tools, with a slot for
-ending a call. Writing to it does nothing. The API returns **200 OK**, reports
+ending a call. Writing to it does nothing. The API returns 200 OK, reports
 success, and leaves the value null. The client library serialises the field
 correctly; the server ignores it.
 
 A system tool must instead be placed in the *general* tool list, and the API
-then **reflects it back into the built-in section on read** — which is precisely
+then reflects it back into the built-in section on read, which is precisely
 what makes the wrong approach look correct.
 
 **Case: the gate in someone else's system.** An automatic reply was generated
@@ -538,15 +538,15 @@ He was reading the *development* database while the production site wrote to the
 The error was caught only because a synthetic webhook was sent by hand, observed
 to succeed, and *its* record was also missing.
 
-**A test that proves your instrument is lying is worth more than the test you
-intended to run.**
+Checking that the instrument was telling the truth mattered more than the
+check it was built to run.
 
 ### 7.3 Protective errors
 
 Training data downloads failed repeatedly with rate-limit errors, which cost an
 hour and were treated as the obstacle. The cause was an unauthenticated session.
 
-Once authenticated, the download succeeded — and 16 GB began landing on a
+Once authenticated the download succeeded, and 16 GB began landing on a
 machine with 17 GB free. It was terminated with 2.1 GB remaining.
 
 **The rate limit had been holding back a download the machine could not hold.**
@@ -574,9 +574,8 @@ phonemiser, required before speech can be synthesised, which a Python package
 manager cannot install because it is not a Python package.
 
 A second run reached training, exported a finished model, and then died drawing
-a diagnostic graph because a plotting library was absent — destroying the model,
-because the upload step ran *after* the graph. **An artifact should never be
-downstream of a nicety.**
+a diagnostic graph because a plotting library was absent. That destroyed the
+model, because the upload step ran *after* the graph. The finished artifact was downstream of a nicety.
 
 ### 7.6 Summary
 
@@ -594,8 +593,8 @@ downstream of a nicety.**
 
 ### 8.1 What the repository shows
 
-The git history spans **seven days**, contains **211 commits**, and produced
-**51,825 lines** across **366 files** with **927 tests**. The author is
+The git history spans seven days, contains 211 commits, and produced
+**51,825 lines** across 366 files with 927 tests. The author is
 architecture-trained rather than computer-science-trained.
 
 This was written with AI coding assistants throughout. Reporting the figures
@@ -633,7 +632,7 @@ tool that reads mail must not call any function that writes; permission to reply
 to an address must be granted only after the decision to reply; the persona may
 not name a tool that does not exist.
 
-These are not unit tests. They are **executable design rules**, and they
+These are not unit tests. They are executable design rules, and they
 survive the author forgetting why they were written.
 
 ---
@@ -654,7 +653,7 @@ Each could have been a sentence in the prompt. None of them is.
 ### 9.2 Getting the rule wrong is normal; getting it stuck is the failure
 
 Two rules in Section 4 were wrong on the first attempt, and both were wrong in
-the same direction: **too restrictive in a way that looked responsible.**
+the same direction: too restrictive in a way that looked responsible.
 Dropping unlisted mail entirely. Refusing to let the agent write anything at all
 to a stranger.
 
