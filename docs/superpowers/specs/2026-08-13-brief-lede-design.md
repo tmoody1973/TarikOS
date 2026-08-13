@@ -50,6 +50,17 @@ One buys the sentence type that is worth the most: *still unanswered, two days
 now*. Seven buys pattern-spotting and costs a prompt that starts narrating the
 week to a man who opened it to find out about today.
 
+### What "the previous brief" actually means: its lede, not its sections
+
+The writer is given the previous brief's **lede**, not its twelve sections. Far
+cheaper, and the more correct signal: if something was not important enough to
+reach yesterday's lede, *still sitting* is noise rather than news. So the
+persistence sentence only fires for things that mattered yesterday and still
+matter today, which is exactly when it is worth saying.
+
+A brief whose writer failed has no lede, so the next run simply sees nothing.
+That degrades to "today only" rather than to an error.
+
 ### Why `research-brief` gets no previous brief
 
 The other two are recurring, so the previous run is about the same thing: the
