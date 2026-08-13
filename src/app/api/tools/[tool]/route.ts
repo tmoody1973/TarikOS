@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import Anthropic from "@anthropic-ai/sdk";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import {
@@ -100,6 +101,7 @@ import {
   shareExpiryFrom,
 } from "@/lib/documentBuilders";
 import { getTracer, safeSetAttrs, safeEndSpan } from "@/lib/tracing";
+import { LEDE_BRIEF, LENS, ledeInput, trimLede, MAX_LEDE_CHARS } from "@/lib/lede";
 
 // Webhook endpoint for Zola's ElevenLabs server tools. Authenticated by
 // a shared secret header (configured on the agent), not a browser session —
@@ -1788,6 +1790,71 @@ async function runTool(
         message: `Synced ${merged.length} contacts (${created} new, ${updated} updated, ${deleted} removed).`,
         data: { total: merged.length, created, updated, deleted },
       };
+    }
+
+    // The paragraph a brief opens with, written after every section is built.
+    //
+    // Runner-only: this is NOT in provision-agent.ts, so Zola cannot call it.
+    // She reads the lede; she never writes it.
+    //
+    // The containment is zolaReply's, and it matters more here. This is the
+    // first thing in the system that turns a Gmail subject or a search snippet
+    // into Zola's OWN words rather than a quotation, so the call holds the
+    // sections and nothing else: no tools, no telos, no memory.
+    case "write_lede": {
+      const briefId = strArg(body.brief_id, 64);
+      if (!briefId) {
+        return { ok: false, message: "No brief to write a lede for." };
+      }
+
+      const material = await convex.query(api.workflows.briefForLede, {
+        secret,
+        briefId: briefId as Id<"briefs">,
+      });
+      if (!material) {
+        return { ok: false, message: "That brief no longer exists." };
+      }
+
+      const lens = LENS[material.workflowName];
+      if (!lens) {
+        // memory-consolidation and anything added later. Not an error: a
+        // workflow with no lens simply does not get a lede.
+        return { ok: true, message: "No lede for this workflow.", data: { lede: "" } };
+      }
+
+      let written = "";
+      try {
+        const response = await new Anthropic().messages.create({
+          model: "claude-opus-5",
+          max_tokens: 400,
+          system: `${LEDE_BRIEF}\n\n${lens}`,
+          messages: [
+            {
+              role: "user",
+              content: ledeInput(material.sections, material.previousLede),
+            },
+          ],
+        });
+        written = response.content
+          .filter((c): c is Anthropic.TextBlock => c.type === "text")
+          .map((c) => c.text)
+          .join("\n")
+          .slice(0, MAX_LEDE_CHARS * 3);
+      } catch (error) {
+        return {
+          ok: false,
+          message: `The lede writer failed: ${error instanceof Error ? error.message : "unknown"}`,
+        };
+      }
+
+      const lede = trimLede(written);
+      if (!lede) return { ok: false, message: "The lede writer returned nothing." };
+
+      await convex.mutation(api.secondBrain.markToolHealthyFromTool, {
+        secret,
+        name: "write_lede",
+      });
+      return { ok: true, message: "Lede written.", data: { lede } };
     }
 
     // The morning brief, delivered instead of merely built. Called by the

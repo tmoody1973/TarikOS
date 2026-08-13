@@ -38,3 +38,46 @@ test("only recurring workflows are given the previous brief", () => {
   const funcBody = body.split(/^export /m)[0] ?? "";
   assert.match(funcBody, /if\s*\(\s*workflow\s*\?\s*\.\s*trigger\s*\.\s*type\s*===\s*["']cron["']/);
 });
+
+const ROUTE = read("../src/app/api/tools/[tool]/route.ts");
+const PROVISION = read("../scripts/provision-agent.ts");
+
+/** One `case "name": {` block from the tool route, comments stripped. */
+function routeCase(name: string): string {
+  const body = ROUTE.split(`case "${name}": {`)[1]?.split("\n    }")[0] ?? "";
+  assert.ok(body, `no route case for ${name}`);
+  return strip(body);
+}
+
+test("Zola cannot write her own lede", () => {
+  // A runner-only tool, the shape send_brief_digest already established.
+  assert.match(ROUTE, /case "write_lede":/);
+  assert.doesNotMatch(PROVISION, /name: "write_lede"/);
+});
+
+test("the writer call carries no tools", () => {
+  const body = routeCase("write_lede");
+  assert.doesNotMatch(
+    body,
+    /tools:/,
+    "a lede writer with tools is a mail headline with hands",
+  );
+});
+
+test("the writer carries none of Tarik's standing context", () => {
+  const body = routeCase("write_lede");
+  for (const forbidden of ["telos", "standing", "recall", "memories", "getBrief"]) {
+    assert.doesNotMatch(
+      body,
+      new RegExp(forbidden, "i"),
+      `the writer must not reach for ${forbidden}`,
+    );
+  }
+});
+
+test("the writer's material goes through the fenced builder", () => {
+  const body = routeCase("write_lede");
+  assert.match(body, /ledeInput\(/);
+  assert.match(body, /LEDE_BRIEF/);
+  assert.match(body, /trimLede\(/, "raw model output must never be stored");
+});
