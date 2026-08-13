@@ -248,6 +248,12 @@ function BriefsInner() {
               )}
             </header>
 
+            {brief?.lede ? (
+              <p className="mt-5 border-l-2 border-hudblue/50 pl-4 text-[15px] leading-relaxed text-parchment">
+                {brief.lede}
+              </p>
+            ) : null}
+
             {/* Column flow */}
             {!brief ? (
               <p className="pulse-soft mt-8 text-center text-xs tracking-[0.3em] text-steel">

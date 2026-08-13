@@ -1900,6 +1900,7 @@ async function runTool(
       if (!title || sections.length === 0) {
         return { ok: false, message: "Nothing to send — no brief sections." };
       }
+      const lede = strArg(body.lede, 700);
 
       const text = briefDigest(
         title,
@@ -1909,6 +1910,7 @@ async function runTool(
           const sectionBody = strArg(s.body, 4000);
           return heading && sectionBody ? [{ heading, body: sectionBody }] : [];
         }),
+        lede,
       );
       // Every section failed, so there is nothing worth waking him for. The
       // dashboard still carries the errors.

@@ -81,7 +81,11 @@ function renderLine(line: string): string {
  * a partial brief when a step errors, and a morning text that is only "Gmail
  * token expired" is worse than no text. The dashboard still shows the failure.
  */
-export function briefDigest(title: string, sections: DigestSection[]): string {
+export function briefDigest(
+  title: string,
+  sections: DigestSection[],
+  lede?: string,
+): string {
   const usable = sections.filter(
     (s) => s.body.trim() && !s.body.includes(ERROR_MARK),
   );
@@ -96,13 +100,20 @@ export function briefDigest(title: string, sections: DigestSection[]): string {
     return `<b>${escapeHtml(s.heading)}</b>\n${lines.join("\n")}`;
   });
 
-  const full = `<b>${escapeHtml(title)}</b>\n\n${blocks.join("\n\n")}`;
+  // The lede is escaped like everything else — it came out of a model that read
+  // untrusted mail and headlines, so a stray `<` in it would make Telegram
+  // reject the whole message exactly as a stray `<` in a subject line would.
+  const header = lede?.trim()
+    ? `<b>${escapeHtml(title)}</b>\n\n${escapeHtml(lede.trim())}`
+    : `<b>${escapeHtml(title)}</b>`;
+
+  const full = `${header}\n\n${blocks.join("\n\n")}`;
   if (full.length <= MAX_REPLY) return full;
 
   // Drop whole blocks rather than slicing the string: a mid-tag cut is what
   // makes Telegram reject the message, and half a calendar entry is noise.
-  // The header always survives, so the message still says what it is.
-  const header = `<b>${escapeHtml(title)}</b>`;
+  // The header now carries the lede, so the one thing worth reading always
+  // survives the cut.
   const budget = MAX_REPLY - TAIL.length;
   let out = header;
   for (const block of blocks) {

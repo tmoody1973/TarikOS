@@ -258,3 +258,35 @@ test("the in-app mail sentinel host never becomes a phone link", () => {
   assert.ok(!out.includes("tarikos.internal"));
   assert.match(out, /Grant decision/);
 });
+
+test("the lede opens the digest", () => {
+  const out = briefDigest("Morning Brief", [{ heading: "Calendar", body: "- 10am standup" }],
+    "Your 10am moved. Nothing else needs you.");
+  assert.ok(
+    out.indexOf("Your 10am moved") < out.indexOf("Calendar"),
+    "the lede must come before the first section",
+  );
+});
+
+test("the lede survives the Telegram cut", () => {
+  // Blocks are dropped whole when the message is too long. The lede is the one
+  // thing that must never be what gets dropped.
+  const fat = Array.from({ length: 60 }, (_, i) => ({
+    heading: `Section ${i}`,
+    body: "x".repeat(300),
+  }));
+  const out = briefDigest("Morning Brief", fat, "Your 10am moved.");
+  assert.match(out, /Your 10am moved/);
+});
+
+test("a lede with a stray angle bracket cannot break the message", () => {
+  // A single bare < makes Telegram reject the WHOLE message.
+  const out = briefDigest("Morning Brief", [{ heading: "A", body: "b" }], "5 < 6 & rising");
+  assert.doesNotMatch(out, /[^&]< /);
+  assert.match(out, /&lt; 6 &amp; rising/);
+});
+
+test("no lede is the same digest as before", () => {
+  const sections = [{ heading: "Calendar", body: "- 10am standup" }];
+  assert.equal(briefDigest("T", sections), briefDigest("T", sections, ""));
+});
