@@ -89,9 +89,13 @@ export const finishBrief = internalMutation({
     status: v.union(v.literal("ready"), v.literal("error")),
     workflowName: v.string(),
     error: v.optional(v.string()),
+    lede: v.optional(v.string()),
   },
-  handler: async (ctx, { briefId, status, workflowName, error }) => {
-    await ctx.db.patch(briefId, { status });
+  handler: async (ctx, { briefId, status, workflowName, error, lede }) => {
+    // Only patch the lede when there is one. Writing `undefined` over a value
+    // is the same bug as writing "" — a brief that failed to get a lede on a
+    // retry must not lose the one it already had.
+    await ctx.db.patch(briefId, lede ? { status, lede } : { status });
     const workflow = await ctx.db
       .query("workflows")
       .withIndex("by_name", (q) => q.eq("name", workflowName))
@@ -205,6 +209,56 @@ export const latestReadyBrief = query({
         ),
       )
       .first();
+  },
+});
+
+/**
+ * Everything the lede writer is allowed to see, assembled server-side.
+ *
+ * The tool route passes only a briefId: today's sections are already in the
+ * table by the time the step loop ends, so nothing large crosses the wire.
+ *
+ * The previous brief is supplied ONLY for cron workflows. research-brief is
+ * voice-triggered per topic, so its previous run could be about Bandcamp while
+ * this one is about Indiegraf; handing the writer that and labelling it "last
+ * time" would produce comparisons out of nothing.
+ */
+export const briefForLede = query({
+  args: { secret: v.string(), briefId: v.id("briefs") },
+  handler: async (ctx, { secret, briefId }) => {
+    checkToolSecret(secret);
+    const brief = await ctx.db.get(briefId);
+    if (!brief) return null;
+
+    const workflow = await ctx.db
+      .query("workflows")
+      .withIndex("by_name", (q) => q.eq("name", brief.workflowName))
+      .unique();
+
+    let previousLede: string | undefined;
+    if (workflow?.trigger.type === "cron") {
+      const previous = await ctx.db
+        .query("briefs")
+        .order("desc")
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("workflowName"), brief.workflowName),
+            q.eq(q.field("status"), "ready"),
+            q.neq(q.field("_id"), briefId),
+          ),
+        )
+        .first();
+      previousLede = previous?.lede;
+    }
+
+    return {
+      workflowName: brief.workflowName,
+      sections: brief.sections.map((s) => ({
+        heading: s.heading,
+        body: s.body,
+      })),
+      previousLede,
+    };
   },
 });
 

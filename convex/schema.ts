@@ -138,6 +138,10 @@ export default defineSchema({
       v.literal("error"),
     ),
     runStartedAt: v.number(),
+    // The opening paragraph, written after every section is built by something
+    // that read all of them. Optional because every brief already in the table
+    // predates it, and because a failed writer must still leave a usable brief.
+    lede: v.optional(v.string()),
     sections: v.array(
       v.object({
         heading: v.string(),
