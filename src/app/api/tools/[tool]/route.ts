@@ -935,6 +935,10 @@ async function runTool(
           `Brief "${brief.title}" is ready with ${brief.sections.length} section(s). Speak from its sections.`,
         data: {
           title: brief.title,
+          // She cannot follow two different rituals from one tool unless the
+          // tool tells her which one she is in — the weekly review is walked
+          // item by item, a morning brief is read and stopped on.
+          workflow: brief.workflowName,
           builtAt: brief.runStartedAt,
           lede: brief.lede,
           sections: brief.sections.map((s) => ({

@@ -133,12 +133,28 @@ test("the runner type-checks the lede before use", () => {
 
 test("get_brief speaks the lede when there is one", () => {
   const body = routeCase("get_brief");
-  assert.match(body, /lede/, "the lede must reach Zola");
+  // Scoped to the `message:` field alone. The whole case body also contains
+  // the no-brief fallback's own `message:` and, past `data:`, a second
+  // `brief.lede` reference — a full-body match would pass even if `message`
+  // itself reverted to the old unconditional wording.
+  const dataIdx = body.indexOf("data:");
+  const messageStart = body.lastIndexOf("message:", dataIdx);
+  assert.ok(messageStart >= 0 && dataIdx > messageStart, "no message field before data");
+  const message = body.slice(messageStart, dataIdx);
+  assert.match(message, /lede/, "the lede must reach Zola");
   assert.match(
-    body,
+    message,
     /brief\.lede\s*\?\?|brief\.lede\s*\|\|/,
     "and must fall back to the section wording for briefs built before this",
   );
+});
+
+test("get_brief tells her which brief she is holding", () => {
+  // She cannot follow two different rituals from one tool unless the tool
+  // tells her which one she is in — the weekly-review carve-out in the
+  // persona depends on data.workflow surviving.
+  const body = routeCase("get_brief");
+  assert.match(body, /workflow:\s*brief\.workflowName/);
 });
 
 test("the persona sends her to the lede rather than to the sections", () => {

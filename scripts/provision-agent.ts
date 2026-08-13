@@ -667,7 +667,7 @@ export const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
     type: "webhook" as const,
     name: "get_brief",
     description:
-      "Fetch the latest pre-built brief (morning brief or other workflow output). Call this FIRST for any briefing or 'good morning' — it answers instantly without live tool calls, and it comes back already written as one spoken paragraph. Read that paragraph and stop; the sections are there if he asks for more. If it reports no ready brief, fall back to get_calendar and get_emails.",
+      "Fetch the latest pre-built brief (morning brief or other workflow output). Call this FIRST for any briefing or 'good morning' — it answers instantly without live tool calls, and it comes back already written as one spoken paragraph. Read that paragraph and stop; the sections are there if he asks for more. One exception: when data.workflow is \"weekly-review\" he walks it with you item by item, so read the paragraph and then go through the sections rather than stopping. If it reports no ready brief, fall back to get_calendar and get_emails.",
     responseTimeoutSecs: 15,
     apiSchema: {
       url: `${TOOL_BASE_URL}/get_brief`,
