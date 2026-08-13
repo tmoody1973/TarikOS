@@ -61,8 +61,16 @@ All line numbers verified 2026-08-13.
 **`sendDraft` exists at `src/lib/mail.ts:416` and that is fine.** Its only
 caller is `src/app/api/mail/drafts/[id]/send/route.ts`, which is Tarik pressing
 Send on his Mail page. **No tool reaches it, and reply_zero must not change
-that.** Grep before you finish: `grep -rn sendDraft src/` should still show
-exactly one caller outside the lib.
+that.** Grep before you finish:
+
+```
+grep -rln "sendDraft" src/ --include="*.ts" --include="*.tsx" | grep -v "src/lib/mail.ts"
+```
+
+That must print exactly **one file**, `src/app/api/mail/drafts/[id]/send/route.ts`.
+Use `-l` and count files, not lines: a line count says 2 because the file both
+imports and calls it, and that near-miss is how a green check turns into a
+false one.
 
 ---
 
@@ -84,8 +92,8 @@ It holds the rules:
 **2. A `reply_zero` case** in `src/app/api/tools/[tool]/route.ts` that calls
 `listMailThreads`, applies the pure rules, and returns `{ ok, message, data }`.
 
-**3. One line in `MORNING_BRIEF_STEPS`** in `convex/workflows.ts` (~line 300),
-then re-run the seed.
+**3. One line in `MORNING_BRIEF_STEPS`** in `convex/workflows.ts:352`, then
+re-run the seed (`seedPhase2`, same file, and it is idempotent by design).
 
 ### Why point 3 is the whole trick
 
