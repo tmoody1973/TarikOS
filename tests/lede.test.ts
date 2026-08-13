@@ -36,12 +36,25 @@ test("a huge section cannot fill the writer's context", () => {
 });
 
 test("one runaway section cannot crowd out the others", () => {
-  const sections = [
-    { heading: "Runaway", body: "x".repeat(50_000) },
-    { heading: "Calendar", body: "- 10:00 AM · Standup" },
-  ];
+  // Fill the budget with large sections: 13 sections of 850 chars each.
+  // 13 * (12-char heading + 850-char body) ≈ 11,200 chars, leaving ~800 budget.
+  const sections = Array.from({ length: 13 }, (_, i) => ({
+    heading: `Sec${i}`,
+    body: "x".repeat(850),
+  }));
+
+  // Add a runaway section that exceeds the remaining budget.
+  // With `continue`, this is skipped and the next section is tried.
+  // With `break`, the loop exits here and the next section is never processed.
+  sections.push({ heading: "Runaway", body: "y".repeat(900) });
+
+  // Add a short section that should survive.
+  // With `continue`, this will be added (fits in remaining budget).
+  // With `break`, this will NOT be added (loop exited at Runaway).
+  sections.push({ heading: "Calendar", body: "- 10:00 AM · Standup" });
+
   const input = ledeInput(sections);
-  assert.match(input, /Calendar/, "the second section must survive the first");
+  assert.match(input, /Calendar/, "the short section must survive when a runaway section is skipped");
 });
 
 test("a failed section is not material for the lede", () => {
@@ -90,6 +103,15 @@ test("a cap falls on a sentence boundary rather than mid-word", () => {
   const spoken = trimLede(long);
   assert.ok(spoken.length <= MAX_LEDE_CHARS, `was ${spoken.length}`);
   assert.match(spoken, /\.$/, "must end on a full stop, not a half word");
+});
+
+test("a cap without a sentence boundary uses an ellipsis", () => {
+  // Create a string longer than MAX_LEDE_CHARS with no sentence boundary past 150 chars.
+  // This forces the ellipsis fallback: no full stop within stop > 150, so use "…".
+  const noBreak = "word ".repeat(200); // 1000 chars, no sentence boundary
+  const spoken = trimLede(noBreak);
+  assert.ok(spoken.length <= MAX_LEDE_CHARS, `was ${spoken.length}`);
+  assert.match(spoken, /…$/, "must end with ellipsis when no sentence boundary is found");
 });
 
 test("nothing usable yields nothing, never an empty-looking lede", () => {
