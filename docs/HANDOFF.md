@@ -13,8 +13,8 @@ cost more time today than every genuine error combined.
 
 ## State
 
-`main` in sync with origin. **927/927 tests, tsc clean, `next build` green.**
-Convex deployed, agent provisioned, Vercel deployed. 35 commits today.
+`main` in sync with origin. **944/944 tests, tsc clean, `next build` green.**
+Convex deployed, agent provisioned, Vercel deployed. 36 commits today.
 Working tree carries only `.claude/`, which is not yours to decide on.
 
 Shipped, and how each was verified:
@@ -27,6 +27,7 @@ Shipped, and how each was verified:
 | `end_call` — she hangs up on a goodbye | said out loud, dock went to STANDBY |
 | The letter a stranger gets | Tarik got one |
 | **Wake word: "Hey Zola"** | said out loud, first try |
+| `email_tarik` and `draft_reply` | both called live; he has the email, the draft is still a draft |
 
 Also written: a build diary, a plain-English ML lesson, a LinkedIn post, and an
 11-page design paper in `docs/paper/`.
@@ -39,16 +40,18 @@ the day, which is close to adversarial. That number, not the validation one,
 decides whether the 0.07 threshold stays. Peak scores above 0.2 print to the
 browser console, so a normal working day produces the data for free.
 
-**2. `email_tarik` and `draft_reply`** — the sending half she calls herself. The
-mechanism exists and is proven: `emailOwner` reads the recipient from the
-server, `replyToSender` answers the envelope of inbound mail. What is missing is
-the pair of tools that let *her* choose to use them. The rule they must obey is
-one sentence: **she writes to him freely, and drafts to everyone else.** A
-forwarded thread must draft through GMAIL as him, because the correspondent
-knows him and not her.
+**2. Give the draft somewhere to be released.** `draft_reply` now parks a real
+letter in AgentMail, and the only place to release it is AgentMail's own
+dashboard. That is the "a control nobody knows to press" trap with a different
+hat on. A Drafts tab and a Send control on `/mail/zola` closes it; the endpoint
+is `POST /v0/inboxes/{inbox}/drafts/{id}/send` and it is confirmed to work.
 
 **3. Publish.** `docs/lessons/post-linkedin.txt` is 2,881 of 3,000 characters
 and ready to paste. The paper wants a second read first.
+
+**4. Re-run the replay eval.** Two tool descriptions were added to the standing
+prompt after it was reshaped to 72%. `evals/tools.json` was regenerated so the
+harness scores what shipped, but the number has not been taken since.
 
 ## The wake word, since it is new
 
@@ -78,6 +81,20 @@ all lives on Hugging Face.
 
 ## Traps
 
+- **Probing an endpoint named after a verb PERFORMS the verb.** Mapping
+  AgentMail's drafts API, a `POST /drafts/{id}/send` went out purely to find
+  whether the route existed. It existed, and it sent: a real email, body "probe
+  body", to `moodyco1973@gmail.com`. It reached Tarik and not a stranger only
+  because his own address is the one thing on the outbound allow list. A 404
+  control against a neighbouring bogus path was run — one call too late. Run
+  the control FIRST, and never let the reconnaissance call be the destructive
+  one; a bogus sibling path answers "does this route exist" for free.
+- **A guardrail can assert that something does not exist yet.**
+  `zolaMailGuardrail` carried `assert.doesNotMatch(PROVISION, /email_tarik|
+  draft_reply/)` — a not-yet-built marker that reads exactly like a rule. When
+  the feature lands, replace it with the rule it was standing in for. Deleting
+  it silently drops the real constraint; leaving it blocks the build. This is a
+  good pattern and worth repeating, as long as the next person recognises it.
 - **An ElevenLabs system tool goes in `tools`, NOT in `built_in_tools`.** The
   config has a `built_in_tools` map with an `end_call` slot, and writing to it
   does nothing: the API returns **200**, reports success, leaves the value null.
@@ -149,9 +166,13 @@ all lives on Hugging Face.
 
 - **Live with the wake word for a day and count the false fires.** The single
   most useful number nobody has.
-- **Two AgentMail cleanups from debugging:** `moodyco1973@gmail.com` was added
-  to the send allow list, and one "send-gate probe" email went to it. Both
-  trivially reversible, neither harmful.
+- **A draft is sitting in her drafts,** `f5ad5157`, "Re: help" to
+  `moodyco1973@gmail.com`. It is the live proof that `draft_reply` drafts and
+  does not send. Release it or delete it; either is fine.
+- **Three AgentMail cleanups from debugging:** `moodyco1973@gmail.com` was added
+  to the send allow list, and two probe emails went to it — one "send-gate
+  probe" and one "Re: help / probe body". All trivially reversible, none
+  harmful.
 - **Watch tomorrow's morning brief** for the inbox line.
 - **Open an exported .docx in Word** and confirm it is not corrupt. Open since
   four handoffs.
