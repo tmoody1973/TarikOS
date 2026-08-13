@@ -27,6 +27,20 @@ test("finishBrief can store a lede", () => {
   assert.match(body.slice(0, 900), /lede/);
 });
 
+test("a rebuild clears the previous run's lede", () => {
+  // createOrResetBrief's reset branch (briefId present) is the only place
+  // that resets sections for a rebuild. finishBrief deliberately refuses to
+  // overwrite lede on a failed write_lede, so if the reset branch doesn't
+  // clear it, a rebuild whose lede writer fails finishes "ready" wearing the
+  // previous run's lede while carrying brand-new sections.
+  const stripped = strip(WORKFLOWS);
+  const body = stripped.split("export const createOrResetBrief")[1] ?? "";
+  assert.ok(body, "createOrResetBrief must exist");
+  const resetBranch = body.split("if (briefId)")[1]?.split("return briefId")[0] ?? "";
+  assert.ok(resetBranch, "the reset branch must exist");
+  assert.match(resetBranch, /lede\s*:\s*undefined/, "the reset branch must clear lede");
+});
+
 test("only recurring workflows are given the previous brief", () => {
   // research-brief is voice-triggered per topic: its previous run could be
   // about Bandcamp while this one is about Indiegraf, and calling that
@@ -155,6 +169,16 @@ test("get_brief tells her which brief she is holding", () => {
   // persona depends on data.workflow surviving.
   const body = routeCase("get_brief");
   assert.match(body, /workflow:\s*brief\.workflowName/);
+});
+
+test("the runner and the route agree on the brief_id wire name", () => {
+  // Nothing type-checks this: the runner sends a plain JSON body and the
+  // route reads it out of an unstructured `body`. A rename on either side
+  // degrades silently — write_lede just returns "no brief to write a lede
+  // for" and the brief still finishes fine, so nobody would notice for weeks.
+  assert.match(strip(RUNNER), /callTool\(\s*["']write_lede["']\s*,\s*\{\s*brief_id:\s*id\s*\}/);
+  const body = routeCase("write_lede");
+  assert.match(body, /strArg\(\s*body\.brief_id\s*,/);
 });
 
 test("the persona sends her to the lede rather than to the sections", () => {

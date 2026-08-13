@@ -56,11 +56,16 @@ export const createOrResetBrief = internalMutation({
   },
   handler: async (ctx, { briefId, title, workflowName, runStartedAt }) => {
     if (briefId) {
+      // A rebuild is a fresh run: clear lede along with sections, or a run
+      // whose write_lede fails finishes "ready" wearing the previous run's
+      // lede — finishBrief refuses to overwrite it, so this reset is the
+      // only place that ever will. `undefined` here removes the field.
       await ctx.db.patch(briefId, {
         title,
         status: "building",
         runStartedAt,
         sections: [],
+        lede: undefined,
       });
       return briefId;
     }

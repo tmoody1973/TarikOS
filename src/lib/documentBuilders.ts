@@ -68,6 +68,7 @@ function markdown(title: string, body: string, now: number): BuiltDocument {
 
 export type BriefSource = {
   title: string;
+  lede?: string;
   sections: { heading: string; body: string }[];
 };
 
@@ -82,6 +83,7 @@ export function buildDocumentFromBrief(
   // stub: it looks like the save failed.
   const body =
     `# ${brief.title}\n\n_Saved ${isoDate(now)}._\n\n` +
+    (brief.lede ? `${brief.lede}\n\n` : "") +
     (sections || "_This brief had no sections when it was saved._\n");
   return markdown(brief.title, body, now);
 }

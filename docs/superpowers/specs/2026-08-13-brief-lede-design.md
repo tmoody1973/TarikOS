@@ -125,7 +125,14 @@ second place that talks to Anthropic.
   runaway search result from crowding out the other eleven sections.
 - **`case "write_lede"`** — the model call. `system: LEDE_BRIEF + LENS[workflow]`,
   `messages: [{ role: "user", content: ledeInput(...) }]`, `claude-opus-5`,
-  output forced to `{ lede: string }`.
+  plain text out, then `trimLede`.
+
+  An earlier draft of this spec said the output was forced through a
+  `{ lede: string }` schema. It is not, and it must not be: forcing a schema on
+  this API means handing the call a tool definition, and *the writer holds no
+  tools* is the containment rule this whole design rests on. A guardrail test
+  forbids exactly that. The `max_tokens` guard and `trimLede` deliver the
+  property the schema was reached for.
 - **`convex/workflows.ts`** — `briefForLede` query; `finishBrief` accepts `lede`;
   `latestReadyBrief` returns it.
 - **`convex/schema.ts`** — `briefs.lede: v.optional(v.string())`.
@@ -219,6 +226,8 @@ as "open bracket."
 | Failure | Result |
 |---|---|
 | The model call fails or times out | `callTool` returns `{ok: false}`. No lede. Brief finishes |
+| The model is cut off by `max_tokens` | Treated as a failure, not salvaged. A lede truncated at the ceiling is the opening of a paragraph that was going somewhere else |
+| A brief is REBUILT and the writer fails | `createOrResetBrief` clears `lede`, so the old paragraph cannot survive above new sections. This was a real bug found by the whole-branch review: `finishBrief`'s refusal to overwrite with `undefined` — correct on its own — meant a rebuild kept a stale lede describing a brief that no longer existed |
 | No previous brief exists | This run only. Every workflow's first run hits this |
 | A `research-brief` runs | No previous brief by design, see above |
 | Zero sections succeeded | No lede. The brief is already `status: "error"` |
