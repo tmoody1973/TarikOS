@@ -56,9 +56,13 @@ is `POST /v0/inboxes/{inbox}/drafts/{id}/send` and it is confirmed to work.
 **3. Publish.** `docs/lessons/post-linkedin.txt` is 2,881 of 3,000 characters
 and ready to paste. The paper wants a second read first.
 
-**4. Re-run the replay eval.** Two tool descriptions were added to the standing
-prompt after it was reshaped to 72%. `evals/tools.json` was regenerated so the
-harness scores what shipped, but the number has not been taken since.
+**4. ~~Re-run the replay eval.~~ Done, 2026-08-13.** Three runs after the lede's
+description changes: 68.2%, 71.0%, 71.0% against a 72.0% baseline. The spread on
+identical code is 2.8 points, well inside the harness's own ~9% floor, so this is
+unchanged. Worth knowing that the FIRST run alone read as "down 3.7%" — one run
+is not a measurement, and the floor exists precisely to stop you acting on that.
+Command: `evals/.venv/bin/python evals/replay.py --compare before`. The system
+`python3` lacks the `anthropic` module; the venv is the one that works.
 
 ## The wake word, since it is new
 
