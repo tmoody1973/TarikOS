@@ -37,7 +37,10 @@ export type WakeState = "off" | "arming" | "armed" | "error";
  * LiveKit's wake-word trainer, drop `hey_zola.onnx` in public/wake/models, and
  * change this to `{ name: "hey_zola", url: "/wake/models/hey_zola.onnx" }`.
  */
-const KEYWORD: string | { name: string; url: string } = "hey_jarvis";
+const KEYWORD: string | { name: string; url: string } = {
+  name: "hey_zola",
+  url: "/wake/models/hey_zola.onnx",
+};
 
 /** What the button says. Through a parameter, so TypeScript stops narrowing
  * the constant above to whichever branch it happens to hold today. */
@@ -118,12 +121,18 @@ export function useWakeWord(onWake: () => void, suspended: boolean) {
       const oww = await OpenWakeWord.create({
         baseUrl: "/wake/models/",
         wakewordModels: [KEYWORD],
-        // 0.7 rather than openWakeWord's default 0.5. Tarik is a radio host:
-        // his office has voices and music in it most of the day, and every
-        // false fire opens a live microphone. This is a starting point to tune
-        // in the actual room, not a setting to trust — it is the value
-        // ElevenLabs' own wake-word guide starts from too.
-        threshold: 0.7,
+        // 0.07, and the digit is not a typo.
+        //
+        // A THRESHOLD BELONGS TO A MODEL, NOT TO A CODEBASE. This number came
+        // out of hey_zola's own training run, which reported an optimal cut of
+        // 0.07 giving recall 0.9995 and 0.168 false positives per hour. The
+        // previous model wanted 0.7. Carrying that number across would have
+        // produced a detector that armed perfectly and never fired once, which
+        // is the hardest kind of broken to notice.
+        //
+        // Retrain the phrase and this number moves with it. It is a reading,
+        // not a preference. docs/lessons/hey_zola.train.yaml is the run.
+        threshold: 0.07,
         onDetection: () => {
           earcon();
           onWakeRef.current();

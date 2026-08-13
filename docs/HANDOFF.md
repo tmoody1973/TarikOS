@@ -352,12 +352,15 @@ absent feature rather than a button that throws.
 - **openWakeWord, on-device, Apache-2.0 code AND models.** No account, no key,
   no approval. Three ONNX models in `public/wake/models` — melspectrogram,
   speech embedding, phrase classifier — chained in the browser.
-- **`hey_jarvis` by default**, one of the pretrained models, so the whole path
-  works with nothing from anybody. "Hey Zola" is a file: train it, drop
-  `hey_zola.onnx` in `public/wake/models`, change `KEYWORD` in `useWakeWord.ts`.
-- **Threshold 0.7**, not openWakeWord's default 0.5. Tarik is a radio host and
-  his office has voices in it most of the day; every false fire opens a live
-  microphone. A starting point to tune in the real room, not a setting to trust.
+- **She answers to "Hey Zola."** Trained on Hugging Face hardware for under a
+  dollar: 60,000 steps in 9.6 minutes, 161 KB, recall 0.9995, 0.168 false
+  positives per hour. The run is `docs/lessons/hey_zola.train.yaml` (566 bytes,
+  reproduces all 17GB) and the metrics are beside it.
+- **Threshold 0.07, and the digit is not a typo.** A THRESHOLD BELONGS TO A
+  MODEL, NOT TO A CODEBASE. The previous model wanted 0.7; carrying that number
+  across would have armed perfectly and never fired once. A guardrail now reads
+  the trained metrics file and fails if the two disagree, so retraining the
+  phrase cannot silently leave the old cut behind.
 - **The detector is released while a session is live.** ElevenLabs' own guide
   stops its mic stream before `start_session` "to avoid conflicts", and there is
   a second reason it does not give: a detector left running hears Zola through

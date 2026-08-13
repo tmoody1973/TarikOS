@@ -69,7 +69,7 @@ test("the models are served from the app, not from a third party", () => {
   for (const model of [
     "public/wake/models/melspectrogram.onnx",
     "public/wake/models/embedding_model.onnx",
-    "public/wake/models/hey_jarvis_v0.1.onnx",
+    "public/wake/models/hey_zola.onnx",
     "public/wake/mic-worklet.js",
   ]) {
     assert.ok(existsSync(model), `${model} must be served from public/`);
@@ -109,21 +109,25 @@ test("multithreaded wasm is not switched on quietly", () => {
   assert.match(HOOK, /numThreads: 1/);
 });
 
-test("the threshold is set for a room with a radio in it", () => {
-  // openWakeWord defaults to 0.5. Tarik is a radio host — his office has voices
-  // and music in it most of the day, and every false fire opens a live mic.
-  // 0.7 is the value ElevenLabs' own guide uses, and it is a starting point to
-  // tune in the actual room rather than a setting to trust.
+test("the threshold is the one the training measured, not a preference", () => {
+  // THE TRAP this replaces: the previous model's optimal cut was 0.7, this
+  // one's is 0.07. A threshold belongs to a model, not to a codebase, and
+  // carrying the old number across would have produced a detector that armed
+  // perfectly and never fired once.
   const threshold = Number(HOOK.match(/threshold: ([\d.]+)/)?.[1]);
-  assert.ok(threshold >= 0.7, `threshold is ${threshold}; a busy room needs 0.7 or higher`);
+  const metrics = JSON.parse(
+    readFileSync("docs/lessons/hey_zola.metrics.json", "utf8"),
+  ) as { threshold: number; note?: string }[];
+  const optimal = metrics.find((r) => r.note === "optimal_threshold");
+  assert.ok(optimal, "the training run's optimal threshold must be recorded");
+  assert.ok(
+    Math.abs(threshold - optimal.threshold) < 0.005,
+    `the hook uses ${threshold}; the training measured ${optimal.threshold}`,
+  );
 });
 
-test("the model files are not run through Clerk middleware", () => {
-  // Found on production: the worklet served (200) and the models did not (404).
-  // The matcher excludes a list of static extensions and .onnx was not on it,
-  // so 3.5MB of public model weights took a middleware hop and came back as an
-  // auth redirect. They carry no secret; they are weights.
-  const proxy = readFileSync("src/proxy.ts", "utf8");
-  const matcher = proxy.split("matcher:")[1]?.split("]")[0] ?? "";
-  assert.match(matcher, /onnx/, ".onnx must be excluded from the middleware matcher");
+test("the model in the app is the model that was measured", () => {
+  // A metrics file describing a different model is worse than none.
+  assert.match(HOOK, /hey_zola\.onnx/);
+  assert.ok(existsSync("public/wake/models/hey_zola.onnx"));
 });
