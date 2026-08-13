@@ -126,11 +126,29 @@ export const run = internalAction({
     }
 
     const ready = okCount > 0;
+
+    // The lede, written by something that read every section. Only when the
+    // brief is worth opening: a run where every step failed has nothing to
+    // synthesise, and its status is already "error".
+    //
+    // Deliberately not allowed to fail the run. callTool turns any failure into
+    // {ok: false}, so a writer that times out simply leaves the brief without a
+    // lede — the same rule as "a partial brief beats no brief", one step on.
+    let lede: string | undefined;
+    if (ready) {
+      const written = await callTool("write_lede", { brief_id: id }, secret);
+      const value = written.ok
+        ? (written.data as { lede?: string } | undefined)?.lede
+        : undefined;
+      if (value) lede = value;
+    }
+
     await ctx.runMutation(internal.workflows.finishBrief, {
       briefId: id,
       status: ready ? "ready" : "error",
       workflowName: name,
       error: firstError,
+      lede,
     });
 
     // Put the finished brief on his phone. Sections are passed straight from
@@ -147,7 +165,7 @@ export const run = internalAction({
       // must not mark a brief that built fine as a failed run.
       const digest = await callTool(
         "send_brief_digest",
-        { title, sections: built },
+        { title, lede, sections: built },
         secret,
       );
       if (!digest.ok) console.log(`brief digest not sent: ${digest.message}`);

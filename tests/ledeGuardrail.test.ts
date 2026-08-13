@@ -90,3 +90,31 @@ test("a lede cut off at the token ceiling is never spoken as finished", () => {
     "trimLede only cuts long output at a sentence boundary — a short truncation must fail loudly instead",
   );
 });
+
+const RUNNER = read("../convex/workflowRunner.ts");
+
+test("the lede is written after every section, never during", () => {
+  const src = strip(RUNNER);
+  const loop = src.indexOf("for (const step of steps)");
+  const lede = src.indexOf('callTool("write_lede"');
+  assert.ok(loop > 0 && lede > 0, "both steps must exist");
+  assert.ok(lede > loop, "the writer must see the whole brief, not half of it");
+});
+
+test("a failed lede still leaves a finished brief", () => {
+  // The runner's existing rule — a partial brief beats no brief — extends to
+  // a brief with no lede beating no brief.
+  const src = strip(RUNNER);
+  const lede = src.indexOf('callTool("write_lede"');
+  const finish = src.indexOf("finishBrief");
+  assert.ok(finish > lede, "finishBrief must run after, and unconditionally");
+  assert.doesNotMatch(
+    src.slice(lede, finish),
+    /throw |return;/,
+    "nothing between the writer and finishBrief may abandon the run",
+  );
+});
+
+test("the Telegram digest gets the lede too", () => {
+  assert.match(strip(RUNNER), /send_brief_digest[\s\S]{0,200}lede/);
+});
