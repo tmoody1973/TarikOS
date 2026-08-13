@@ -108,6 +108,11 @@ import { LEDE_BRIEF, LENS, ledeInput, trimLede, MAX_LEDE_CHARS } from "@/lib/led
 // proxy.ts exempts /api/tools from Clerk.
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
+// The lede writer's model, hoisted the way consolidate.ts, studioPropose.ts,
+// and zolaDraft.ts already do it — one named constant instead of a literal
+// buried in a request body.
+const MODEL = "claude-opus-5";
+
 // Rows per contact mutation. A full sync is ~4,800 and one mutation cannot
 // carry them; this also bounds each stale-sweep pass.
 const CONTACT_BATCH = 200;
@@ -1825,7 +1830,7 @@ async function runTool(
       let written = "";
       try {
         const response = await new Anthropic().messages.create({
-          model: "claude-opus-5",
+          model: MODEL,
           max_tokens: 400,
           system: `${LEDE_BRIEF}\n\n${lens}`,
           messages: [
@@ -1835,6 +1840,20 @@ async function runTool(
             },
           ],
         });
+
+        // 400 tokens is generous headroom over the 50-80 word target, so this
+        // is rare. But trimLede only cuts at a sentence boundary when the
+        // string is over MAX_LEDE_CHARS — a response truncated by the token
+        // ceiling that happens to land under that length would otherwise pass
+        // through untouched, mid-sentence, and Zola would read it out loud
+        // with no error and nothing on the page to say it was cut off. A lede
+        // stopped at the ceiling is the first half of a paragraph that was
+        // going somewhere else; the runner already treats a missing lede as
+        // fine, so failing here is the same failure philosophy one level down.
+        if (response.stop_reason === "max_tokens") {
+          return { ok: false, message: "The lede writer was cut off mid-thought." };
+        }
+
         written = response.content
           .filter((c): c is Anthropic.TextBlock => c.type === "text")
           .map((c) => c.text)

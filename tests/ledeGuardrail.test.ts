@@ -81,3 +81,12 @@ test("the writer's material goes through the fenced builder", () => {
   assert.match(body, /LEDE_BRIEF/);
   assert.match(body, /trimLede\(/, "raw model output must never be stored");
 });
+
+test("a lede cut off at the token ceiling is never spoken as finished", () => {
+  const body = routeCase("write_lede");
+  assert.match(
+    body,
+    /stop_reason\s*===\s*["']max_tokens["']/,
+    "trimLede only cuts long output at a sentence boundary — a short truncation must fail loudly instead",
+  );
+});
