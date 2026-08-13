@@ -12,7 +12,7 @@ That's the whole lesson. You're not teaching it what the phrase sounds like. You
 
 I assumed training a model meant building something from scratch. It doesn't. Four pieces in a row, and only the last one learns anything. The first three were trained by other people on far more data than I'll ever have. Frozen. Untouched.
 
-That's why the result is about a megabyte in under an hour, instead of a gigabyte over a month.
+That's why the finished model is 161 KB, trained in ten minutes, instead of a gigabyte trained over a month.
 
 3. The error I fought for an hour was protecting me.
 

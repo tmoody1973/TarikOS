@@ -16,7 +16,7 @@ That last part is the whole lesson. You're not teaching it what the phrase sound
 
 I assumed "training a model" meant building something from scratch. It doesn't. The system is four pieces in a row, and only the last one learns anything. The first three, which turn sound into a picture and the picture into a numerical fingerprint, were trained by other people on far more data than I'll ever have. They're frozen. Untouched.
 
-That's why the result is about a megabyte, trained in under an hour, instead of a gigabyte trained over a month. Take something general that someone else paid for, freeze it, train a small specific thing on top.
+That's why the finished model is 161 KB, trained in ten minutes, instead of a gigabyte trained over a month. Take something general that someone else paid for, freeze it, train a small specific thing on top.
 
 **3. The error I spent an hour fighting was protecting me.**
 

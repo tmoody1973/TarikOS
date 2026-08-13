@@ -386,7 +386,10 @@ MODELS is never stated — which matters in a public MIT repo. An assistant that
 stops hearing its owner on a date somebody else picks is not the thing being
 built here.
 
-Still unmeasured: how often it false-fires in a room with a radio on.
+**Verified out loud on production, 12 August:** she answers to "Hey Zola,"
+first try. Still unmeasured: how often it false-fires over a full working day
+with the radio on. That number, not the validation figure, decides whether 0.07
+stays.
 
 ## Open, needs Tarik
 

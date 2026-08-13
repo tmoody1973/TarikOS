@@ -490,7 +490,17 @@ train and it's better at the thing I actually care about, which isn't hearing
 me — it's **not** hearing me. I'm a radio host. My office has voices and music
 in it most of the day, and every false trigger opens a live microphone.
 
-It's running as I write this. It'll take about an hour.
+It ran on a rented GPU rather than my laptop, which had quietly filled up.
+60,000 steps in under ten minutes, for less than a dollar. The result is a
+161 KB file: recall 0.9995, and about one false trigger every six hours.
+
+Then one detail nearly undid it. The trained model's best cut-off is 0.07. The
+model it replaced wanted 0.7. Same app, same code, a number ten times apart,
+and pasting the old one across would have produced a detector that switched on
+perfectly and never once heard me. A threshold belongs to a model, not to a
+codebase.
+
+She answers to her own name now. First try.
 
 ---
 
