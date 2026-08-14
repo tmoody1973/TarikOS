@@ -518,6 +518,27 @@ export const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
   },
   {
     type: "webhook" as const,
+    name: "reply_zero",
+    description:
+      "Find the email threads that have been sitting unanswered for a day or more — where somebody wrote to Tarik and he never replied, or he replied and they went quiet. Use it when he asks what he owes people, what he has missed, who is waiting on him, or what is still open in his inbox. It reads only; it never sends, archives, or files anything.",
+    preToolSpeech: "force" as const,
+    // Two Gmail queries per connected account, joined. Measured at ten
+    // seconds against one account with a hundred messages a side.
+    responseTimeoutSecs: 30,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/reply_zero`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: [],
+        description: "Sitting-thread lookup (no parameters)",
+        properties: {},
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
     name: "web_research",
     description:
       "Fast web search for a question with a readable answer: current events, news, facts, or anything outside your knowledge. Returns sources; summarize them aloud in two or three sentences — the source cards land on his dashboard by themselves. Use this when one round of searching settles it. If it needs visiting several pages, weighing options against each other, or poking around a specific site, use browse instead.",
