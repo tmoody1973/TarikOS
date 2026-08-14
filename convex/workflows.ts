@@ -354,6 +354,11 @@ const MORNING_BRIEF_STEPS: { tool: string; args: Record<string, string> }[] = [
   { tool: "telos_brief", args: {} },
   { tool: "get_calendar", args: { date: "{{today}}" } },
   { tool: "get_emails", args: {} },
+  // What arrived is one question; what he still owes people is another, and
+  // only this one gets worse if nobody asks it. Placed straight after the
+  // inbox so the lede writer reads both together and can say a thread has
+  // been sitting since Tuesday.
+  { tool: "reply_zero", args: {} },
   // Her inbox surfaces to him rather than waiting to be checked. `as: count`
   // because a brief is generated unattended and read aloud: he gets how much
   // arrived, never what a stranger wrote.

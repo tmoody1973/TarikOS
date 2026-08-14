@@ -4,6 +4,17 @@ import {
   pickAccount,
   type Account,
 } from "./google.ts";
+import {
+  buildInboxQuery,
+  type MuteList,
+} from "../../convex/mailFilterLib.ts";
+import {
+  REPLY_ZERO_INBOX_BASE,
+  REPLY_ZERO_MAX_RESULTS,
+  REPLY_ZERO_SENT_QUERY,
+  type MailHeader,
+  type ReplyZeroMessage,
+} from "./replyZero.ts";
 import { sanitizeEmailHtml } from "./mailSanitizer.ts";
 import { extractEmailAddress } from "./emailAddress.ts";
 import { tokenize } from "./briefArchive.ts";
@@ -93,6 +104,78 @@ export async function listMailThreads(
         : (seen.add(`${t.account}:${t.threadId}`), true),
     );
   return { threads, accounts: accounts.map((a) => a.label) };
+}
+
+/**
+ * Both legs of every thread from the past week, for reply_zero.
+ *
+ * TWO queries on purpose. `in:inbox` never returns Tarik's own messages — his
+ * sent mail carries SENT and not INBOX — so an inbox-only view cannot tell a
+ * thread he answered from one he abandoned. Asking `in:sent` as well and
+ * joining on threadId is what makes the answer trustworthy; the reasoning and
+ * the live evidence are in src/lib/replyZero.ts.
+ *
+ * `verbose: false` because none of this needs message bodies: it cut the
+ * response from 1.9 MB to 0.4 MB per call when measured, with threadId,
+ * timestamp, sender and subject all still present.
+ *
+ * Mutes are applied to the inbox leg only. A muted sender has no inbound leg,
+ * and findSittingThreads drops any thread without one, so one filter covers
+ * both directions.
+ */
+export async function fetchReplyZeroMessages(mutes: MuteList): Promise<{
+  inbox: ReplyZeroMessage[];
+  sent: ReplyZeroMessage[];
+  accounts: string[];
+}> {
+  const accounts = await connectedAccounts("gmail");
+  const inboxQuery = buildInboxQuery(mutes, { base: REPLY_ZERO_INBOX_BASE });
+
+  const fetchLeg = async (
+    id: string,
+    label: string,
+    query: string,
+  ): Promise<ReplyZeroMessage[]> => {
+    const data = await execute("GMAIL_FETCH_EMAILS", id, {
+      query,
+      max_results: REPLY_ZERO_MAX_RESULTS,
+      verbose: false,
+    });
+    const messages = ((data.messages ?? []) as RawMsg[]) ?? [];
+    return messages.map((m) => {
+      const payload = (m.payload ?? {}) as { headers?: unknown };
+      const raw = str(m.sender ?? m.from);
+      return {
+        threadId: str(m.threadId) || str(m.thread_id),
+        account: label,
+        // Display name for speech; the raw address is kept for the broadcast
+        // test, which needs to see `no-reply@…` before it is stripped.
+        from: raw.replace(/<.*>/, "").trim(),
+        subject: str(m.subject),
+        date: timestamp(m),
+        headers: Array.isArray(payload.headers)
+          ? (payload.headers as MailHeader[])
+          : undefined,
+        address: raw,
+      };
+    });
+  };
+
+  const perAccount = await Promise.all(
+    accounts.map(async ({ id, label }) => {
+      const [inbox, sent] = await Promise.all([
+        fetchLeg(id, label, inboxQuery),
+        fetchLeg(id, label, REPLY_ZERO_SENT_QUERY),
+      ]);
+      return { inbox, sent };
+    }),
+  );
+
+  return {
+    inbox: perAccount.flatMap((a) => a.inbox),
+    sent: perAccount.flatMap((a) => a.sent),
+    accounts: accounts.map((a) => a.label),
+  };
 }
 
 // ---- Reply matching (MOO-494). Deliberately strict: every meaningful token

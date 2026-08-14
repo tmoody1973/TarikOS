@@ -18,7 +18,16 @@ import {
 } from "@/lib/research";
 import { fetchFeedGroup } from "@/lib/rss";
 import { runConsolidation } from "@/lib/consolidate";
-import { createDraft, resolveReplyTarget } from "@/lib/mail";
+import {
+  createDraft,
+  fetchReplyZeroMessages,
+  resolveReplyTarget,
+} from "@/lib/mail";
+import {
+  findSittingThreads,
+  isBroadcast,
+  speakSitting,
+} from "@/lib/replyZero";
 import { draftEmailBody } from "@/lib/zolaDraft";
 import { discoverFeed } from "@/lib/feedDiscovery";
 import { createBrowserSession, endBrowserSession } from "@/lib/browserSession";
@@ -660,6 +669,38 @@ async function runTool(
             ? "No new primary inbox email in the last day."
             : `${emails.length} recent email(s).`,
         data: { emails },
+      };
+    }
+    // The threads he never answered. Every other mail tool reads or drafts;
+    // this is the only one that triages. Two Gmail queries joined on threadId,
+    // because `in:inbox` alone cannot see a reply he sent from his phone —
+    // the reasoning lives in src/lib/replyZero.ts.
+    //
+    // Read-only, like the rest of them: nothing here archives, labels, or
+    // sends. Noticing a sitting thread and acting on one are separate
+    // decisions, and only the first has been made.
+    case "reply_zero": {
+      const mutes = await convex.query(api.mailFilters.forTools, { secret });
+      const { inbox, sent, accounts } = await fetchReplyZeroMessages(mutes);
+      const threads = findSittingThreads({ inbox, sent, now: Date.now() });
+      await convex.mutation(api.secondBrain.markToolHealthyFromTool, {
+        secret,
+        name: "reply_zero",
+      });
+      return {
+        ok: true,
+        message: speakSitting(threads),
+        data: {
+          threads,
+          accounts,
+          // Reported rather than dropped quietly: if the broadcast filter ever
+          // starts eating real mail, this is the number that shows it.
+          scanned: {
+            inbox: inbox.length,
+            sent: sent.length,
+            broadcasts: inbox.filter(isBroadcast).length,
+          },
+        },
       };
     }
     case "web_research":

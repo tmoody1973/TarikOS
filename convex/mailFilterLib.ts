@@ -61,28 +61,32 @@ function quoted(subject: string): string {
 
 export function buildInboxQuery(
   mutes: MuteList,
-  options?: { detail?: false },
+  options?: { detail?: false; base?: string },
 ): string;
 export function buildInboxQuery(
   mutes: MuteList,
-  options: { detail: true },
+  options: { detail: true; base?: string },
 ): { query: string; dropped: number };
 /**
  * The Gmail query for the inbox, with every mute applied.
  *
  * Truncates rather than risking a rejected query, and reports how many rules
  * were dropped so a rule that does nothing is visible instead of mysterious.
+ *
+ * `base` swaps the window for a caller that needs a different one — reply_zero
+ * looks back seven days, not one. The mute terms are the part worth sharing;
+ * a second copy of them is a second place a muted sender can leak through.
  */
 export function buildInboxQuery(
   mutes: MuteList,
-  options?: { detail?: boolean },
+  options?: { detail?: boolean; base?: string },
 ): string | { query: string; dropped: number } {
   const terms = [
     ...clean(mutes?.senders).map((s) => `-from:${s}`),
     ...clean(mutes?.subjects).map((s) => `-subject:${quoted(s)}`),
   ];
 
-  let query = BASE_INBOX_QUERY;
+  let query = options?.base ?? BASE_INBOX_QUERY;
   let used = 0;
   for (const term of terms) {
     if (query.length + 1 + term.length > MAX_QUERY_CHARS) break;
