@@ -34,6 +34,10 @@ const TOOL_LABELS: Record<string, string> = {
   telos_brief: "Goals",
   habit_review: "Habits",
   journal_digest: "This Week's Journal",
+  // Not "reply zero": the heading is what the lede writer reads, and left as
+  // the tool name it wrote "Reply zero's up to nine threads waiting" into
+  // something he HEARS. A heading in his own words keeps the tool invisible.
+  reply_zero: "Waiting on You",
 };
 
 function labelFor(tool: string): string {

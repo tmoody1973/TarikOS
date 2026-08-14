@@ -258,3 +258,14 @@ test("a day window crosses month and year boundaries", () => {
 test("a single-day window is just that day", () => {
   assert.deepEqual(daysEndingOn("2026-08-08", 1), ["2026-08-08"]);
 });
+
+test("the reply_zero section is headed in his words, not the tool's name", () => {
+  // The lede writer reads section headings, so "reply zero" came back out of
+  // her mouth as "Reply zero's up to nine threads waiting" in a real brief.
+  const [step] = expandSteps([{ tool: "reply_zero", args: {} }], {
+    today: "2026-08-14",
+    topics: [],
+  });
+  assert.equal(step.label, "Waiting on You");
+  assert.doesNotMatch(step.label, /reply/i);
+});
