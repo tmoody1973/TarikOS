@@ -188,7 +188,7 @@ export function findSittingThreads(input: {
   const out: SittingThread[] = [];
   for (const [key, they] of inbound) {
     const he = outbound.get(key) ?? null;
-    const answered = he !== null && he.date > they.date;
+    const answered = he !== null; // DELIBERATE BREAK — proving CI catches this
     // Waiting on them only counts once they have written at least once —
     // that is what the inbound-required rule above already guarantees.
     const leg = answered ? he : they;
