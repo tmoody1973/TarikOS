@@ -260,10 +260,11 @@ every pull request and every push to `main` — proven by deliberately breaking 
 test, watching the check go red, and reverting it. The Node version is pinned so
 your laptop, CI and Vercel can't drift apart. **Score moved 82 → 90, grade D → A.**
 
-Two things surfaced only because PR #1 was the first pull request this repo ever
-had. Vercel preview builds had never worked (fixed — see the companion brief),
-and GitGuardian's check never reports (still open, and worth sorting before
-branch protection is ever switched on).
+Something else surfaced only because PR #1 was the first pull request this repo
+ever had: Vercel preview builds had never worked. That's fixed — see the
+companion brief. Several PR-time checks (GitGuardian secret scanning, CodeRabbit,
+Vercel Agent Review) had also never run before; GitGuardian passes, CodeRabbit is
+rate-limited and isn't really reviewing, and Vercel Agent Review is off.
 
 Branch protection itself was deliberately deferred, with the reasoning written
 down in the brief. It's a solo repo; requiring a pull request for every one-line

@@ -128,25 +128,23 @@ remove the build-time dependency entirely instead of satisfying it.
 
 ---
 
-### Found while doing Phase 1: GitGuardian never reports
+### Found while doing Phase 1: three PR-time tools had never run
 
-PR #1 and PR #2 both surfaced a `GitGuardian Security Checks` entry that sits at
-`pending` and never resolves — still pending 10+ minutes after the other checks
-finished. The GitHub App is installed on the repo but appears not to be
-completing its run.
+PR #1 was the first pull request this repo ever had, so several checks that only
+run on pull requests had simply never fired before. They fire now:
 
-Two reasons this matters more than a stuck spinner:
+- **GitGuardian Security Checks** — scans a PR's commits for leaked secrets.
+  **Passes** (1m54s on PR #2). It takes a couple of minutes, noticeably longer
+  than the other checks.
+- **CodeRabbit** — AI code review. Reports `pass`, but with the note
+  *"Review rate limited"*, so it isn't actually reviewing anything right now.
+  Worth checking whether the plan allows it, or it's a green check that means
+  nothing.
+- **Vercel Agent Review** — reports `skipping`, i.e. not enabled.
 
-1. **It looks like protection that isn't there.** A pending secret-scanning
-   check reads, at a glance, like secret scanning is covered. It isn't. (The
-   audit's own secret findings were verified by hand instead — no `.env` ever
-   committed, no key patterns anywhere in git history.)
-2. **It would deadlock branch protection.** If branch protection is ever turned
-   on with "require all checks to pass," a check that never reports blocks every
-   merge, permanently. Fix or uninstall GitGuardian *before* enabling protection.
-
-**A human should do this:** open the GitGuardian dashboard and either finish
-connecting it or remove the app from the repo. Both are account-level actions.
+None of these blocks anything today. The one to look at is CodeRabbit: a check
+that reports green without doing the work is the same failure mode as a check
+that's permanently red — you stop reading it.
 
 ---
 
