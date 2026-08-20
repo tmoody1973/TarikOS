@@ -113,12 +113,40 @@ This matters now in a way it didn't yesterday: every future PR will show a red
 Vercel check next to the green CI check, and a red check you're supposed to
 ignore is exactly what trains you to ignore the real one.
 
-**The fix (a human should do this — it changes Vercel project settings):** add
-`NEXT_PUBLIC_CONVEX_URL` to the **Preview** environment in Vercel, pointed at a
-dev Convex deployment rather than production, and add `COMPOSIO_API_KEY` too if
-you want preview builds to complete. Alternatively, make the Convex client lazy
-in the affected routes so it isn't constructed at module load — the pattern
-`src/lib/google.ts` already uses, and the more robust fix.
+**FIXED 2026-08-20.** Added two Preview-scoped env vars in Vercel:
+`NEXT_PUBLIC_CONVEX_URL` pointed at the **dev** Convex deployment
+(`necessary-monitor-400`), never production, so a preview build can't reach
+production data; and a placeholder `COMPOSIO_API_KEY`, because the build only
+needs the value to exist and a placeholder means a preview can't spend real
+credits. Production env vars were not touched. Verified on PR #2: the preview
+deploy went Error → Ready.
+
+The more robust fix is still available and still worth doing someday: make the
+Convex client lazy in the affected routes so it isn't constructed at module
+load, the pattern `src/lib/google.ts` already uses and explains. That would
+remove the build-time dependency entirely instead of satisfying it.
+
+---
+
+### Found while doing Phase 1: GitGuardian never reports
+
+PR #1 and PR #2 both surfaced a `GitGuardian Security Checks` entry that sits at
+`pending` and never resolves — still pending 10+ minutes after the other checks
+finished. The GitHub App is installed on the repo but appears not to be
+completing its run.
+
+Two reasons this matters more than a stuck spinner:
+
+1. **It looks like protection that isn't there.** A pending secret-scanning
+   check reads, at a glance, like secret scanning is covered. It isn't. (The
+   audit's own secret findings were verified by hand instead — no `.env` ever
+   committed, no key patterns anywhere in git history.)
+2. **It would deadlock branch protection.** If branch protection is ever turned
+   on with "require all checks to pass," a check that never reports blocks every
+   merge, permanently. Fix or uninstall GitGuardian *before* enabling protection.
+
+**A human should do this:** open the GitGuardian dashboard and either finish
+connecting it or remove the app from the repo. Both are account-level actions.
 
 ---
 
