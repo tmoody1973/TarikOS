@@ -1,0 +1,63 @@
+# The robot proofreader.
+#
+# Every push and every pull request gets the same four checks that used to
+# depend on somebody remembering to run them. A push to `main` deploys straight
+# to production (vercel.json runs `npx convex deploy --cmd 'npm run build'`), so
+# this is the only thing standing between a broken commit and the 7am brief.
+#
+# Step order is deliberate — see `next typegen` below.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned on purpose: package.json declares no `engines` field, and
+      # `npm test` runs `node --test "tests/*.test.ts"` — TypeScript executed
+      # directly, which leans on Node's built-in type stripping. Older Node 22
+      # releases can't do that. 24 is the current LTS and Vercel's default.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # MUST run before tsc. Next generates route/layout types into .next/types
+      # during a build, and a fresh checkout has no .next/ — without this,
+      # `tsc --noEmit` fails on `Cannot find name 'LayoutProps'` in
+      # src/app/layout.tsx. Verified by running it on a clean worktree.
+      - name: Generate Next.js route types
+        run: npx next typegen
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Tests
+        run: npm test
+
+      # Report-only for now: there are 66 pre-existing lint errors. A check
+      # that is red on day one is a check everyone learns to ignore, which is
+      # worse than no check. Flip `continue-on-error` off once the backlog is
+      # cleared.
+      - name: Lint (report-only)
+        run: npm run lint
+        continue-on-error: true
+
+      # Two env vars are needed at build time because they're read at module
+      # scope: NEXT_PUBLIC_CONVEX_URL (ConvexHttpClient in several routes) and
+      # COMPOSIO_API_KEY (src/lib/research.ts:6). These are deliberate
+      # throwaway placeholders — the build never calls out to either service,
+      # it only needs the values to exist. No real secret belongs in this file.
+      - name: Build
+        run: npx next build
+        env:
+          NEXT_PUBLIC_CONVEX_URL: https://placeholder-ci.convex.cloud
+          COMPOSIO_API_KEY: placeholder-ci-not-a-real-key
