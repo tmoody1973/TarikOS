@@ -239,3 +239,135 @@ export const standingContext = query({
       : memoryBlock;
   },
 });
+
+// ------------------------------------------------------------ second brain v1
+//
+// Two verbs for decisions and open loops. Both follow the same rule the older
+// capture verbs follow: they take what the sentence contained and nothing else.
+// If Tarik did not name a person or a date, the record simply does not have
+// one. Asking is the regression.
+
+export const recordDecision = mutation({
+  args: {
+    secret: v.string(),
+    what: v.string(),
+    why: v.string(),
+    supersedes: v.optional(v.id("decisions")),
+    transcriptId: v.optional(v.id("transcripts")),
+  },
+  handler: async (ctx, { secret, what, why, supersedes, transcriptId }) => {
+    checkToolSecret(secret);
+    const id = await ctx.db.insert("decisions", {
+      what,
+      why,
+      decidedAt: Date.now(),
+      supersedes,
+      transcriptId,
+    });
+    await ctx.db.insert("briefingCards", {
+      kind: "note",
+      title: "Decision recorded",
+      body: what,
+    });
+    await markToolHealthy(ctx, "record_decision");
+    return id;
+  },
+});
+
+export const openLoop = mutation({
+  args: {
+    secret: v.string(),
+    text: v.string(),
+    person: v.optional(v.string()),
+    dueAt: v.optional(v.number()),
+    transcriptId: v.optional(v.id("transcripts")),
+  },
+  handler: async (ctx, { secret, text, person, dueAt, transcriptId }) => {
+    checkToolSecret(secret);
+    const id = await ctx.db.insert("openLoops", {
+      text,
+      status: "open",
+      person,
+      dueAt,
+      openedAt: Date.now(),
+      transcriptId,
+    });
+    await markToolHealthy(ctx, "open_loop");
+    return id;
+  },
+});
+
+// Closing is by fuzzy text, because he will not be holding an id in his head.
+// Two candidates is a question, never a guess — the same never-pick-between-
+// two-matches rule the rest of the tool surface follows.
+export const closeLoop = mutation({
+  args: { secret: v.string(), text: v.string() },
+  handler: async (ctx, { secret, text }) => {
+    checkToolSecret(secret);
+    const open = await ctx.db
+      .query("openLoops")
+      .withIndex("by_status", (q) => q.eq("status", "open"))
+      .collect();
+    const matches = matchLoops(open, text);
+    if (matches.length === 0) return { outcome: "none" as const, candidates: [] };
+    if (matches.length > 1) {
+      return {
+        outcome: "ambiguous" as const,
+        candidates: matches.slice(0, 3).map((l) => l.text),
+      };
+    }
+    await ctx.db.patch(matches[0]._id, {
+      status: "closed",
+      closedAt: Date.now(),
+    });
+    await markToolHealthy(ctx, "close_loop");
+    return { outcome: "closed" as const, candidates: [matches[0].text] };
+  },
+});
+
+// Word-overlap match. Deliberately not an embedding call: closing a loop is a
+// three-word utterance against a list that is tens of rows long, and a network
+// hop in the voice path costs more than the precision buys.
+export function matchLoops<T extends { text: string }>(loops: T[], query: string): T[] {
+  const words = (s: string) =>
+    new Set(
+      s
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter((w) => w.length > 2),
+    );
+  const q = words(query);
+  if (q.size === 0) return [];
+  const scored = loops
+    .map((l) => {
+      const t = words(l.text);
+      let hit = 0;
+      for (const w of q) if (t.has(w)) hit++;
+      return { l, score: hit / q.size };
+    })
+    .filter((s) => s.score >= 0.5)
+    .sort((a, b) => b.score - a.score);
+  if (scored.length === 0) return [];
+  // A clear winner is one match; a tie is an ambiguity he gets asked about.
+  const top = scored[0].score;
+  return scored.filter((s) => s.score === top).map((s) => s.l);
+}
+
+export const recentDecisions = query({
+  args: { secret: v.string() },
+  handler: async (ctx, { secret }) => {
+    checkToolSecret(secret);
+    return await ctx.db.query("decisions").withIndex("by_decidedAt").order("desc").take(50);
+  },
+});
+
+export const openLoopsList = query({
+  args: { secret: v.string() },
+  handler: async (ctx, { secret }) => {
+    checkToolSecret(secret);
+    return await ctx.db
+      .query("openLoops")
+      .withIndex("by_status", (q) => q.eq("status", "open"))
+      .collect();
+  },
+});

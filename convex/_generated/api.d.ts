@@ -18,6 +18,7 @@ import type * as documents from "../documents.js";
 import type * as documentsLib from "../documentsLib.js";
 import type * as embeddingsLib from "../embeddingsLib.js";
 import type * as feeds from "../feeds.js";
+import type * as graph from "../graph.js";
 import type * as habits from "../habits.js";
 import type * as habitsCron from "../habitsCron.js";
 import type * as habitsLib from "../habitsLib.js";
@@ -63,6 +64,7 @@ declare const fullApi: ApiFromModules<{
   documentsLib: typeof documentsLib;
   embeddingsLib: typeof embeddingsLib;
   feeds: typeof feeds;
+  graph: typeof graph;
   habits: typeof habits;
   habitsCron: typeof habitsCron;
   habitsLib: typeof habitsLib;

@@ -28,6 +28,17 @@ import {
   isBroadcast,
   speakSitting,
 } from "@/lib/replyZero";
+import { shapeNote } from "@/lib/shapeCheck";
+import { recallMessage } from "@/lib/recallSpeech";
+
+/**
+ * A normal morning's worth of sitting threads.
+ *
+ * Not a cap and not a filter — the number she compares against before she
+ * speaks. Measured from ordinary days; eighteen was the day the question was
+ * wrong.
+ */
+const REPLY_ZERO_NORMAL: [number, number] = [0, 8];
 import { draftEmailBody } from "@/lib/zolaDraft";
 import { discoverFeed } from "@/lib/feedDiscovery";
 import { createBrowserSession, endBrowserSession } from "@/lib/browserSession";
@@ -473,6 +484,68 @@ async function runTool(
       });
       return { ok: true, message: "Stored in memory." };
     }
+    // ------------------------------------------------------ second brain v1
+    //
+    // Both verbs take what the sentence contained and stop. There is no
+    // follow-up question anywhere below, and adding one would undo the reason
+    // these stores exist: capture that costs nothing is capture that keeps
+    // happening.
+    case "record_decision": {
+      const what = strArg(body.what, 400);
+      const why = strArg(body.why, 800);
+      if (!what || !why) {
+        return { ok: false, message: "A decision needs both the choice and the reasoning." };
+      }
+      await convex.mutation(api.secondBrain.recordDecision, {
+        secret,
+        what,
+        why,
+      });
+      // The rationale goes back in the spoken message on purpose. It is the one
+      // permitted round trip in the capture path — a confirmation he can
+      // correct, not a question he has to answer.
+      return {
+        ok: true,
+        message: `Recorded: ${what}. Because ${why}. Read that back to him once and let him correct it.`,
+      };
+    }
+    case "open_loop": {
+      const text = strArg(body.text, 400);
+      if (!text) {
+        return { ok: false, message: "An open loop needs the sentence." };
+      }
+      await convex.mutation(api.secondBrain.openLoop, {
+        secret,
+        text,
+        person: strArg(body.person, 120),
+        dueAt: typeof body.dueAt === "number" ? body.dueAt : undefined,
+      });
+      return { ok: true, message: "Open loop noted." };
+    }
+    case "close_loop": {
+      const text = strArg(body.text, 400);
+      if (!text) {
+        return { ok: false, message: "Which loop should close?" };
+      }
+      const res = await convex.mutation(api.secondBrain.closeLoop, {
+        secret,
+        text,
+      });
+      if (res.outcome === "none") {
+        return { outcome: "no_match", ok: false, message: "No open loop matches that." };
+      }
+      if (res.outcome === "ambiguous") {
+        // Never pick between two matches — the standing rule across the tool
+        // surface. Closing the wrong loop is silent and unrecoverable by voice.
+        return {
+          outcome: "ambiguous",
+          ok: false,
+          message: `More than one matches: ${res.candidates.join("; ")}. Ask which.`,
+          data: { candidates: res.candidates },
+        };
+      }
+      return { ok: true, message: `Closed: ${res.candidates[0]}.` };
+    }
     case "recall": {
       const searchQuery = typeof body.query === "string" ? body.query : "";
       if (!searchQuery) {
@@ -488,13 +561,14 @@ async function runTool(
       // tool has, because it teaches him to stop asking.
       const count =
         results.thoughts.length + results.memories.length + results.studio.length;
+      // The order of the sentences is the rule; it lives in recallMessage so it
+      // can be tested. See src/lib/recallSpeech.ts.
+      const near = results.near ?? [];
       return {
+        ...(count === 0 ? { outcome: "no_match" as const } : {}),
         ok: true,
-        message:
-          count === 0
-            ? "Nothing in the second brain matches that."
-            : `Found ${count} matching item(s).`,
-        data: results,
+        message: recallMessage(count, near),
+        data: { ...results, near },
       };
     }
     case "consolidate_memories": {
@@ -687,9 +761,18 @@ async function runTool(
         secret,
         name: "reply_zero",
       });
+      // Suspicion pass before she speaks. Three to five sitting threads is a
+      // normal morning; eighteen was the bug, and eighteen was visibly odd
+      // before anyone knew why. See src/lib/shapeCheck.ts.
+      const oddity = shapeNote(threads, {
+        normal: REPLY_ZERO_NORMAL,
+        sourceOf: (t) => t.who,
+      });
       return {
         ok: true,
-        message: speakSitting(threads),
+        message: oddity
+          ? `${speakSitting(threads)} Shape check: ${oddity} — mention that, do not explain it away.`
+          : speakSitting(threads),
         data: {
           threads,
           accounts,

@@ -373,6 +373,18 @@ export const backfillEmbeddings = internalAction({
 
 const MIN_SCORE = 0.4; // ponytail: single similarity floor; tune if noisy
 
+// Below the floor but not nothing.
+//
+// Embeddings never return empty: asked a question they cannot answer, they hand
+// back the nearest row anyway, and noise delivered with a citation is worse
+// than silence because it teaches him to stop trusting the answer. So the floor
+// stays, the no comes first, and anything in this band travels separately as a
+// NEAR MISS she may offer afterwards, labelled as one.
+const NEAR_SCORE = 0.28;
+
+/** How many near misses are worth speaking. More than two is a list, not a hint. */
+const NEAR_LIMIT = 2;
+
 export const getMemoriesByIds = internalQuery({
   args: { ids: v.array(v.id("memories")) },
   handler: async (ctx, { ids }): Promise<Doc<"memories">[]> => {
@@ -426,6 +438,7 @@ async function vectorHits(
   telosDocs: Doc<"telosItems">[];
   journalDocs: Doc<"journalEntries">[];
   studioDocs: Doc<"studioDocs">[];
+  nearDocs: { content: string }[];
 } | null> {
   const apiKey = process.env.VOYAGE_API_KEY;
   if (!apiKey) return null;
@@ -454,7 +467,23 @@ async function vectorHits(
       ids: studioHits.filter((h) => h._score >= MIN_SCORE).map((h) => h._id),
     }),
   ]);
-  return { memDocs, thoughtDocs, telosDocs, journalDocs, studioDocs };
+  // The near-miss band, fetched only from the two stores whose rows are short
+  // enough to say out loud. A near miss is a hint, not a result.
+  const nearIds = (hits: { _id: string; _score: number }[]) =>
+    hits.filter((h) => h._score < MIN_SCORE && h._score >= NEAR_SCORE).map((h) => h._id);
+  const [nearMem, nearThought] = await Promise.all([
+    ctx.runQuery(internal.memoryOps.getMemoriesByIds, {
+      ids: nearIds(memHits) as Id<"memories">[],
+    }),
+    ctx.runQuery(internal.memoryOps.getThoughtsByIds, {
+      ids: nearIds(thoughtHits) as Id<"thoughts">[],
+    }),
+  ]);
+  const nearDocs = [
+    ...nearMem.map((m) => ({ content: m.content })),
+    ...nearThought.map((t) => ({ content: t.cleaned })),
+  ].slice(0, NEAR_LIMIT);
+  return { memDocs, thoughtDocs, telosDocs, journalDocs, studioDocs, nearDocs };
 }
 
 function dedupeBy<T>(items: T[], key: (item: T) => string): T[] {
@@ -476,13 +505,14 @@ export const hybridRecall = action({
     thoughts: { content: string; tags: string[] }[];
     studio: { id: string; title: string; excerpt: string }[];
     semantic: boolean;
+    near: string[];
   }> => {
     checkToolSecret(secret);
     const [text, vec] = await Promise.all([
       ctx.runQuery(api.secondBrain.recall, { secret, searchQuery }),
       vectorHits(ctx, searchQuery),
     ]);
-    if (!vec) return { ...text, semantic: false };
+    if (!vec) return { ...text, semantic: false, near: [] };
     return {
       memories: dedupeBy(
         [
@@ -521,6 +551,7 @@ export const hybridRecall = action({
         (s) => s.id,
       ).slice(0, 6),
       semantic: true,
+      near: vec.nearDocs.map((d) => d.content),
     };
   },
 });
