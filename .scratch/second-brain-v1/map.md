@@ -97,27 +97,34 @@ runs, because the noise band is ~2.8 points.
   Hard guard: it must never nag. No orphan counts, no connectedness score, no unlinked-
   mentions prompt — that is filing in a costume, and filing is what kills these systems.
   Voice is still the front door.
+- [08 — The signal that says this is alive](issues/08-the-signal-that-says-it-is-alive.md)
+  — measure the **share of recalls that return something**, not captures; capture count is
+  the collector's fallacy and would rise while the system died. Ticket 06 supplies the
+  signal free (answered vs "nothing on that"), and Phoenix already traces it, so there is
+  nothing to build. Secondary: recalls per week trending. Tiebreaker: switch it off for a
+  week at six weeks and see if he notices. Structural rather than bureaucratic, because
+  every other decision here removed a way for the system to ask for attention — so nothing
+  else would notice it had died.
 
 ## Not yet specified
 
-- What the dashboard becomes once voice is the front door. Now / Recall / Review / Map /
-  Areas are five surfaces in the PRD; if voice is the front door, most are inspection.
-  Can't sharpen until the graph's v1 status is decided.
-- How this meets Plane — mostly cleared by tickets 01 and 02: the brain points at Plane
-  rows rather than copying them, and Plane's own task-to-project link is a derived edge.
-  What remains dim is the read path — whether recall queries Plane live on every question
-  or works from a periodically refreshed local view, which is a latency and staleness
-  tradeoff nothing has forced yet.
-- Whether Studio documents participate as nodes, and what that buys.
-- Migration of the existing `memories`, `thoughts` and `briefs` rows — shape depends on
-  which node types survive.
-- Sensitive-domain policy (health, finances). The PRD asserts scope and access policy but
-  nothing downstream depends on it yet.
+<!-- see "Fog of war": in-scope fog you can't ticket yet; graduates as the frontier advances -->
 
-- The similarity floor for "I have nothing" is a real number that must be chosen against
-  real queries. Ticket 06 settled that a floor must exist and what she says below it; the
-  value itself is tuning, and belongs to implementation rather than this map.
+Most of the original fog has graduated or cleared. What remains dim:
+
+- Whether Studio documents are worth pointing at as nodes. Ticket 01's rule already says how
+  they *would* work (a pointer inheriting its kind); what is unclear is whether any answer
+  gets better for it.
 
 ## Out of scope
 
 <!-- ruled beyond the destination -->
+
+- **Sensitive-domain policy** (health, finances — PRD §10.2). v1 imports nothing external
+  and shares nothing, so no decision downstream depends on it. It returns as a fresh effort
+  the day an import or a share is proposed, not as a resumption of this one.
+- **The Plane read path** — whether recall queries Plane live on every question or works
+  from a periodically refreshed local view. A latency and staleness tradeoff, measurable
+  once something is running; implementation, not a decision the route waits on.
+- **The similarity floor's value.** Ticket 06 settled that a floor must exist and what she
+  says below it. The number is tuning against real queries and cannot be chosen on paper.
