@@ -59,7 +59,7 @@ test("stored memories and journal entries on /brain wrap", () => {
 test("graph node detail wraps too", () => {
   const graph = read("../src/components/BrainGraph.tsx");
   assert.match(
-    context(graph, "{chosen.label}"),
+    context(graph, "{node.label}"),
     /\[overflow-wrap:anywhere\]/,
     "the node inspector renders a stored label and must wrap",
   );
