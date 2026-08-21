@@ -83,6 +83,13 @@ runs, because the noise band is ~2.8 points.
   Existing stops unchanged — no permanent deletion, no *silent* priority or identity change.
   Superseding passes. v1 has nothing to approve; if inference ever arrives, the brief raises
   one item and never reads a list.
+- [06 — What Zola says when the answer is weak](issues/06-what-zola-says-when-the-answer-is-weak.md)
+  — claim strength matches record strength. Stale: state it, date it, ask once. Conflict:
+  name both, say which is newer, never pick silently. **Nothing: say so first.** Embeddings
+  never return empty, so recall needs a similarity floor or she will cite the nearest row as
+  an answer — noise with a citation, which is worse than silence. Near-misses come after the
+  "no", labelled as near-misses. And when she does know, no hedge at all: hedges only carry
+  information while they stay rare.
 
 ## Not yet specified
 
@@ -99,6 +106,10 @@ runs, because the noise band is ~2.8 points.
   which node types survive.
 - Sensitive-domain policy (health, finances). The PRD asserts scope and access policy but
   nothing downstream depends on it yet.
+
+- The similarity floor for "I have nothing" is a real number that must be chosen against
+  real queries. Ticket 06 settled that a floor must exist and what she says below it; the
+  value itself is tuning, and belongs to implementation rather than this map.
 
 ## Out of scope
 
