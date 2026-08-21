@@ -13,7 +13,18 @@ for (const line of readFileSync(".env.local", "utf8").split("\n")) {
   if (m) env[m[1]] = m[2];
 }
 
-const ZOLA_VOICE_ID = "lcMyyd2HUfFzxdCaC4Ta";
+// "Zola — South African": a DESIGNED voice, generated from a prompt describing
+// educated urban South African English with the cadence of a first-language
+// Nguni speaker. Two reasons it replaced Lucy.
+//
+// The name. Zola is Nguni. An assistant called Zola who sounded like a young
+// American was a seam nobody had noticed until Tarik did.
+//
+// The model. ElevenLabs' own guidance for v3 is to use an instant clone or a
+// designed voice; Lucy is a Professional Voice Clone, which was always the
+// off-label choice even though she sounded fine. This moves onto the
+// supported path rather than away from it.
+const ZOLA_VOICE_ID = "0OpYRB9XFILqAP5R0BAl";
 const TOOL_BASE_URL = env.TOOL_BASE_URL;
 if (!TOOL_BASE_URL) {
   throw new Error(
