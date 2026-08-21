@@ -2,6 +2,9 @@
 
 Label: `wayfinder:map`
 
+> **Status: the way is clear.** Eleven tickets, all resolved; the fog is empty. Nothing
+> remains to decide before someone builds this. See "Decisions so far" for the route walked.
+
 ## Destination
 
 A locked v1 scope for the TarikOS whole-life second brain: **the smallest version that
@@ -120,16 +123,25 @@ runs, because the noise band is ~2.8 points.
   bar neither a filesystem rebuild nor a query log reaches, since last night's trail would
   have shown eighteen correct steps. Mechanism: one general shape check plus per-tool rules;
   explicitly not a model call in the voice path.
+- [10 — Does anything get backfilled](issues/10-does-anything-get-backfilled.md) — **no, the
+  stores start cold.** The question dissolved rather than trading off: he asks about recent
+  decisions, so the store fills at the rate he needs it and an empty start was never the
+  problem it looked like. Sidesteps the harder argument about whether history deserves an
+  exception to the no-inference rule. Noted while checking: consolidation has read every
+  transcript since it shipped but only ever extracted memories and telos updates, so the
+  decisions in them are genuinely unmined if the premise ever changes.
 
 ## Not yet specified
 
 <!-- see "Fog of war": in-scope fog you can't ticket yet; graduates as the frontier advances -->
 
-Most of the original fog has graduated or cleared. What remains dim:
+**The fog is clear.** Every patch either graduated into a ticket, was answered by one, or
+was ruled out of scope.
 
-- Whether Studio documents are worth pointing at as nodes. Ticket 01's rule already says how
-  they *would* work (a pointer inheriting its kind); what is unclear is whether any answer
-  gets better for it.
+The one remaining unknown — whether Studio documents are worth pointing at as nodes — is not
+fog. Ticket 01 already settled *how* it would work (a pointer inheriting its kind); what is
+unknown is whether any answer gets better for it, and that cannot be reasoned out on paper.
+It is a question for after something is running, so it sits in Out of scope for v1.
 
 ## Out of scope
 
@@ -141,5 +153,7 @@ Most of the original fog has graduated or cleared. What remains dim:
 - **The Plane read path** — whether recall queries Plane live on every question or works
   from a periodically refreshed local view. A latency and staleness tradeoff, measurable
   once something is running; implementation, not a decision the route waits on.
+- **Studio documents as nodes** for v1. How it would work is settled; whether it is worth
+  it needs a running system to judge. Revisit once recall is answering real questions.
 - **The similarity floor's value.** Ticket 06 settled that a floor must exist and what she
   says below it. The number is tuning against real queries and cannot be chosen on paper.
