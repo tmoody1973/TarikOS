@@ -112,6 +112,14 @@ runs, because the noise band is ~2.8 points.
   graph's node inspector is the detail view, so nothing else is needed. `navigate_ui`
   already exists, so she can answer and put the thing on screen in the same breath. Build
   cost: one page plus one new navigate target.
+- [11 — She checks her own answer before speaking it](issues/11-she-checks-her-own-answer.md)
+  — surfaced from the OpenViking read, not the PRD. She shape-checks her own answer before
+  speaking: **fix what she knows how to fix and mention it**, name the doubt and stop when
+  she cannot. Cheap because bad answers are *strangely shaped* before they are explicably
+  wrong — eighteen results where five is normal is arithmetic, not intelligence. Clears a
+  bar neither a filesystem rebuild nor a query log reaches, since last night's trail would
+  have shown eighteen correct steps. Mechanism: one general shape check plus per-tool rules;
+  explicitly not a model call in the voice path.
 
 ## Not yet specified
 
