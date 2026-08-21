@@ -335,10 +335,26 @@ def predict(client, persona: str, tools: list[dict], row: dict) -> str:
     delta that clears it. The band comes from how many rows flip, not from the
     range of the aggregate — see instability().
     """
+    # The persona and all fifty tool definitions are BYTE-IDENTICAL for every
+    # one of the 107 utterances in a run — about 8,800 tokens resent 107 times,
+    # roughly 937k input tokens per run, and six runs in one evening is what
+    # exhausted the account's usage limit on 2026-08-20.
+    #
+    # Caching is a prefix match and the render order is tools -> system ->
+    # messages, so one breakpoint at the end of `system` covers the tools too.
+    # The 1h TTL matters more than it looks: --repeat runs the suite three
+    # times back to back, and the default five-minute window would expire
+    # between them and re-pay for the whole prefix each time.
     message = client.messages.create(
         model=MODEL,
         max_tokens=MAX_TOKENS,
-        system=persona,
+        system=[
+            {
+                "type": "text",
+                "text": persona,
+                "cache_control": {"type": "ephemeral", "ttl": "1h"},
+            }
+        ],
         tools=tools,
         messages=conversation(row),
     )
@@ -583,6 +599,21 @@ def selftest() -> None:
     assert converted["utterance"] == "what did I say about the grant"
     assert matches(converted, "web_research")
     assert example_to_row({"id": "ex2"})["expected_tool"] == ""
+
+    # The prefix cache is worth ~89% of a run's input tokens, and nothing else
+    # here would notice if the breakpoint went missing. Capture what predict()
+    # actually sends and assert on it.
+    sent = {}
+
+    def _capture(**kwargs):
+        sent.update(kwargs)
+        return _FakeMessage("recall")
+
+    predict(_FakeClient(_capture), "PERSONA TEXT", [], {"utterance": "hi"})
+    assert isinstance(sent["system"], list), "system must be blocks, not a bare string, or cache_control has nowhere to live"
+    assert sent["system"][0]["text"] == "PERSONA TEXT"
+    cc = sent["system"][0].get("cache_control")
+    assert cc == {"type": "ephemeral", "ttl": "1h"}, f"prefix cache breakpoint missing or changed: {cc}"
 
     # `reviewed` must come from Phoenix, never be assumed. This is the honest-
     # metadata guarantee: an unreviewed row has to keep saying so.
