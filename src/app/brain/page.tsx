@@ -6,6 +6,7 @@ import { Authenticated, AuthLoading } from "convex/react";
 import { Zone } from "@/components/hud/Zone";
 import { BrainStream } from "@/components/BrainStream";
 import { BrainGraph } from "@/components/BrainGraph";
+import { BrainFocus } from "@/components/BrainFocus";
 
 /**
  * The second brain, as a screen.
@@ -38,14 +39,15 @@ export default function BrainPage() {
   );
 }
 
-const VIEWS = ["stream", "graph"] as const;
+const VIEWS = ["focus", "stream", "graph"] as const;
 type View = (typeof VIEWS)[number];
 
 function BrainInner() {
   // navigate_ui: /brain?view=graph[&focus=<label fragment>]
   const params = useSearchParams();
+  const requested = params.get("view");
   const [view, setView] = useState<View>(
-    params.get("view") === "graph" ? "graph" : "stream",
+    (VIEWS as readonly string[]).includes(requested ?? "") ? (requested as View) : "focus",
   );
   const [search, setSearch] = useState("");
   const focusHint = params.get("focus") ?? undefined;
@@ -82,6 +84,8 @@ function BrainInner() {
 
         {view === "graph" ? (
           <BrainGraph focusHint={focusHint} />
+        ) : view === "focus" ? (
+          <BrainFocus />
         ) : (
           <BrainStream search={search} />
         )}
