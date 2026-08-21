@@ -2,7 +2,7 @@
 
 Type: grilling
 Status: open
-Blocked by: 04
+Blocked by: —
 
 ## Question
 
@@ -39,3 +39,14 @@ What remains, and what this ticket is now about:
    inference will need the day it arrives.
 
 This ticket is now blocked on 04 alone; 02 is resolved.
+
+
+## Narrowed again by ticket 04 (2026-08-21)
+
+04 decided stale records are confirmed *when used*, not surfaced on a timer — so there is no
+stale queue either. Both volume sources are now gone, and this ticket is only its second
+half: **which approvals may happen by voice at all.**
+
+That still matters. It governs what the morning brief can *offer* rather than merely
+mention, and it is the rule inference will need on the day it is switched on. Retitle when
+resolved; "budget" no longer describes it.

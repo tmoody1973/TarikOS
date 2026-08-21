@@ -63,6 +63,12 @@ runs, because the noise band is ~2.8 points.
   in v1, because it is the only source that manufactures review work — so the review queue
   starts empty. Provenance governs speech: derived and stated may be spoken as fact,
   inferred may only be asked.
+- [04 — What happens to a record nobody touches](issues/04-what-happens-to-untouched-records.md)
+  — two kinds of old, handled oppositely. Cold (still true, rarely needed) sinks silently in
+  recall ranking with no status change and no queue. Stale (truth in question) is confirmed
+  *when used*, never on a timer — she hedges and asks in the moment. Shelf life comes from
+  the existing `memories.type` field: `fact` never expires, `project` rots fastest.
+  "Touched" means cited by Zola. Nothing is ever deleted automatically.
 
 ## Not yet specified
 
