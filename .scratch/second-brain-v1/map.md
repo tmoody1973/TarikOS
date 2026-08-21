@@ -69,6 +69,13 @@ runs, because the noise band is ~2.8 points.
   *when used*, never on a timer — she hedges and asks in the moment. Shelf life comes from
   the existing `memories.type` field: `fact` never expires, `project` rots fastest.
   "Touched" means cited by Zola. Nothing is ever deleted automatically.
+- [03 — What capture asks for](issues/03-what-capture-asks-for.md) — nothing, which is
+  already how `remember` and `capture_thought` behave; the job is not regressing it. The two
+  new verbs do not ask either: an open loop is just the sentence, and a decision's rationale
+  is written from what he just said and read back once for a yes. Governing rule: never ask
+  for what the conversation already contains. Guessing is safe because embeddings make
+  misfiled records findable anyway, and cheap mistakes are what buy zero friction. Undo
+  rather than approval.
 
 ## Not yet specified
 
