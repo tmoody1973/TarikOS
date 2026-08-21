@@ -105,6 +105,13 @@ runs, because the noise band is ~2.8 points.
   week at six weeks and see if he notices. Structural rather than bureaucratic, because
   every other decision here removed a way for the system to ask for attention — so nothing
   else would notice it had died.
+- [09 — Does v1 have a screen other than the graph](issues/09-does-v1-have-a-screen.md) —
+  **no. One new screen total: the graph**, inside the existing `brain` route. Areas became a
+  tag, Review has nothing to review, Recall is voice, and **Now already exists as the
+  `briefs` page** — building it would be a worse copy of a thing he already uses daily. The
+  graph's node inspector is the detail view, so nothing else is needed. `navigate_ui`
+  already exists, so she can answer and put the thing on screen in the same breath. Build
+  cost: one page plus one new navigate target.
 
 ## Not yet specified
 
