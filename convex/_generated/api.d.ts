@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as brainStream from "../brainStream.js";
 import type * as browserSessions from "../browserSessions.js";
 import type * as contacts from "../contacts.js";
 import type * as contactsCron from "../contactsCron.js";
@@ -54,6 +55,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  brainStream: typeof brainStream;
   browserSessions: typeof browserSessions;
   contacts: typeof contacts;
   contactsCron: typeof contactsCron;

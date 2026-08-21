@@ -143,3 +143,45 @@ export function layout(
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
+/**
+ * Where the simulation STARTS, derived from the node id.
+ *
+ * A force layout's one real cost is that it settles somewhere slightly
+ * different every time you open it, and then the shape never becomes familiar —
+ * which is the single thing a graph is actually good at. Seeding the start from
+ * a hash of the id removes that cost without removing the physics: same graph,
+ * same settle, still alive under your hand.
+ *
+ * The hash is over the ID, never the array index. Convex returns rows
+ * newest-first, so one new memory reshuffles the array — an index-based seed
+ * would rearrange the whole map every time he captured a thought.
+ */
+export function seedPositions(
+  nodes: readonly GraphNode[],
+  size: number,
+): Record<string, Pos> {
+  const out: Record<string, Pos> = {};
+  for (const n of nodes) {
+    const h = hash(n.id);
+    // Two independent draws off one hash: an angle and a radius. Sqrt on the
+    // radius keeps the disc evenly filled instead of clumped at the centre.
+    const angle = ((h % 10000) / 10000) * TAU;
+    const radius = Math.sqrt(((h >>> 13) % 10000) / 10000) * 0.42 * size;
+    out[n.id] = {
+      x: size / 2 + radius * Math.cos(angle),
+      y: size / 2 + radius * Math.sin(angle),
+    };
+  }
+  return out;
+}
+
+/** FNV-1a. Small, fast, no dependency, and stable across runs. */
+function hash(s: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h;
+}
