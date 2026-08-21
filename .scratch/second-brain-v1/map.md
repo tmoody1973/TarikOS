@@ -90,6 +90,13 @@ runs, because the noise band is ~2.8 points.
   an answer — noise with a citation, which is worse than silence. Near-misses come after the
   "no", labelled as near-misses. And when she does know, no hedge at all: hedges only carry
   information while they stay rare.
+- [07 — Is the Map in v1](issues/07-is-the-map-in-v1.md) — **yes**, Tarik's call, and ticket
+  02 reversed the lean this was written with: edges are derived, so the graph is populated
+  on day one instead of sparse for months. Two features, not one — a *local* graph (one or
+  two hops, the actual tool) and a *whole* graph (a view, honestly budgeted as decoration).
+  Hard guard: it must never nag. No orphan counts, no connectedness score, no unlinked-
+  mentions prompt — that is filing in a costume, and filing is what kills these systems.
+  Voice is still the front door.
 
 ## Not yet specified
 
