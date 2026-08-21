@@ -300,6 +300,7 @@ export const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
     description:
       "Save a NEW person to Tarik's Google contacts. ALWAYS read the name and the number or email back to him and get an explicit yes BEFORE calling this — a wrong number saved under a right name looks correct and will be dialled, and nothing later corrects it. Needs a name plus at least a number or an email.",
     responseTimeoutSecs: 20,
+    preToolSpeech: "force" as const,
     toolCallSound: "typing" as const,
     toolCallSoundBehavior: "always" as const,
     apiSchema: {
@@ -349,6 +350,7 @@ export const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
     description:
       "Change a contact Tarik already has — their number, email, name or workplace. ALWAYS look them up first, read back exactly what is changing and what it replaces, and get an explicit yes BEFORE calling this: a new number REPLACES every number that contact had, and nothing undoes it. Send only the fields he is actually changing.",
     responseTimeoutSecs: 20,
+    preToolSpeech: "force" as const,
     toolCallSound: "typing" as const,
     toolCallSoundBehavior: "always" as const,
     apiSchema: {
@@ -375,6 +377,7 @@ export const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
     description:
       "Delete someone from Tarik's Google contacts for good. Read the full name back and get an explicit yes BEFORE calling this — nothing undoes it and no sync brings them back. If the name matches more than one person, ask which he means rather than deleting.",
     responseTimeoutSecs: 20,
+    preToolSpeech: "force" as const,
     toolCallSound: "typing" as const,
     toolCallSoundBehavior: "always" as const,
     apiSchema: {
@@ -984,6 +987,7 @@ export const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
     description:
       "Call Tarik's phone. Use only when something genuinely needs his voice and a message would not do — a browse session needing takeover, or a failure he must know about now. There is no way to call anyone else.",
     responseTimeoutSecs: 20,
+    preToolSpeech: "force" as const,
     toolCallSound: "typing" as const,
     toolCallSoundBehavior: "always" as const,
     apiSchema: {
@@ -1194,6 +1198,7 @@ export const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
     description:
       "Suggest a rewrite of ONE passage in a Studio document. Tarik has no cursor on a phone call, so identify the passage by QUOTING a few of its words — pass them as quote. The suggestion is written into the document as a proposal he can take or leave; it does NOT change the document, and you cannot apply it. If the quote matches two passages, the tool returns both — read them out and ask which. If it matches none, say so. The proposal appears on his screen while you are still talking, so tell him it is waiting there and move on.",
     responseTimeoutSecs: 60,
+    preToolSpeech: "force" as const,
     toolCallSound: "typing" as const,
     toolCallSoundBehavior: "always" as const,
     apiSchema: {
