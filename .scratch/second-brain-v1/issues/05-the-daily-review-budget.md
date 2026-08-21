@@ -2,7 +2,7 @@
 
 Type: grilling
 Status: open
-Blocked by: 02, 04
+Blocked by: 04
 
 ## Question
 
@@ -21,3 +21,21 @@ to the overflow — does it wait, merge, or expire unreviewed?
 deletes permanently and never silently changes priority. But approving an inferred edge is
 lower-stakes than that. If nothing can be approved by voice, the brief can only *mention*
 the queue, and the queue still needs a screen — which reopens the thing we just closed.
+
+
+## Narrowed by ticket 02 (2026-08-21)
+
+The volume half of this ticket is largely answered: with no inference in v1, nothing
+generates proposals, so **the review queue starts empty**. The cap question is moot until
+inference is turned on.
+
+What remains, and what this ticket is now about:
+
+1. **Stale items.** If ticket 04 decides that untouched records surface for confirmation
+   rather than sinking quietly, that is a queue — and it is the only one v1 has. Its volume
+   is set by the decay policy, not by inference.
+2. **Authority.** Which approvals may happen by voice at all. Still live, because it
+   governs what the brief can offer rather than merely mention, and because it is the rule
+   inference will need the day it arrives.
+
+This ticket is now blocked on 04 alone; 02 is resolved.

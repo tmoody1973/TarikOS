@@ -56,15 +56,24 @@ runs, because the noise band is ~2.8 points.
   the canonical row, so capture asks nothing. `commitment` merges into `open_loop`, `area`
   drops to a tag, `source` drops to an attribute. Nodes point and never copy, but cache the
   title so she can speak without a fetch.
+- [02 — Who writes the edges](issues/02-who-writes-the-edges.md) — most are derived from
+  columns that already exist (`habits.telosItemId`, `memories.transcriptId`,
+  `documents.sourceType`, Plane, Calendar, `reply_zero`), so the graph is populated on day
+  one at zero cost. Dependency (`blocks`) is the one edge a human must state. No inference
+  in v1, because it is the only source that manufactures review work — so the review queue
+  starts empty. Provenance governs speech: derived and stated may be spoken as fact,
+  inferred may only be asked.
 
 ## Not yet specified
 
 - What the dashboard becomes once voice is the front door. Now / Recall / Review / Map /
   Areas are five surfaces in the PRD; if voice is the front door, most are inspection.
   Can't sharpen until the graph's v1 status is decided.
-- How this meets Plane. Tasks and projects already live there with their own hierarchy;
-  whether brain edges duplicate, reference, or ignore that structure is unclear until the
-  edge question resolves.
+- How this meets Plane — mostly cleared by tickets 01 and 02: the brain points at Plane
+  rows rather than copying them, and Plane's own task-to-project link is a derived edge.
+  What remains dim is the read path — whether recall queries Plane live on every question
+  or works from a periodically refreshed local view, which is a latency and staleness
+  tradeoff nothing has forced yet.
 - Whether Studio documents participate as nodes, and what that buys.
 - Migration of the existing `memories`, `thoughts` and `briefs` rows — shape depends on
   which node types survive.
