@@ -511,4 +511,70 @@ export default defineSchema({
     .index("by_message", ["messageId"])
     .index("by_sender", ["from"])
     .index("by_received", ["receivedAt"]),
+
+  // ---------------------------------------------------------------- second brain v1
+  //
+  // Two stores, and only two. Everything else the second brain shows is a
+  // POINTER at a row that already exists somewhere in this file — a memory, a
+  // habit, a document, a telos item — inheriting its kind from what it points
+  // at. Nobody picks a type at capture time, which is why capture can ask
+  // nothing. Decided 2026-08-21; the reasoning is in
+  // docs/decisions/2026-08-21-second-brain-that-survives.md.
+
+  // What was chosen, and why.
+  //
+  // The one genuine gap in the system: nothing here stores a decision. A memory
+  // holds what is true, a telos item holds what he is aiming at, a thought
+  // holds what occurred to him. None of them hold "we went with X, because Y,
+  // and it replaced Z" — which is the shape of the question he actually asks.
+  //
+  // `supersedes` is the load-bearing field. Without it this is a log; with it,
+  // asking "what did we decide about X" can answer with the CURRENT decision
+  // and say what it overruled, which is the difference between a record and an
+  // archive.
+  decisions: defineTable({
+    what: v.string(),
+    // Written from what he just said, then read back once for a yes. Never
+    // solicited with a question — see the capture rule in the decision doc.
+    why: v.string(),
+    decidedAt: v.number(),
+    supersedes: v.optional(v.id("decisions")),
+    // Provenance. Derived facts may be spoken as fact only because the
+    // conversation they came from can be pointed at.
+    transcriptId: v.optional(v.id("transcripts")),
+    embedding: v.optional(v.array(v.float64())),
+  })
+    .index("by_decidedAt", ["decidedAt"])
+    .searchIndex("search_what", { searchField: "what" })
+    .vectorIndex("by_embedding", {
+      vectorField: "embedding",
+      dimensions: 1024,
+    }),
+
+  // Something unresolved, with no date and no email.
+  //
+  // The hole between `reminders` (which needs a dueAt) and reply_zero (which
+  // only ever sees mail). Most of what is actually hanging over him is neither:
+  // a thing he said he would do, with nobody chasing it and no calendar entry.
+  //
+  // `person` and `dueAt` are optional and are NEVER prompted for. If the
+  // sentence he said contains them, they are filled in; if not, the loop is
+  // still worth having. A store that demands a due date before it will accept
+  // an item is a store he stops using by week three.
+  openLoops: defineTable({
+    text: v.string(),
+    status: v.union(v.literal("open"), v.literal("closed")),
+    person: v.optional(v.string()),
+    dueAt: v.optional(v.number()),
+    openedAt: v.number(),
+    closedAt: v.optional(v.number()),
+    transcriptId: v.optional(v.id("transcripts")),
+    embedding: v.optional(v.array(v.float64())),
+  })
+    .index("by_status", ["status"])
+    .searchIndex("search_text", { searchField: "text" })
+    .vectorIndex("by_embedding", {
+      vectorField: "embedding",
+      dimensions: 1024,
+    }),
 });

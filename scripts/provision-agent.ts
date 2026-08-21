@@ -818,7 +818,7 @@ export const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
     type: "client" as const,
     name: "navigate_ui",
     description:
-      "Navigate Tarik's dashboard in his browser. Use whenever he asks to see or open something — \"show me my briefs\", \"open my memories\", \"go home\". Pages are home, briefs, brain (memories and thoughts), telos (mission, goals, journal), mail (his email in-app), habits (pillars and today's votes), conversations (transcripts), and control (tool and workflow switches). Optional target opens a specific brief by a fragment of its title. Confirm in a word or two — the screen change speaks for itself.",
+      "Navigate Tarik's dashboard in his browser. Use whenever he asks to see or open something — \"show me my briefs\", \"open my memories\", \"go home\". Pages are home, briefs, brain (memories and thoughts), telos (mission, goals, journal), mail (his email in-app), habits (pillars and today's votes), conversations (transcripts), and control (tool and workflow switches). Optional target opens a specific brief by a fragment of its title, or on the graph page focuses the graph on a node by a fragment of its label. Use graph when a thing is easier shown than said — anything that needs two or three items held side by side. Confirm in a word or two — the screen change speaks for itself.",
     expectsResponse: true,
     responseTimeoutSecs: 10,
     parameters: {
@@ -829,11 +829,94 @@ export const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
         page: {
           type: "string" as const,
           description: "Destination page",
-          enum: ["home", "briefs", "brain", "telos", "mail", "habits", "conversations", "control"],
+          enum: [
+            "home",
+            "briefs",
+            "brain",
+            "graph",
+            "telos",
+            "mail",
+            "habits",
+            "conversations",
+            "control",
+          ],
         },
         target: bodyProp(
           "Optional: a few words from a brief's title to open it directly (briefs page only)",
         ),
+      },
+    },
+  },
+  // Second brain v1. Two stores that did not exist before: what he decided, and
+  // what is hanging. Neither verb interrogates him — whatever the sentence
+  // contained is what gets stored.
+  {
+    type: "webhook" as const,
+    name: "record_decision",
+    description:
+      "Record something Tarik just DECIDED — a choice with reasoning behind it, not a fact and not a task. Use when he says he is going with something, dropping something, or changing his mind. Write the reasoning yourself from what he just said; never ask him for it. The response contains the rationale — read it back to him once, plainly, so he can correct it. That read-back is a confirmation, not a question.",
+    responseTimeoutSecs: 15,
+    toolCallSound: "typing" as const,
+    toolCallSoundBehavior: "always" as const,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/record_decision`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["what", "why"],
+        description: "The decision",
+        properties: {
+          what: bodyProp("The choice he made, in one sentence, in his words"),
+          why: bodyProp(
+            "The reasoning, written by you from what he just said — never solicited with a question",
+          ),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "open_loop",
+    description:
+      "Note something unresolved that has no date and no email behind it — a thing he said he would do, a thread with someone, a question left hanging. Use it for anything that is neither a reminder (which needs a time) nor an email. Person and due date are optional: fill them ONLY if he already said them. Never ask who or when.",
+    responseTimeoutSecs: 15,
+    toolCallSound: "typing" as const,
+    toolCallSoundBehavior: "always" as const,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/open_loop`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["text"],
+        description: "The loop",
+        properties: {
+          text: bodyProp("The unresolved thing, one sentence, in his words"),
+          person: bodyProp("Optional: who it involves, only if he already said"),
+        },
+      },
+    },
+  },
+  {
+    type: "webhook" as const,
+    name: "close_loop",
+    description:
+      "Close an open loop he says is now handled. Match on a few words of it. If more than one matches, the response says so and lists them — ask which, never pick.",
+    responseTimeoutSecs: 15,
+    toolCallSound: "typing" as const,
+    toolCallSoundBehavior: "always" as const,
+    apiSchema: {
+      url: `${TOOL_BASE_URL}/close_loop`,
+      method: "POST" as const,
+      requestHeaders: { "x-morpheus-secret": env.MORPHEUS_TOOL_SECRET },
+      requestBodySchema: {
+        type: "object" as const,
+        required: ["text"],
+        description: "Which loop",
+        properties: {
+          text: bodyProp("A few words from the loop he is closing"),
+        },
       },
     },
   },

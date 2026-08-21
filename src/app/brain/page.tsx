@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Authenticated, AuthLoading, useAction, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Doc, Id } from "../../../convex/_generated/dataModel";
 import { Zone, ZoneEmpty } from "@/components/hud/Zone";
 import { MemoryPanel } from "@/components/MemoryPanel";
+import { BrainGraph } from "@/components/BrainGraph";
 
 const TYPE_FILTERS = ["all", "preference", "fact", "project", "person"] as const;
 type TypeFilter = (typeof TYPE_FILTERS)[number];
@@ -16,7 +18,9 @@ export default function BrainPage() {
   return (
     <>
       <Authenticated>
-        <BrainInner />
+        <Suspense fallback={null}>
+          <BrainInner />
+        </Suspense>
       </Authenticated>
       <AuthLoading>
         <div className="flex flex-1 items-center justify-center">
@@ -30,6 +34,15 @@ export default function BrainPage() {
 }
 
 function BrainInner() {
+  // navigate_ui "graph": /brain?view=graph[&focus=<label fragment>]. The graph
+  // is a second way of looking at this store, not a second store, so it lives
+  // behind a toggle on this page rather than on a route of its own.
+  const params = useSearchParams();
+  const [view, setView] = useState<"lists" | "graph">(
+    params.get("view") === "graph" ? "graph" : "lists",
+  );
+  const focusHint = params.get("focus") ?? undefined;
+
   const thoughts = useQuery(api.dashboard.recentThoughts);
   const memories = useQuery(api.dashboard.recentMemories);
   const journal = useQuery(api.dashboard.recentJournal);
@@ -73,6 +86,25 @@ function BrainInner() {
   return (
     <div className="flex flex-1 flex-col gap-3">
       <Zone title="Second Brain" accent="bg-lavender">
+        <div className="mb-3 flex items-center gap-1.5">
+          {(["lists", "graph"] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={`rounded-full border px-2.5 py-0.5 text-[10px] uppercase tracking-wider transition ${
+                view === v
+                  ? "border-lavender/70 bg-lavender/15 text-foreground"
+                  : "border-panel-edge text-steel hover:border-lavender/40"
+              }`}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+        {view === "graph" ? (
+          <BrainGraph focusHint={focusHint} />
+        ) : (
+        <>
         <input
           type="search"
           value={searchQuery}
@@ -176,6 +208,8 @@ function BrainInner() {
             )}
           </div>
         </div>
+        </>
+        )}
       </Zone>
 
       <MemoryPanel memoryId={openMemory} onClose={() => setOpenMemory(null)} />

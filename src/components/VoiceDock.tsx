@@ -31,6 +31,9 @@ const PAGES: Record<string, string> = {
   home: "/",
   briefs: "/briefs",
   brain: "/brain",
+  // The graph lives inside /brain rather than getting its own route: it is a
+  // second way of looking at the same store, not a second store.
+  graph: "/brain?view=graph",
   telos: "/telos",
   mail: "/mail",
   conversations: "/conversations",
@@ -91,6 +94,12 @@ export function VoiceDock() {
         if (params.page === "briefs" && params.target) {
           router.push(`/briefs?open=${encodeURIComponent(params.target)}`);
           return `Opened the brief matching "${params.target}".`;
+        }
+        // Focusing the graph on a node is what lets her answer and put the
+        // thing on screen in the same breath.
+        if (params.page === "graph" && params.target) {
+          router.push(`/brain?view=graph&focus=${encodeURIComponent(params.target)}`);
+          return `Focused the graph on "${params.target}".`;
         }
         router.push(path);
         return `Navigated to ${params.page}.`;
