@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as brainStream from "../brainStream.js";
 import type * as browserSessions from "../browserSessions.js";
 import type * as contacts from "../contacts.js";
 import type * as contactsCron from "../contactsCron.js";
@@ -18,6 +19,7 @@ import type * as documents from "../documents.js";
 import type * as documentsLib from "../documentsLib.js";
 import type * as embeddingsLib from "../embeddingsLib.js";
 import type * as feeds from "../feeds.js";
+import type * as focus from "../focus.js";
 import type * as graph from "../graph.js";
 import type * as habits from "../habits.js";
 import type * as habitsCron from "../habitsCron.js";
@@ -26,6 +28,7 @@ import type * as journal from "../journal.js";
 import type * as mailFilterLib from "../mailFilterLib.js";
 import type * as mailFilters from "../mailFilters.js";
 import type * as memoryOps from "../memoryOps.js";
+import type * as mentionsLib from "../mentionsLib.js";
 import type * as planeSettings from "../planeSettings.js";
 import type * as reminders from "../reminders.js";
 import type * as remindersDb from "../remindersDb.js";
@@ -54,6 +57,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  brainStream: typeof brainStream;
   browserSessions: typeof browserSessions;
   contacts: typeof contacts;
   contactsCron: typeof contactsCron;
@@ -64,6 +68,7 @@ declare const fullApi: ApiFromModules<{
   documentsLib: typeof documentsLib;
   embeddingsLib: typeof embeddingsLib;
   feeds: typeof feeds;
+  focus: typeof focus;
   graph: typeof graph;
   habits: typeof habits;
   habitsCron: typeof habitsCron;
@@ -72,6 +77,7 @@ declare const fullApi: ApiFromModules<{
   mailFilterLib: typeof mailFilterLib;
   mailFilters: typeof mailFilters;
   memoryOps: typeof memoryOps;
+  mentionsLib: typeof mentionsLib;
   planeSettings: typeof planeSettings;
   reminders: typeof reminders;
   remindersDb: typeof remindersDb;

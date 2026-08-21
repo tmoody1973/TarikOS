@@ -41,15 +41,28 @@ test("tool errors on /control wrap instead of widening the page", () => {
   }
 });
 
+/* The /brain lists became one stream on 2026-08-21, so the rendering sites
+ * moved out of the page and into BrainStream. The risk did not move: every one
+ * of these renders text the app did not author — a memory Zola wrote, a
+ * decision's rationale, a journal entry, a node label. */
 test("stored memories and journal entries on /brain wrap", () => {
-  const brain = read("../src/app/brain/page.tsx");
-  for (const needle of ["{m.content}", "{j.text}"]) {
+  const stream = read("../src/components/BrainStream.tsx");
+  for (const needle of ["{item.text}", "{item.why}"]) {
     assert.match(
-      context(brain, needle),
+      context(stream, needle),
       /\[overflow-wrap:anywhere\]/,
       `${needle} renders text the app did not author and must wrap`,
     );
   }
+});
+
+test("graph node detail wraps too", () => {
+  const graph = read("../src/components/BrainGraph.tsx");
+  assert.match(
+    context(graph, "{node.label}"),
+    /\[overflow-wrap:anywhere\]/,
+    "the node inspector renders a stored label and must wrap",
+  );
 });
 
 /* /telos already had this before today — asserted so the pattern cannot be
