@@ -1,7 +1,7 @@
 # 05 — The daily review budget, and where it lands
 
 Type: grilling
-Status: open
+Status: resolved
 Blocked by: —
 
 ## Question
@@ -50,3 +50,39 @@ half: **which approvals may happen by voice at all.**
 That still matters. It governs what the morning brief can *offer* rather than merely
 mention, and it is the rule inference will need on the day it is switched on. Retitle when
 resolved; "budget" no longer describes it.
+
+## Answer
+
+**Voice may do anything reversible that she can say back in one sentence. The binding
+constraint is bandwidth, not risk.**
+
+The two existing house rules stand and need no change: no permanent deletion by voice, and
+no *silent* change to goal priority, relationship significance, or identity data. The
+operative word in the second is silent — the rule was never that voice is untrustworthy,
+only that things must not happen without him hearing them. Spoken and reversible is fine.
+
+**The line that actually matters is bandwidth.** Voice is one-at-a-time; a screen is
+many-at-once. So the test is not "is this dangerous" but "could he hold it in his head
+having heard it once":
+
+- "You were focused on the portfolio — still true?" is one thing. Voice.
+- "Here are six proposed links, approve the ones you want" requires seeing them side by
+  side. Screen.
+
+This is worth stating because it rules out some perfectly *safe* operations. Comparison is
+the thing voice cannot do, and no amount of trust fixes that.
+
+**Superseding is explicitly fine by voice.** "That's no longer true" archives the prior
+decision and records what replaced it; nothing is lost and she names what she is replacing.
+Reversible and one-sentence, so it passes.
+
+**For v1 there is nothing to approve.** 02 removed inference and 04 removed the stale queue,
+so the only voice approvals left are the ones already designed in: confirming a stale record
+at the moment it is used, and correcting a decision's read-back.
+
+**For the morning brief:** it mentions nothing to approve, because nothing is waiting. If
+inference is switched on later, the brief may raise **one** item and take a yes — never read
+a list. The bandwidth rule governs the brief exactly as it governs a live conversation.
+
+**Retitle note:** "daily review budget" no longer describes this ticket. It is *the voice
+authority rule*.

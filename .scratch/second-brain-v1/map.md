@@ -76,6 +76,13 @@ runs, because the noise band is ~2.8 points.
   for what the conversation already contains. Guessing is safe because embeddings make
   misfiled records findable anyway, and cheap mistakes are what buy zero friction. Undo
   rather than approval.
+- [05 — The voice authority rule](issues/05-the-daily-review-budget.md) *(was "the daily
+  review budget")* — voice may do anything reversible that she can say back in one sentence.
+  The binding constraint is bandwidth, not risk: voice cannot do comparison, so anything
+  needing several things held side by side is a screen job even when it is perfectly safe.
+  Existing stops unchanged — no permanent deletion, no *silent* priority or identity change.
+  Superseding passes. v1 has nothing to approve; if inference ever arrives, the brief raises
+  one item and never reads a list.
 
 ## Not yet specified
 
