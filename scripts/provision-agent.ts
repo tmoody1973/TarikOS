@@ -818,7 +818,7 @@ export const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
     type: "client" as const,
     name: "navigate_ui",
     description:
-      "Navigate Tarik's dashboard in his browser. Use whenever he asks to see or open something — \"show me my briefs\", \"open my memories\", \"go home\". Pages are home, briefs, brain (memories and thoughts), telos (mission, goals, journal), mail (his email in-app), habits (pillars and today's votes), conversations (transcripts), and control (tool and workflow switches). Optional target opens a specific brief by a fragment of its title, or on the graph page focuses the graph on a node by a fragment of its label. Use graph when a thing is easier shown than said — anything that needs two or three items held side by side. Confirm in a word or two — the screen change speaks for itself.",
+      "Navigate Tarik's dashboard in his browser. Use whenever he asks to see or open something — \"show me my briefs\", \"open my memories\", \"go home\". Pages are home, briefs, brain (memories and thoughts), graph (the same store drawn as connections), telos (mission, goals, journal), mail (his email in-app), habits (pillars and today's votes), conversations (transcripts), and control (tool and workflow switches). Optional target opens a specific brief by a fragment of its title, or on the graph page focuses the graph on a node by a fragment of its label. Use graph when a thing is easier shown than said — anything that needs two or three items held side by side. Confirm in a word or two — the screen change speaks for itself.",
     expectsResponse: true,
     responseTimeoutSecs: 10,
     parameters: {
