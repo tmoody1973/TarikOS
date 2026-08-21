@@ -51,6 +51,12 @@ runs, because the noise band is ~2.8 points.
 
 <!-- one line per closed ticket -->
 
+- [01 — How many node types survive](issues/01-how-many-node-types-survive.md) — two are
+  chosen (`decision`, `open_loop`); the other ten are pointers that inherit their kind from
+  the canonical row, so capture asks nothing. `commitment` merges into `open_loop`, `area`
+  drops to a tag, `source` drops to an attribute. Nodes point and never copy, but cache the
+  title so she can speak without a fetch.
+
 ## Not yet specified
 
 - What the dashboard becomes once voice is the front door. Now / Recall / Review / Map /
