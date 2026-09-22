@@ -84,7 +84,13 @@ test("the loop is bounded and ends in words", () => {
 
 test("tools are called through the one webhook surface", () => {
   // No second implementation of a tool. Voice and text go through one door,
-  // so a guardrail on the route protects both.
-  assert.match(route, /\/api\/tools\/\$\{name\}/);
-  assert.match(route, /x-morpheus-secret/);
+  // so a guardrail on the route protects both. The door is src/lib/toolCall.ts,
+  // shared with the GPT-Live tool-call route; the Telegram route must use it.
+  assert.match(route, /import \{ callTool \} from "@\/lib\/toolCall"/);
+  const toolCall = readFileSync(
+    new URL("../src/lib/toolCall.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(toolCall, /\/api\/tools\/\$\{name\}/);
+  assert.match(toolCall, /x-morpheus-secret/);
 });

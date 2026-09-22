@@ -1,3 +1,4 @@
+import { callTool } from "@/lib/toolCall";
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { ConvexHttpClient } from "convex/browser";
@@ -38,22 +39,7 @@ const MAX_TOOL_ROUNDS = 4;
  * calls, with the same shared secret. There is no second implementation of a
  * tool anywhere: voice and text go through one door.
  */
-async function runTool(
-  origin: string,
-  name: string,
-  input: unknown,
-  secret: string,
-): Promise<string> {
-  const res = await fetch(new URL(`/api/tools/${name}`, origin), {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-morpheus-secret": secret },
-    body: JSON.stringify(input ?? {}),
-  });
-  const body = await res.text();
-  // Handed to the model as-is: the route already answers with a spoken
-  // `message` on failure, which is more useful to Claude than a status code.
-  return body.slice(0, 12000);
-}
+const runTool = callTool;
 
 export async function POST(req: NextRequest) {
   const origin = req.nextUrl.origin;

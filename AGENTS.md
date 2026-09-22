@@ -26,6 +26,10 @@ Every Morpheus capability is a webhook tool. To add one:
    description, JSON body schema, `x-morpheus-secret` header) to `TOOLS` in
    `scripts/provision-agent.ts`, then run `node scripts/provision-agent.ts`
    to update the agent in place.
+   GPT-Live (phase 1, `/talk-live`) reads a generated copy of the same list:
+   run `npm run voice:tools` after editing `TOOLS` so
+   `src/lib/voice/liveTools.generated.ts` matches. Browser-handled tools
+   (`navigate_ui`, `end_call`) are listed in `src/lib/voice/liveToolTypes.ts`.
 3. **Registry:** nothing to do — the tool auto-registers in the Convex
    `tools` table on its first successful call (via `markToolHealthy`) and
    then appears in the dashboard control panel with an enable/disable

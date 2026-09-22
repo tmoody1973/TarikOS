@@ -11,7 +11,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test \"tests/*.test.ts\""
+    "test": "node --test \"tests/*.test.ts\"",
+    "voice:tools": "node scripts/export-live-tools.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.37",

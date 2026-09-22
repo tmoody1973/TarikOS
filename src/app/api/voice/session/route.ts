@@ -4,8 +4,8 @@ import OpenAI from "openai";
 import {
   buildLiveSessionConfig,
   DEFAULT_VOICE,
-  isAccent,
   isLiveVoice,
+  STANDING_CONTEXT_MAX_CHARS,
 } from "@/lib/voice/liveSession";
 
 /* Starts a GPT-Live WebRTC session for the signed-in browser.
@@ -32,10 +32,10 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
-  const { sdp, voice = DEFAULT_VOICE, accent } = (body ?? {}) as {
+  const { sdp, voice = DEFAULT_VOICE, standingContext } = (body ?? {}) as {
     sdp?: unknown;
     voice?: unknown;
-    accent?: unknown;
+    standingContext?: unknown;
   };
   if (typeof sdp !== "string" || !sdp.trim() || sdp.length > MAX_SDP_BYTES) {
     return NextResponse.json(
@@ -46,9 +46,13 @@ export async function POST(req: Request) {
   if (!isLiveVoice(voice)) {
     return NextResponse.json({ error: "Unknown voice" }, { status: 400 });
   }
-  if (accent !== undefined && accent !== "" && !isAccent(accent)) {
+  if (
+    standingContext !== undefined &&
+    (typeof standingContext !== "string" ||
+      standingContext.length > STANDING_CONTEXT_MAX_CHARS)
+  ) {
     return NextResponse.json(
-      { error: "Accent must be plain words, 40 characters or fewer" },
+      { error: "standingContext must be a string within the size limit" },
       { status: 400 },
     );
   }
@@ -63,7 +67,7 @@ export async function POST(req: Request) {
   try {
     const client = new OpenAI({ maxRetries: 0 });
     const result = await client.live.create({
-      session: buildLiveSessionConfig({ voice, accent: accent || undefined }),
+      session: buildLiveSessionConfig({ voice, standingContext }),
       transport: { type: "webrtc", sdp },
     });
     return NextResponse.json(result, { status: 201 });

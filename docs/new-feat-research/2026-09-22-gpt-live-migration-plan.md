@@ -267,6 +267,12 @@ and never silent, not to paper over them.
 - Two things in that note do not apply to GPT-Live: the "ephemeral credentials then RealtimeSession" flow is the older Realtime API, and its 0.7s and 2s thresholds are the author's heuristics, not OpenAI numbers.
 
 **Phase 2: cutover behind the switch.**
+What the phase 1 hook still lacks for VoiceDock and `/talk`, from the review on 2026-09-22:
+a `LiveProvider` in AppShell so both read one session; input and output volume getters
+from WebAudio analysers for the orb; `isSpeaking` from the output level; `error` split
+from `note`; mute and unmute via `session.input_audio.mute`; an event timeline collected
+in the hook for post-call spans; and `/talk` reading live captions from the provider,
+since a Zola turn only reaches Convex when the speaker changes. Then:
 Replace `ConversationProvider` and `useConversation` with a `LiveProvider` and
 `useLiveSession` hook. Orb on WebAudio analysers. Post-call spans via `/api/voice/post-call`.
 Update `voiceDockStates.test.ts` and `talkRoute.test.ts`. Re-point `replay.py`; run the
