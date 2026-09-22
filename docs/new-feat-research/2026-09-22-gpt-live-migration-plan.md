@@ -235,8 +235,9 @@ Baseline to beat: 0.738 tool-selection accuracy on 107 utterances.
 ## Phases
 
 Each phase ships to production behind a switch, because that is how this project works.
-The switch is an env var `VOICE_PROVIDER` read by `AppShell`, defaulting to `elevenlabs`,
-plus a `?voice=live` query override so Tarik can test in prod without flipping everyone.
+The switch is an env var `NEXT_PUBLIC_VOICE_PROVIDER` read by `AppShell`, `/talk` and
+`/talk-live`, defaulting to `elevenlabs`. It is read at build time, so a flip is a redeploy;
+the fast rollback is Vercel's instant rollback. `/talk-live` is the ear-test bench until the flip.
 
 **Phase 0: spike (one page, no tools).**
 Add `openai@^7.21`. Add `/api/voice/session`. Add a `/talk-live` page with a hand-rolled
@@ -276,10 +277,15 @@ since a Zola turn only reaches Convex when the speaker changes. Then:
 Replace `ConversationProvider` and `useConversation` with a `LiveProvider` and
 `useLiveSession` hook. Orb on WebAudio analysers. Post-call spans via `/api/voice/post-call`.
 Update `voiceDockStates.test.ts` and `talkRoute.test.ts`. Re-point `replay.py`; run the
-eval; compare to 0.738. Flip `VOICE_PROVIDER=openai` in prod when the eval and Tarik's ear
+eval; compare to 0.738. Flip `NEXT_PUBLIC_VOICE_PROVIDER=openai` in prod when the eval and Tarik's ear
 both agree. Rollback is flipping it back.
 
 **Phase 3: phone.**
+First step, from the phase 2 review: pull the session core out of `useLiveSession` into a
+pure module that takes server events, keeps turns and the timeline, calls a tool runner and a
+transcript sink, and yields the post-call payload. The browser hook becomes WebRTC plumbing
+around it; the Hetzner sideband becomes a WebSocket around the same core with `callTool` and
+`ConvexHttpClient` plugged in. The post-call payload already carries `transport: "sip"`.
 Telnyx FQDN SIP connection to OpenAI. `/api/openai/webhook` route with signature check.
 Sideband service on Hetzner (Node, `openai` sideband client, same tool-forwarding code
 lifted into a shared module). Spike the Telnyx outbound bridge for `call_tarik`.
@@ -287,9 +293,15 @@ Success: inbound call answered by Zola with tools; `call_tarik` either bridged o
 consciously kept on ElevenLabs.
 
 **Phase 4: remove ElevenLabs.**
-Delete `@elevenlabs/*` packages, `provision-agent.ts`, `/api/voice/token`,
-`/api/elevenlabs/post-call`, and the three `ELEVENLABS_*` env vars from Vercel. Update
-AGENTS.md, README, and the eval docs. Optionally adopt the cookbook crawl/walk/run harness.
+Depends on the phase 3 outbound spike: if `call_tarik` stays on ElevenLabs, its three env vars
+stay too. Otherwise delete `@elevenlabs/*` packages, `provision-agent.ts` (after moving
+`TOOLS` into `src/lib/voice`), `/api/voice/token`, `/api/elevenlabs/post-call`, `VoiceDock.tsx`
+and its private `RevealText` and `scaleVolume`, `ElevenTalk` in `talk/page.tsx`,
+`voiceDockStates.test.ts`, `provider.ts` and `NEXT_PUBLIC_VOICE_PROVIDER`, `/talk-live`,
+`mapPostCall` and `shouldProcess` in `phoenixMapper.ts` (move `ConversationSpan` out first),
+and the `ELEVENLABS_*` env vars. Collapse `AppShellInner` and `LiveShell` into one shell.
+Decide whether the `Live*` names stay. Update AGENTS.md, README, and the eval docs.
+Optionally adopt the cookbook crawl/walk/run harness.
 
 ---
 
