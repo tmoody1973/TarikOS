@@ -96,6 +96,10 @@ export function isAccent(value: unknown): value is string {
   );
 }
 
+export function accentLine(accent: string): string {
+  return `Accent: you are a native ${accent} English speaker. Speak with an unmistakable ${accent} accent in every reply, every word, from the first syllable. Never drift toward an American accent.`;
+}
+
 export type LiveSessionOptions = {
   voice?: LiveVoice;
   accent?: string;
@@ -105,8 +109,10 @@ export function buildLiveSessionConfig({
   voice = DEFAULT_VOICE,
   accent,
 }: LiveSessionOptions = {}): MediaSessionConfig {
+  // First line, not last: a trailing sentence did nothing for Shimmer
+  // (docs/LEARNING-LOG.md, 2026-09-22). Leading and explicit is the second try.
   const instructions = accent
-    ? `${VOICE_INSTRUCTIONS}\n\nSpeak ${accent.trim()} English.`
+    ? `${accentLine(accent.trim())}\n\n${VOICE_INSTRUCTIONS}`
     : VOICE_INSTRUCTIONS;
   return {
     model: LIVE_MODEL,
