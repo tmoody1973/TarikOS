@@ -38,3 +38,20 @@ key both events share, and it is what the docs mean by "preserve the outer deleg
 Keyed that way, the same script ran the real calendar tool and the backend answered with the
 day's events. Also learned: a text-only WebSocket session with a typed message is a fast,
 mic-free way to see the exact event sequence before trusting a browser test.
+
+## 2026-09-22 · The first flip lasted four minutes
+
+**Expected:** With the dashboard switched to GPT-Live, opening `/talk-live` would redirect to
+`/talk` and show the live screen.
+
+**What happened:** "This page couldn't load." The console showed Convex refusing
+`transcripts:latest` with a server error. That query throws when there is no signed-in
+identity, and on a fresh page load React renders before Convex has received Clerk's token.
+The old `/talk` had the identical ungated query and had simply never been hard-refreshed;
+my redirect made a fresh load the normal path. Rolled back in four seconds with Vercel's
+instant rollback.
+
+**What we now believe:** Every Convex query on a page that can be the first page loaded must
+wait for `useConvexAuth().isAuthenticated`, using the `"skip"` argument. The mutations and the
+session-start query were never at risk because they run on a click. And: keep the rollback
+command ready before a flip, then test the fresh-load path first, not the navigated-to path.
