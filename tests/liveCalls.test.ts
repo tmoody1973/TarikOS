@@ -12,21 +12,27 @@ import { PAGES, resolveNavigation } from "../src/lib/voice/navigation.ts";
 /* Phase 1 of the GPT-Live migration: the tool loop's state machine, the
  * generated tool list, and page navigation. All pure. */
 
-test("calls collect per backend response and release on completed", () => {
+test("calls collect per delegation and release on completed", () => {
+  // Real shapes from a live session on 2026-09-22: output_item.done carries
+  // no response id, only response.completed does. The envelope's
+  // delegation_id is the key both share.
+  const d = "item_ER1xS6b2";
   let s = reduceCallEvent(EMPTY_CALL_STATE, {
     type: "response.output_item.done",
-    response: { id: "resp_1" },
-    item: { type: "function_call", call_id: "call_a", name: "get_brief", arguments: "{}" },
-  });
-  assert.equal(s.ready, undefined);
-  // A message item is not a call.
+    output_index: 0,
+    item: { type: "reasoning" },
+  }, d);
   s = reduceCallEvent(s.state, {
     type: "response.output_item.done",
-    response: { id: "resp_1" },
-    item: { type: "message" },
-  });
-  s = reduceCallEvent(s.state, { type: "response.completed", response: { id: "resp_1" } });
-  assert.deepEqual(s.ready, [{ callId: "call_a", name: "get_brief", arguments: "{}" }]);
+    output_index: 1,
+    item: { type: "function_call", call_id: "call_a", name: "get_calendar", arguments: "{}" },
+  }, d);
+  assert.equal(s.ready, undefined);
+  s = reduceCallEvent(s.state, {
+    type: "response.completed",
+    response: { id: "resp_042e", status: "completed" },
+  }, d);
+  assert.deepEqual(s.ready, [{ callId: "call_a", name: "get_calendar", arguments: "{}" }]);
   assert.deepEqual(s.state, EMPTY_CALL_STATE);
 });
 
@@ -34,14 +40,13 @@ test("a completed response with no calls releases nothing, a failed one drops th
   const empty = reduceCallEvent(EMPTY_CALL_STATE, {
     type: "response.completed",
     response: { id: "r" },
-  });
+  }, "d1");
   assert.equal(empty.ready, undefined);
   let s = reduceCallEvent(EMPTY_CALL_STATE, {
     type: "response.output_item.done",
-    response: { id: "r2" },
     item: { type: "function_call", call_id: "c", name: "remember", arguments: "{}" },
-  });
-  s = reduceCallEvent(s.state, { type: "response.failed", response: { id: "r2" } });
+  }, "d2");
+  s = reduceCallEvent(s.state, { type: "response.failed", response: { id: "r2" } }, "d2");
   assert.equal(s.ready, undefined);
   assert.deepEqual(s.state, {});
 });

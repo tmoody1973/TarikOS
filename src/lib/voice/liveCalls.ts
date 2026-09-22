@@ -9,7 +9,9 @@
 
 export type PendingCall = { callId: string; name: string; arguments: string };
 
-// Keyed by the backend response id.
+// Keyed by the Live delegation id from the `response.event` envelope. The
+// nested output_item.done carries no response id (checked against a live
+// session on 2026-09-22), so the envelope is the only key both events share.
 export type CallState = Record<string, PendingCall[]>;
 
 export const EMPTY_CALL_STATE: CallState = {};
@@ -20,13 +22,16 @@ export type CallReduction = {
   ready?: PendingCall[];
 };
 
-export function reduceCallEvent(state: CallState, raw: unknown): CallReduction {
+export function reduceCallEvent(
+  state: CallState,
+  raw: unknown,
+  delegationId: string | null | undefined,
+): CallReduction {
   const event = raw as {
     type?: string;
-    response?: { id?: string };
     item?: { type?: string; call_id?: string; name?: string; arguments?: string };
   };
-  const key = event.response?.id ?? "current";
+  const key = delegationId ?? "current";
   switch (event.type) {
     case "response.output_item.done": {
       const item = event.item;

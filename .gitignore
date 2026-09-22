@@ -49,3 +49,4 @@ next-env.d.ts
 
 # wrangler local state (created by `wrangler r2` commands)
 .wrangler/
+.scratch/
