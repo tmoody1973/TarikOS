@@ -26,7 +26,7 @@ Clicking any headline slides in the reader: the article extracted server-side an
 
 ## How it works, in plain English
 
-1. **You talk.** The browser opens a realtime voice session with an [ElevenLabs Agent](https://elevenlabs.io/agents), or you dial a Telnyx number that routes to the same agent over a SIP trunk. Either way Zola listens, responds with a voice, and decides when a request needs a real action.
+1. **You talk.** The browser opens a realtime voice session with an [ElevenLabs Agent](https://elevenlabs.io/agents), or you dial a Telnyx number that routes to the same agent over a SIP trunk. Either way Zola listens, responds with a voice, and decides when a request needs a real action. **The voice layer is moving to [OpenAI GPT-Live](https://developers.openai.com/api/docs/guides/live)**: at `/talk-live` Zola already runs on `gpt-live-1`, a full-duplex model that can listen while it speaks, with a separate OpenAI backend model choosing her tools. The dashboard's voice dock and the phone number stay on ElevenLabs until the cutover. The plan, phase by phase, is in [`docs/new-feat-research/2026-09-22-gpt-live-migration-plan.md`](docs/new-feat-research/2026-09-22-gpt-live-migration-plan.md).
 2. **She calls a tool.** Every capability ("what's on my calendar", "draft a reply to that email", "run my research workflow") is a webhook the agent calls: `POST /api/tools/<tool_name>` on this app, authenticated with a shared secret. The route does the actual work and returns a sentence for Zola to speak.
 3. **The work happens server-side.** Tool routes talk to Gmail and Google Calendar through [Composio](https://composio.dev) (which holds the OAuth tokens), to Claude for writing and reasoning, and to [Convex](https://convex.dev) for state.
 4. **The dashboard reacts live.** Convex is a realtime database: when a tool writes a briefing card, a journal entry, or a workflow result, every open page updates instantly, with no refresh. The UI is a set of LCARS-styled panels: morning brief, mail center, calendar, telos (goals), journal, memory.
@@ -48,7 +48,7 @@ Seven guardrails are structural, not polite requests:
 | Layer | Technology |
 |---|---|
 | Web app | Next.js 16 (App Router, Turbopack), React 19, Tailwind CSS 4 |
-| Voice | ElevenLabs Agents (realtime speech-to-speech), `@elevenlabs/react` |
+| Voice | ElevenLabs Agents (realtime speech-to-speech), `@elevenlabs/react` · migrating to OpenAI GPT-Live (`gpt-live-1` voice, `gpt-5.6-terra` backend, `openai` SDK, WebRTC) |
 | Telephony | Telnyx (number + SIP trunk) → ElevenLabs, so the same agent answers a real phone |
 | Reasoning / writing | Claude (Anthropic SDK, server-side) |
 | State + realtime + crons | Convex |
@@ -94,9 +94,11 @@ Seven guardrails are structural, not polite requests:
                                  Browserbase + Stagehand (Viewport browser)
 ```
 
+On the GPT-Live path the shape is the same with one difference: nobody calls the webhooks for us. The browser receives each function call on the WebRTC data channel, forwards it to a Clerk-gated `/api/voice/tool-call`, and that route calls `/api/tools/<tool>` with the secret through the same one-door helper the Telegram channel uses. The tool definitions GPT-Live sees are generated from the ElevenLabs ones (`npm run voice:tools`), so there is still one list.
+
 Every tool call is wrapped in an OpenTelemetry span, and after a call ends ElevenLabs POSTs the full transcript to `/api/elevenlabs/post-call`, which maps it into a conversation trace: the utterance, the tool she picked, and what came back, in one tree. Both paths ship to a self-hosted Phoenix. Tracing is never load-bearing: the webhook answers as soon as the signature verifies and ships afterwards, so a dead collector cannot break the thing it observes.
 
-The repeatable pattern, documented in [AGENTS.md](AGENTS.md): every new capability is (1) a `case` in `src/app/api/tools/[tool]/route.ts`, (2) a tool definition in `scripts/provision-agent.ts`, (3) nothing else. Tools self-register in Convex on first use and appear in the dashboard control panel with health status and an enable/disable toggle.
+The repeatable pattern, documented in [AGENTS.md](AGENTS.md): every new capability is (1) a `case` in `src/app/api/tools/[tool]/route.ts`, (2) a tool definition in `scripts/provision-agent.ts`, then `npm run voice:tools` so GPT-Live's generated copy matches, (3) nothing else. Tools self-register in Convex on first use and appear in the dashboard control panel with health status and an enable/disable toggle.
 
 ## Project structure
 
@@ -106,14 +108,19 @@ src/app/            Pages: home HUD, /briefs, /mail, /studio, /projects, /contac
 src/app/api/tools/  The agent's tool webhook (one case per capability)
 src/app/api/mail/   Browser-facing mail routes (Clerk-protected)
 src/app/api/elevenlabs/  Post-call webhook → conversation traces
+src/app/api/voice/  GPT-Live session start and browser→tool forwarding (Clerk-protected)
+src/app/talk-live/  Zola on GPT-Live (phase 1 of the migration)
+src/lib/voice/      GPT-Live session config, split prompts, generated tool list,
+                    the session hook, call tracking, page navigation
 src/lib/            Server-side domain logic: google.ts, mail.ts, calendarLib.ts,
                     plane.ts + planeLib.ts (API boundary / pure logic) …
 convex/             Schema (26 tables), workflows, crons, memory consolidation,
                     telos, habits, studio documents, contacts
-scripts/            provision-agent.ts · connect-google.ts · import-telos.ts
+scripts/            provision-agent.ts · export-live-tools.ts · connect-google.ts · import-telos.ts
 tests/              node --test unit tests for the pure logic
 evals/              Tool-selection replay harness + Phoenix dataset/experiment push
 docs/superpowers/   Design specs for each build phase
+docs/decisions/     Decision records · docs/LEARNING-LOG.md  Running retro
 ```
 
 ## Running it yourself
@@ -123,7 +130,7 @@ You are standing up your own instance wired to your own accounts. Nothing here t
 ### Prerequisites
 
 - Node.js 22+ and npm
-- Accounts: [Convex](https://convex.dev), [Clerk](https://clerk.com), [ElevenLabs](https://elevenlabs.io) (Agents access), [Composio](https://composio.dev), [Anthropic](https://console.anthropic.com), [Voyage AI](https://voyageai.com) (optional, semantic memory), [Browserbase](https://browserbase.com) (optional, Viewport)
+- Accounts: [Convex](https://convex.dev), [Clerk](https://clerk.com), [ElevenLabs](https://elevenlabs.io) (Agents access), [OpenAI](https://platform.openai.com) (GPT-Live access, for `/talk-live`), [Composio](https://composio.dev), [Anthropic](https://console.anthropic.com), [Voyage AI](https://voyageai.com) (optional, semantic memory), [Browserbase](https://browserbase.com) (optional, Viewport)
 
 ### Setup
 
@@ -156,6 +163,7 @@ Values live in `.env.local` (gitignored) and in Vercel/Convex env settings in pr
 |---|---|
 | `ANTHROPIC_API_KEY` | Claude API key (drafting, workflows, consolidation) |
 | `ELEVENLABS_API_KEY` | ElevenLabs API key |
+| `OPENAI_API_KEY` | OpenAI project key with GPT-Live access. Used only by `/api/voice/session`; the browser never sees it. |
 | `ELEVENLABS_AGENT_ID` | The provisioned agent's id (written by provision script) |
 | `COMPOSIO_API_KEY` | Composio key holding your Google OAuth connections |
 | `MORPHEUS_TOOL_SECRET` | Shared secret the agent sends with every tool webhook |
@@ -216,7 +224,8 @@ locks, and you want both:
 ### Tests and deploys
 
 ```bash
-npm test              # node --test, 793 pure-logic and guardrail tests
+npm test              # node --test, 1,071 pure-logic and guardrail tests
+npm run voice:tools   # regenerate GPT-Live's tool list after editing TOOLS
 npm run build         # production build (Turbopack)
 ```
 
@@ -253,6 +262,7 @@ npx vercel deploy --prod  # app  (plain `vercel --prod` only builds)
 - **Control panel** (`/control`). Every tool's health, last error, and an enable/disable toggle; disabled tools are blocked at the route.
 - **Phone**. Call a real number and Zola answers with the same brain and the same tools; no app, no browser, no session to start. She can call you too, for the things a dashboard card can't reach you for. Telnyx owns the number and the SIP trunk, ElevenLabs stays the runtime, and the whole inbound path took no application code. The only code is the outbound tool and its guardrails.
 - **Voice console**. Mic waveform, live transcripts, and a tool-activity matrix so you can see Zola working.
+- **GPT-Live** (`/talk-live`). The same Zola, same tools, on OpenAI's full-duplex voice model: interrupt her mid-sentence and the tool she was running still finishes. Voice and reasoning are separate models with separate prompts, so the tool-picker can be swapped or evaluated on its own. Billed per second of session. Phase 1 of a four-phase migration; the dashboard dock and phone follow.
 - **Tool-selection evals** (`evals/`). The loop that turns "I think that description is better" into a number. Real past utterances become a labelled dataset; the harness replays them against the live tool definitions and scores which tool the model reaches for. Runs locally in seconds, or as a Phoenix experiment when a run is worth keeping. Two identical runs disagree on ~9% of utterances, so the harness reports that noise floor rather than letting you read meaning into a two-point move.
 
 ## The telos layer
@@ -272,7 +282,7 @@ The loop this closes: you tell your AI what matters once, it holds you to it eve
 
 ## Design specs
 
-Each phase shipped against a written spec in [`docs/superpowers/specs/`](docs/superpowers/specs/): foundation, workflows and briefs, telos, mail center, viewport, habits, observability and evals, restaurant booking, document storage, mobile PWA, and Plane projects. Decisions that were genuinely contested get their own record in [`docs/decisions/`](docs/decisions/): which editor Studio uses and why, and why Studio keeps its own store rather than becoming a thought. They read as a build log of the decisions and their reasons.
+Each phase shipped against a written spec in [`docs/superpowers/specs/`](docs/superpowers/specs/): foundation, workflows and briefs, telos, mail center, viewport, habits, observability and evals, restaurant booking, document storage, mobile PWA, and Plane projects. Decisions that were genuinely contested get their own record in [`docs/decisions/`](docs/decisions/): which editor Studio uses and why, why Studio keeps its own store rather than becoming a thought, and why the voice layer is moving from ElevenLabs to GPT-Live. They read as a build log of the decisions and their reasons. [`docs/LEARNING-LOG.md`](docs/LEARNING-LOG.md) is the running retro: what was expected, what happened, what is now believed.
 
 ## License
 
