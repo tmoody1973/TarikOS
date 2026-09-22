@@ -227,7 +227,7 @@ export function useLiveSession({ voice }: { voice: LiveVoice }): LiveSession {
           caption("morpheus", event.delta);
           break;
         case "response.event": {
-          const result = reduceCallEvent(calls.current, event.event);
+          const result = reduceCallEvent(calls.current, event.event, event.delegation_id);
           calls.current = result.state;
           if (result.ready) void runCalls(result.ready);
           break;
