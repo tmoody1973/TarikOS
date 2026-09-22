@@ -1507,7 +1507,7 @@ export const TOOLS: ElevenLabs.PromptAgentApiModelInputToolsItem[] = [
  * health dots and toggles on the control page, and the number the landing page
  * claims. end_call has none of that: it never reaches /api/tools.
  */
-const SYSTEM_TOOLS = [
+export const SYSTEM_TOOLS = [
   {
     type: "system" as const,
     name: "end_call",
