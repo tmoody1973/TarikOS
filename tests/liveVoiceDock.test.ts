@@ -61,6 +61,15 @@ test("one way in: the cap, the button and the wake word all call the hook's star
   assert.ok(!/useLiveSession\(/.test(dock), "the dock reads the shared session, it does not own one");
 });
 
+/* A fresh load of /talk reaches Convex before Clerk's token does, and
+ * transcripts.latest throws without an identity. Seen in production
+ * 2026-09-22: "This page couldn't load". The query must wait for auth. */
+test("LiveTalk waits for Convex auth before reading the last transcript", () => {
+  const liveTalk = read("../src/app/talk/LiveTalk.tsx");
+  assert.match(liveTalk, /useConvexAuth\(\)/);
+  assert.match(liveTalk, /useQuery\(api\.transcripts\.latest, isAuthenticated \? \{\} : "skip"\)/);
+});
+
 test("the live dock links to /talk and is labelled for assistive tech", () => {
   assert.match(dock, /href="\/talk"/);
   assert.match(dock, /aria-label="Start a voice session"/);

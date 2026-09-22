@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
-import { useQuery } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { LIVE_USD_PER_MINUTE } from "@/lib/voice/liveSession";
 import { useLive } from "@/components/LiveProvider";
@@ -35,7 +35,12 @@ export function LiveTalk() {
     getOutputVolume,
   } = useLive();
 
-  const last = useQuery(api.transcripts.latest, {});
+  // transcripts.latest throws without an identity, and on a fresh load the
+  // page renders before Convex has Clerk's token. Skip until it does; the
+  // same "skip" pattern the habits and briefs pages use. First seen live on
+  // 2026-09-22 when /talk-live started redirecting here.
+  const { isAuthenticated } = useConvexAuth();
+  const last = useQuery(api.transcripts.latest, isAuthenticated ? {} : "skip");
   const turns = connected ? captions : (last?.turns ?? []);
 
   const endRef = useRef<HTMLDivElement>(null);
