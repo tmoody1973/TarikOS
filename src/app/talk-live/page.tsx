@@ -1,21 +1,28 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { redirect } from "next/navigation";
 import {
   DEFAULT_VOICE,
   LIVE_USD_PER_MINUTE,
   LIVE_VOICES,
   type LiveVoice,
 } from "@/lib/voice/liveSession";
+import { voiceProvider } from "@/lib/voice/provider";
 import { useLiveSession } from "@/lib/voice/useLiveSession";
 
-/* Phase 1 of the GPT-Live migration: Zola with her tools, memory and
- * transcripts, on a page that does not touch VoiceDock or the wake word.
- * Phase 2 moves VoiceDock onto the same hook. */
+/* The ear-test bench from phases 0 and 1: its own GPT-Live session, a voice
+ * picker, captions, cost. Once the shell owns the session (openai provider),
+ * /talk is the view onto it and this page steps aside. Deleted in phase 4. */
 
 export default function TalkLivePage() {
+  if (voiceProvider() === "openai") redirect("/talk");
+  return <TalkLiveBench />;
+}
+
+function TalkLiveBench() {
   const [voice, setVoice] = useState<LiveVoice>(DEFAULT_VOICE);
-  const { status, sessionId, note, seconds, captions, activeTool, start, stop } =
+  const { status, sessionId, note, error, seconds, captions, activeTool, start, stop } =
     useLiveSession({ voice });
   const live = status === "live";
 
@@ -64,11 +71,15 @@ export default function TalkLivePage() {
         )}
       </div>
 
-      {note && (
-        <p className="text-xs text-steel">
-          {note}
-          {sessionId && live ? ` Session ${sessionId}` : ""}
-        </p>
+      {error ? (
+        <p className="text-xs text-salmon">VOICE LINK ERROR: {error}</p>
+      ) : (
+        note && (
+          <p className="text-xs text-steel">
+            {note}
+            {sessionId && live ? ` Session ${sessionId}` : ""}
+          </p>
+        )
       )}
 
       <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-panel-edge bg-panel p-3">

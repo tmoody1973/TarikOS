@@ -1,24 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
-import { useConversation } from "@elevenlabs/react";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
-import { voiceProvider } from "@/lib/voice/provider";
-import { LiveTalk } from "./LiveTalk";
+import { LIVE_USD_PER_MINUTE } from "@/lib/voice/liveSession";
+import { useLive } from "@/components/LiveProvider";
 
-/* Full talk screen (MOO-527). The session lives in ConversationProvider above
- * the router (AppShell), so arriving here does not start one and leaving does
- * not end it — this is a view onto a session that already exists.
+/* The full talk screen on GPT-Live. A view onto the session LiveProvider
+ * holds; arriving here does not start one and leaving does not end it.
  *
- * useConversation() with no arguments reads the live session from context and
- * registers no callbacks of its own, so VoiceDock keeps ownership of
- * onMessage and the transcript writes. The turns come back from Convex rather
- * than from component state: realtime either way, but the database version
- * survives a refresh and needs no state lifted out of the dock.
- *
- * The spine stays on screen. Talk is a page, not a mode you are trapped in. */
+ * While live, the turns come from the provider's captions, because a Zola
+ * turn only reaches Convex when the speaker changes and the screen must not
+ * run a whole reply behind. Idle, the last conversation comes from Convex,
+ * which survives a refresh. */
 
 const Orb = dynamic(() => import("@/components/hud/Orb").then((m) => m.Orb), {
   ssr: false,
@@ -26,46 +21,23 @@ const Orb = dynamic(() => import("@/components/hud/Orb").then((m) => m.Orb), {
 
 const ORB_COLORS: [string, string] = ["#ff9900", "#35e0ff"];
 
-function scaleVolume(get: (() => number) | undefined): number {
-  try {
-    return Math.min(1, Math.pow(get?.() ?? 0, 0.5) * 2.5);
-  } catch {
-    return 0;
-  }
-}
-
-export default function TalkPage() {
-  // Phase 2 of the GPT-Live migration: same route, provider chosen by env.
-  if (voiceProvider() === "openai") return <LiveTalk />;
-  return <ElevenTalk />;
-}
-
-function ElevenTalk() {
+export function LiveTalk() {
   const {
-    status,
+    connected,
     isSpeaking,
     isMuted,
     setMuted,
-    endSession,
+    stop,
+    captions,
+    activeTool,
+    seconds,
     getInputVolume,
     getOutputVolume,
-  } = useConversation();
-  const connected = status === "connected";
+  } = useLive();
 
-  const transcript = useQuery(api.transcripts.latest, {});
-  const turns = transcript?.turns ?? [];
+  const last = useQuery(api.transcripts.latest, {});
+  const turns = connected ? captions : (last?.turns ?? []);
 
-  const scaledInput = useCallback(
-    () => scaleVolume(getInputVolume),
-    [getInputVolume],
-  );
-  const scaledOutput = useCallback(
-    () => scaleVolume(getOutputVolume),
-    [getOutputVolume],
-  );
-
-  // Follow the conversation as it arrives; a transcript you have to chase is
-  // not a transcript you can talk over.
   const endRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -79,14 +51,13 @@ function ElevenTalk() {
             <Orb
               colors={ORB_COLORS}
               volumeMode="manual"
-              getInputVolume={scaledInput}
-              getOutputVolume={scaledOutput}
+              getInputVolume={getInputVolume}
+              getOutputVolume={getOutputVolume}
             />
           ) : (
             <Orb colors={ORB_COLORS} volumeMode="auto" agentState={null} />
           )}
         </div>
-        {/* Glow Means Live: the status only glows while a session is up. */}
         <span
           className={`text-[10px] uppercase tracking-[0.3em] ${
             connected
@@ -96,6 +67,12 @@ function ElevenTalk() {
         >
           {connected ? (isSpeaking ? "Zola speaking" : "Listening") : "Standby"}
         </span>
+        {connected && (
+          <span className="text-[10px] uppercase tracking-[0.3em] text-steel">
+            {activeTool ? <span className="text-amber">{activeTool} · </span> : null}
+            {seconds != null ? `${seconds}s · $${((seconds / 60) * LIVE_USD_PER_MINUTE).toFixed(3)}` : ""}
+          </span>
+        )}
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-panel-edge bg-panel p-3">
@@ -112,11 +89,7 @@ function ElevenTalk() {
           ) : (
             turns.map((t, i) => (
               <p key={i} className="text-sm leading-relaxed">
-                <span
-                  className={
-                    t.role === "tarik" ? "text-hudblue" : "text-amber"
-                  }
-                >
+                <span className={t.role === "tarik" ? "text-hudblue" : "text-amber"}>
                   {t.role === "tarik" ? "TARIK" : "ZOLA"}
                 </span>{" "}
                 <span className="text-foreground/85">{t.text}</span>
@@ -139,12 +112,10 @@ function ElevenTalk() {
         </button>
         <button
           type="button"
-          onClick={() => endSession()}
+          onClick={stop}
           disabled={!connected}
           className="lcars-cap-left flex h-10 flex-1 items-center justify-center bg-salmon transition hover:opacity-80 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-cyan-hud disabled:opacity-40"
         >
-          {/* Antonio speaks only in caps (DESIGN.md § The Two Voices Rule);
-              the dock's own button is DISENGAGE. */}
           <span className="font-[family-name:var(--font-display)] text-base uppercase text-black">
             Disengage
           </span>

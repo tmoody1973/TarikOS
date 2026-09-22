@@ -3,6 +3,9 @@
 import { usePathname } from "next/navigation";
 import { Authenticated } from "convex/react";
 import { ConversationProvider } from "@elevenlabs/react";
+import { voiceProvider } from "@/lib/voice/provider";
+import { LiveProvider } from "./LiveProvider";
+import { LiveVoiceDock } from "./LiveVoiceDock";
 import { NavRail } from "./NavRail";
 import { Spine } from "./Spine";
 import { VoiceDock } from "./VoiceDock";
@@ -22,6 +25,9 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   if (!signedIn || pathname.startsWith("/sign-in")) return <>{children}</>;
+  // Phase 2 of the GPT-Live migration: NEXT_PUBLIC_VOICE_PROVIDER picks the
+  // shell. AppShellInner stays the ElevenLabs shell, untouched, until phase 4.
+  if (voiceProvider() === "openai") return <LiveShell>{children}</LiveShell>;
   return <AppShellInner>{children}</AppShellInner>;
 }
 
@@ -54,5 +60,29 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         </Authenticated>
       </div>
     </ConversationProvider>
+  );
+}
+
+/* The same shell on GPT-Live (phase 2 of the migration). LiveProvider holds
+ * the session above the router exactly as ConversationProvider does; the
+ * dock and /talk read it. Chosen by NEXT_PUBLIC_VOICE_PROVIDER. */
+function LiveShell({ children }: { children: React.ReactNode }) {
+  return (
+    <LiveProvider>
+      <div className="flex min-h-screen flex-col">
+        <div className="flex flex-1 gap-3 p-3 pb-28">
+          <NavRail />
+          <Spine />
+          <main className="flex min-w-0 flex-1 flex-col pl-7 lg:pl-0">
+            {children}
+          </main>
+        </div>
+        <Authenticated>
+          <ServiceWorker />
+          <ViewportPanel />
+          <LiveVoiceDock />
+        </Authenticated>
+      </div>
+    </LiveProvider>
   );
 }
