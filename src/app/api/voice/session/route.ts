@@ -4,6 +4,7 @@ import OpenAI from "openai";
 import {
   buildLiveSessionConfig,
   DEFAULT_VOICE,
+  isAccent,
   isLiveVoice,
 } from "@/lib/voice/liveSession";
 
@@ -31,9 +32,10 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
-  const { sdp, voice = DEFAULT_VOICE } = (body ?? {}) as {
+  const { sdp, voice = DEFAULT_VOICE, accent } = (body ?? {}) as {
     sdp?: unknown;
     voice?: unknown;
+    accent?: unknown;
   };
   if (typeof sdp !== "string" || !sdp.trim() || sdp.length > MAX_SDP_BYTES) {
     return NextResponse.json(
@@ -43,6 +45,12 @@ export async function POST(req: Request) {
   }
   if (!isLiveVoice(voice)) {
     return NextResponse.json({ error: "Unknown voice" }, { status: 400 });
+  }
+  if (accent !== undefined && accent !== "" && !isAccent(accent)) {
+    return NextResponse.json(
+      { error: "Accent must be plain words, 40 characters or fewer" },
+      { status: 400 },
+    );
   }
 
   if (!process.env.OPENAI_API_KEY) {
@@ -55,7 +63,7 @@ export async function POST(req: Request) {
   try {
     const client = new OpenAI({ maxRetries: 0 });
     const result = await client.live.create({
-      session: buildLiveSessionConfig({ voice }),
+      session: buildLiveSessionConfig({ voice, accent: accent || undefined }),
       transport: { type: "webrtc", sdp },
     });
     return NextResponse.json(result, { status: 201 });

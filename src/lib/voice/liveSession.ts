@@ -81,16 +81,36 @@ Do not guess the result while waiting.`;
 
 export const BACKEND_INSTRUCTIONS = `You support Zola in a live voice conversation with Tarik Moody. Transcripts can contain mistakes, unfinished phrases, and later corrections; use the latest context. Use web search when current facts are needed. Return concise, grounded results for a spoken conversation: the relevant facts and where they came from, nothing more.`;
 
+/* Accent is a prompt-level lever. The custom-voices guide says to name the
+ * accent in session.instructions ("Speak British English"); the built-in
+ * voices have no other knob. Plain words only, short, so a user cannot smuggle
+ * instructions through it. */
+export const ACCENT_MAX_LENGTH = 40;
+export const ACCENT_PATTERN = /^[A-Za-z][A-Za-z ]*$/;
+
+export function isAccent(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.length <= ACCENT_MAX_LENGTH &&
+    ACCENT_PATTERN.test(value)
+  );
+}
+
 export type LiveSessionOptions = {
   voice?: LiveVoice;
+  accent?: string;
 };
 
 export function buildLiveSessionConfig({
   voice = DEFAULT_VOICE,
+  accent,
 }: LiveSessionOptions = {}): MediaSessionConfig {
+  const instructions = accent
+    ? `${VOICE_INSTRUCTIONS}\n\nSpeak ${accent.trim()} English.`
+    : VOICE_INSTRUCTIONS;
   return {
     model: LIVE_MODEL,
-    instructions: VOICE_INSTRUCTIONS,
+    instructions,
     audio: { output: { voice } },
     delegation: {
       type: "responses",

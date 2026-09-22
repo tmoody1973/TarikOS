@@ -6,6 +6,7 @@ import type {
   ServerEvent,
 } from "openai/resources/live/live";
 import {
+  ACCENT_MAX_LENGTH,
   appendDelta,
   DEFAULT_VOICE,
   LIVE_USD_PER_MINUTE,
@@ -30,6 +31,7 @@ const ICE_TIMEOUT_MS = 10_000;
 export default function TalkLivePage() {
   const [status, setStatus] = useState<Status>("standby");
   const [voice, setVoice] = useState<LiveVoice>(DEFAULT_VOICE);
+  const [accent, setAccent] = useState("South African");
   const [note, setNote] = useState("");
   const [seconds, setSeconds] = useState<number | null>(null);
   const [captions, setCaptions] = useState<Turn[]>([]);
@@ -151,7 +153,7 @@ export default function TalkLivePage() {
       const res = await fetch("/api/voice/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sdp, voice }),
+        body: JSON.stringify({ sdp, voice, accent }),
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string };
@@ -202,6 +204,17 @@ export default function TalkLivePage() {
               </option>
             ))}
           </select>
+        </label>
+        <label className="flex items-center gap-2 text-xs text-steel">
+          Accent
+          <input
+            value={accent}
+            onChange={(e) => setAccent(e.target.value)}
+            disabled={status !== "standby"}
+            maxLength={ACCENT_MAX_LENGTH}
+            placeholder="none"
+            className="w-36 rounded-md border border-panel-edge bg-panel px-2 py-1 text-xs text-foreground"
+          />
         </label>
         <span
           className={`text-[10px] uppercase tracking-[0.3em] ${
